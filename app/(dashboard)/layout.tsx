@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { Providers } from '@/components/providers';
 
 export default async function DashboardLayout({
   children,
@@ -30,7 +31,7 @@ export default async function DashboardLayout({
 
       <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
         <div className="px-6 py-8 lg:px-10 lg:py-10 max-w-6xl">
-          {children}
+          <Providers>{children}</Providers>
         </div>
       </main>
     </div>

@@ -30,6 +30,10 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
+    const sortBy = searchParams.get('sortBy') || 'created_at';
+    const sortDir = searchParams.get('sortDir') === 'asc' ? true : false;
+    const allowedSortFields = ['name', 'company', 'status', 'created_at'];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
 
     let query = admin
       .from('contacts')
@@ -60,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     // Paginação e ordenação
     const { data: contacts, error, count } = await query
-      .order('created_at', { ascending: false })
+      .order(sortField, { ascending: sortDir })
       .range(offset, offset + limit - 1);
 
     if (error) throw error;
