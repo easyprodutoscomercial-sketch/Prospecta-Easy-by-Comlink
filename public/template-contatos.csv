@@ -1,0 +1,4 @@
+name,phone,email,cpf,cnpj,company,notes
+João Silva,(11) 99999-0001,joao@exemplo.com,123.456.789-00,,Empresa ABC,Cliente em prospecção
+Maria Souza,(21) 98888-0002,maria@exemplo.com,,,Empresa XYZ,Indicação do João
+Pedro Santos,(31) 97777-0003,pedro@exemplo.com,,12.345.678/0001-90,Tech Ltda,Reunião marcada para segunda

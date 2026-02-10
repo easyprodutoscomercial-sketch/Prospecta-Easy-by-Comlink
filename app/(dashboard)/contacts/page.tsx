@@ -29,38 +29,38 @@ export default function ContactsPage() {
   };
 
   return (
-    <div className="px-4 sm:px-0">
+    <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-black">Contatos</h1>
-        <div className="space-x-2">
+        <h1 className="text-2xl font-semibold text-neutral-900">Contatos</h1>
+        <div className="flex gap-2">
           <Link
             href="/import"
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-neutral-700 bg-white border border-neutral-300 rounded-lg hover:bg-neutral-50 transition-colors"
           >
             Importar CSV
           </Link>
           <Link
             href="/contacts/new"
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-black hover:bg-gray-800"
+            className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 transition-colors"
           >
             + Novo Contato
           </Link>
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="border border-neutral-200 rounded-lg p-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <input
             type="text"
             placeholder="Buscar por nome, email, telefone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+            className="px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+            className="px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
           >
             <option value="all">Todos os status</option>
             <option value="NOVO">Novo</option>
@@ -73,7 +73,7 @@ export default function ContactsPage() {
           <select
             value={assignedFilter}
             onChange={(e) => setAssignedFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
+            className="px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
           >
             <option value="all">Todos</option>
             <option value="me">Meus contatos</option>
@@ -83,40 +83,40 @@ export default function ContactsPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-8">Carregando...</div>
+        <div className="text-center py-12 text-sm text-neutral-500">Carregando...</div>
       ) : (
-        <div className="bg-white shadow overflow-hidden rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="border border-neutral-200 rounded-lg overflow-hidden">
+          <table className="min-w-full divide-y divide-neutral-200">
+            <thead className="bg-neutral-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Nome</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Email</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Telefone</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Ações</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white divide-y divide-neutral-100">
               {contacts.map((contact) => (
-                <tr key={contact.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/contacts/${contact.id}`} className="text-black hover:text-gray-600 font-medium">
+                <tr key={contact.id} className="hover:bg-neutral-50 transition-colors">
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    <Link href={`/contacts/${contact.id}`} className="text-sm font-medium text-neutral-900 hover:underline">
                       {contact.name}
                     </Link>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-5 py-3 whitespace-nowrap text-sm text-neutral-500">
                     {contact.email || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-5 py-3 whitespace-nowrap text-sm text-neutral-500">
                     {contact.phone || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(contact.status)}`}>
-                      {contact.status.replace(/_/g, ' ')}
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${getStatusColor(contact.status)}`}>
+                      {formatStatus(contact.status)}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <Link href={`/contacts/${contact.id}`} className="text-black hover:text-gray-600 font-medium">
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    <Link href={`/contacts/${contact.id}`} className="text-xs text-neutral-500 hover:text-neutral-900 font-medium">
                       Ver detalhes
                     </Link>
                   </td>
@@ -125,7 +125,7 @@ export default function ContactsPage() {
             </tbody>
           </table>
           {contacts.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-12 text-sm text-neutral-500">
               Nenhum contato encontrado
             </div>
           )}
@@ -135,14 +135,26 @@ export default function ContactsPage() {
   );
 }
 
+function formatStatus(status: string) {
+  const labels: Record<string, string> = {
+    NOVO: 'Novo',
+    EM_PROSPECCAO: 'Em Prospecção',
+    CONTATADO: 'Contatado',
+    REUNIAO_MARCADA: 'Reunião Marcada',
+    CONVERTIDO: 'Convertido',
+    PERDIDO: 'Perdido',
+  };
+  return labels[status] || status.replace(/_/g, ' ');
+}
+
 function getStatusColor(status: string) {
   const colors: Record<string, string> = {
-    NOVO: 'bg-gray-100 text-gray-800',
-    EM_PROSPECCAO: 'bg-yellow-100 text-yellow-800',
-    CONTATADO: 'bg-blue-100 text-blue-800',
-    REUNIAO_MARCADA: 'bg-green-100 text-green-800',
-    CONVERTIDO: 'bg-emerald-100 text-emerald-800',
-    PERDIDO: 'bg-red-100 text-red-800',
+    NOVO: 'bg-neutral-100 text-neutral-700',
+    EM_PROSPECCAO: 'bg-amber-100 text-amber-700',
+    CONTATADO: 'bg-blue-100 text-blue-700',
+    REUNIAO_MARCADA: 'bg-green-100 text-green-700',
+    CONVERTIDO: 'bg-emerald-100 text-emerald-700',
+    PERDIDO: 'bg-red-100 text-red-700',
   };
-  return colors[status] || 'bg-gray-100 text-gray-800';
+  return colors[status] || 'bg-neutral-100 text-neutral-700';
 }

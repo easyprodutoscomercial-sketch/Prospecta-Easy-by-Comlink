@@ -28,11 +28,11 @@ export default async function DashboardLayout({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Sidebar profileName={profile?.name ?? null} signOutAction={handleSignOut} />
 
-      <main className="lg:pl-64 pt-14 lg:pt-0">
-        <div className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+      <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
+        <div className="px-6 py-8 lg:px-10 lg:py-10 max-w-6xl">
           {children}
         </div>
       </main>

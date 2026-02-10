@@ -15,7 +15,7 @@ const navItems = [
     label: 'Dashboard',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z" />
       </svg>
     ),
   },
@@ -24,7 +24,7 @@ const navItems = [
     label: 'Contatos',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
       </svg>
     ),
   },
@@ -33,7 +33,7 @@ const navItems = [
     label: 'Importar',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
       </svg>
     ),
   },
@@ -51,23 +51,23 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
   const navContent = (
     <>
       {/* Logo */}
-      <div className="flex items-center h-16 px-6 border-b border-gray-800">
-        <Link href="/dashboard" className="text-xl font-bold text-white tracking-tight">
+      <div className="flex items-center h-14 px-5">
+        <Link href="/dashboard" className="text-lg font-semibold text-white tracking-tight">
           Mini CRM
         </Link>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      <nav className="flex-1 px-3 py-2 space-y-0.5">
         {navItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             onClick={() => setMobileOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
               isActive(item.href)
-                ? 'bg-gray-800 text-white'
-                : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                ? 'bg-white/10 text-white'
+                : 'text-neutral-400 hover:bg-white/5 hover:text-neutral-200'
             }`}
           >
             {item.icon}
@@ -77,13 +77,18 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
       </nav>
 
       {/* User area */}
-      <div className="border-t border-gray-800 px-4 py-4">
+      <div className="border-t border-white/10 px-5 py-4">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-300 truncate">{profileName}</span>
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center text-xs font-medium text-white shrink-0">
+              {profileName?.charAt(0)?.toUpperCase() || '?'}
+            </div>
+            <span className="text-sm text-neutral-300 truncate">{profileName}</span>
+          </div>
           <form action={signOutAction}>
             <button
               type="submit"
-              className="text-sm text-gray-500 hover:text-white transition-colors"
+              className="text-xs text-neutral-500 hover:text-white transition-colors"
             >
               Sair
             </button>
@@ -96,30 +101,30 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center h-14 bg-black px-4 border-b border-gray-800">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center h-14 bg-neutral-900 px-4">
         <button
           onClick={() => setMobileOpen(true)}
-          className="text-gray-300 hover:text-white"
+          className="text-neutral-400 hover:text-white"
           aria-label="Abrir menu"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <span className="ml-3 text-lg font-bold text-white">Mini CRM</span>
+        <span className="ml-3 text-sm font-semibold text-white">Mini CRM</span>
       </div>
 
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/50"
+          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Mobile sidebar */}
       <aside
-        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-black flex flex-col transform transition-transform duration-200 ease-in-out ${
+        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-neutral-900 flex flex-col transform transition-transform duration-200 ease-in-out ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -127,7 +132,7 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col bg-black border-r border-gray-800">
+      <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col bg-neutral-900">
         {navContent}
       </aside>
     </>

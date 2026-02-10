@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -46,58 +48,58 @@ export default async function DashboardPage() {
     .limit(5);
 
   return (
-    <div className="px-4 sm:px-0">
-      <h1 className="text-3xl font-bold text-black mb-8">Dashboard</h1>
+    <div>
+      <h1 className="text-2xl font-semibold text-neutral-900 mb-8">Dashboard</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Total de Contatos</p>
-          <p className="text-3xl font-bold text-black">{totalContacts || 0}</p>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        <div className="border border-neutral-200 p-5 rounded-lg">
+          <p className="text-xs text-neutral-500 uppercase tracking-wide">Total de Contatos</p>
+          <p className="text-2xl font-semibold text-neutral-900 mt-1">{totalContacts || 0}</p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Em Prospecção</p>
-          <p className="text-3xl font-bold text-black">{emProspeccao || 0}</p>
+        <div className="border border-neutral-200 p-5 rounded-lg">
+          <p className="text-xs text-neutral-500 uppercase tracking-wide">Em Prospecção</p>
+          <p className="text-2xl font-semibold text-neutral-900 mt-1">{emProspeccao || 0}</p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Reuniões Marcadas</p>
-          <p className="text-3xl font-bold text-black">{reunioesMarcadas || 0}</p>
+        <div className="border border-neutral-200 p-5 rounded-lg">
+          <p className="text-xs text-neutral-500 uppercase tracking-wide">Reuniões Marcadas</p>
+          <p className="text-2xl font-semibold text-neutral-900 mt-1">{reunioesMarcadas || 0}</p>
         </div>
-        <div className="bg-white p-6 rounded-lg shadow">
-          <p className="text-sm text-gray-600">Convertidos</p>
-          <p className="text-3xl font-bold text-black">{convertidos || 0}</p>
+        <div className="border border-neutral-200 p-5 rounded-lg">
+          <p className="text-xs text-neutral-500 uppercase tracking-wide">Convertidos</p>
+          <p className="text-2xl font-semibold text-neutral-900 mt-1">{convertidos || 0}</p>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Contatos Recentes</h2>
-          <Link href="/contacts" className="text-sm text-black hover:text-gray-600 font-medium">
+      <div className="border border-neutral-200 rounded-lg">
+        <div className="px-5 py-4 flex justify-between items-center">
+          <h2 className="text-sm font-medium text-neutral-900">Contatos Recentes</h2>
+          <Link href="/contacts" className="text-xs text-neutral-500 hover:text-neutral-900">
             Ver todos
           </Link>
         </div>
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-neutral-100">
           {recentContacts && recentContacts.length > 0 ? (
             recentContacts.map((contact) => (
               <Link
                 key={contact.id}
                 href={`/contacts/${contact.id}`}
-                className="px-6 py-4 hover:bg-gray-50 flex justify-between items-center block"
+                className="px-5 py-3 hover:bg-neutral-50 flex justify-between items-center block transition-colors"
               >
                 <div>
-                  <p className="font-medium text-black">{contact.name}</p>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm font-medium text-neutral-900">{contact.name}</p>
+                  <p className="text-xs text-neutral-500 mt-0.5">
                     {contact.email || contact.phone || contact.company || '-'}
                   </p>
                 </div>
-                <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(contact.status)}`}>
-                  {contact.status.replace(/_/g, ' ')}
+                <span className={`px-2.5 py-0.5 text-xs font-medium rounded-full ${getStatusColor(contact.status)}`}>
+                  {formatStatus(contact.status)}
                 </span>
               </Link>
             ))
           ) : (
-            <div className="px-6 py-8 text-center text-gray-500">
-              Nenhum contato cadastrado ainda.
-              <Link href="/contacts/new" className="block mt-2 text-black hover:text-gray-600 font-medium">
+            <div className="px-5 py-10 text-center">
+              <p className="text-sm text-neutral-500">Nenhum contato cadastrado ainda.</p>
+              <Link href="/contacts/new" className="text-sm text-neutral-900 hover:underline font-medium mt-1 inline-block">
                 Criar primeiro contato
               </Link>
             </div>
@@ -108,14 +110,26 @@ export default async function DashboardPage() {
   );
 }
 
+function formatStatus(status: string) {
+  const labels: Record<string, string> = {
+    NOVO: 'Novo',
+    EM_PROSPECCAO: 'Em Prospecção',
+    CONTATADO: 'Contatado',
+    REUNIAO_MARCADA: 'Reunião Marcada',
+    CONVERTIDO: 'Convertido',
+    PERDIDO: 'Perdido',
+  };
+  return labels[status] || status.replace(/_/g, ' ');
+}
+
 function getStatusColor(status: string) {
   const colors: Record<string, string> = {
-    NOVO: 'bg-gray-100 text-gray-800',
-    EM_PROSPECCAO: 'bg-yellow-100 text-yellow-800',
-    CONTATADO: 'bg-blue-100 text-blue-800',
-    REUNIAO_MARCADA: 'bg-green-100 text-green-800',
-    CONVERTIDO: 'bg-emerald-100 text-emerald-800',
-    PERDIDO: 'bg-red-100 text-red-800',
+    NOVO: 'bg-neutral-100 text-neutral-700',
+    EM_PROSPECCAO: 'bg-amber-100 text-amber-700',
+    CONTATADO: 'bg-blue-100 text-blue-700',
+    REUNIAO_MARCADA: 'bg-green-100 text-green-700',
+    CONVERTIDO: 'bg-emerald-100 text-emerald-700',
+    PERDIDO: 'bg-red-100 text-red-700',
   };
-  return colors[status] || 'bg-gray-100 text-gray-800';
+  return colors[status] || 'bg-neutral-100 text-neutral-700';
 }
