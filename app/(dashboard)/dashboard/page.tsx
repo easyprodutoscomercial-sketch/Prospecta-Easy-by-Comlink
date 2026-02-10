@@ -1,7 +1,17 @@
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
+import DashboardCharts from '@/components/dashboard-charts';
 
 export const dynamic = 'force-dynamic';
+
+const STATUS_CONFIG = [
+  { key: 'NOVO', label: 'Novo', color: '#a3a3a3' },
+  { key: 'EM_PROSPECCAO', label: 'Em Prospecção', color: '#f59e0b' },
+  { key: 'CONTATADO', label: 'Contatado', color: '#3b82f6' },
+  { key: 'REUNIAO_MARCADA', label: 'Reunião Marcada', color: '#22c55e' },
+  { key: 'CONVERTIDO', label: 'Convertido', color: '#10b981' },
+  { key: 'PERDIDO', label: 'Perdido', color: '#ef4444' },
+];
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -17,29 +27,40 @@ export default async function DashboardPage() {
 
   if (!profile) return null;
 
-  const { count: totalContacts } = await supabase
-    .from('contacts')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', profile.organization_id);
+  // Count by status
+  const statusCounts = await Promise.all(
+    STATUS_CONFIG.map(async (s) => {
+      const { count } = await supabase
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', profile.organization_id)
+        .eq('status', s.key);
+      return { name: s.label, value: count || 0, color: s.color };
+    })
+  );
 
-  const { count: emProspeccao } = await supabase
-    .from('contacts')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', profile.organization_id)
-    .eq('status', 'EM_PROSPECCAO');
+  const totalContacts = statusCounts.reduce((sum, s) => sum + s.value, 0);
 
-  const { count: reunioesMarcadas } = await supabase
-    .from('contacts')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', profile.organization_id)
-    .eq('status', 'REUNIAO_MARCADA');
+  // Monthly data (last 6 months)
+  const now = new Date();
+  const monthlyData = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const start = d.toISOString();
+    const end = new Date(d.getFullYear(), d.getMonth() + 1, 1).toISOString();
 
-  const { count: convertidos } = await supabase
-    .from('contacts')
-    .select('*', { count: 'exact', head: true })
-    .eq('organization_id', profile.organization_id)
-    .eq('status', 'CONVERTIDO');
+    const { count } = await supabase
+      .from('contacts')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', profile.organization_id)
+      .gte('created_at', start)
+      .lt('created_at', end);
 
+    const label = d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
+    monthlyData.push({ month: label, count: count || 0 });
+  }
+
+  // Recent contacts
   const { data: recentContacts } = await supabase
     .from('contacts')
     .select('*')
@@ -47,29 +68,39 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false })
     .limit(5);
 
+  // Key metrics from statusCounts
+  const emProspeccao = statusCounts.find((s) => s.name === 'Em Prospecção')?.value || 0;
+  const reunioesMarcadas = statusCounts.find((s) => s.name === 'Reunião Marcada')?.value || 0;
+  const convertidos = statusCounts.find((s) => s.name === 'Convertido')?.value || 0;
+
   return (
     <div>
       <h1 className="text-2xl font-semibold text-neutral-900 mb-8">Dashboard</h1>
 
+      {/* KPI cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="border border-neutral-200 p-5 rounded-lg">
           <p className="text-xs text-neutral-500 uppercase tracking-wide">Total de Contatos</p>
-          <p className="text-2xl font-semibold text-neutral-900 mt-1">{totalContacts || 0}</p>
+          <p className="text-2xl font-semibold text-neutral-900 mt-1">{totalContacts}</p>
         </div>
         <div className="border border-neutral-200 p-5 rounded-lg">
           <p className="text-xs text-neutral-500 uppercase tracking-wide">Em Prospecção</p>
-          <p className="text-2xl font-semibold text-neutral-900 mt-1">{emProspeccao || 0}</p>
+          <p className="text-2xl font-semibold text-neutral-900 mt-1">{emProspeccao}</p>
         </div>
         <div className="border border-neutral-200 p-5 rounded-lg">
           <p className="text-xs text-neutral-500 uppercase tracking-wide">Reuniões Marcadas</p>
-          <p className="text-2xl font-semibold text-neutral-900 mt-1">{reunioesMarcadas || 0}</p>
+          <p className="text-2xl font-semibold text-neutral-900 mt-1">{reunioesMarcadas}</p>
         </div>
         <div className="border border-neutral-200 p-5 rounded-lg">
           <p className="text-xs text-neutral-500 uppercase tracking-wide">Convertidos</p>
-          <p className="text-2xl font-semibold text-neutral-900 mt-1">{convertidos || 0}</p>
+          <p className="text-2xl font-semibold text-neutral-900 mt-1">{convertidos}</p>
         </div>
       </div>
 
+      {/* Charts */}
+      <DashboardCharts statusData={statusCounts} monthlyData={monthlyData} />
+
+      {/* Recent contacts */}
       <div className="border border-neutral-200 rounded-lg">
         <div className="px-5 py-4 flex justify-between items-center">
           <h2 className="text-sm font-medium text-neutral-900">Contatos Recentes</h2>

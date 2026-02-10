@@ -88,3 +88,35 @@ export async function PATCH(
     );
   }
 }
+
+// DELETE /api/contacts/:id - Deletar contato
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    // Deletar interações primeiro
+    await supabase.from('interactions').delete().eq('contact_id', id);
+
+    // Deletar contato
+    const { error } = await supabase.from('contacts').delete().eq('id', id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting contact:', error);
+    return NextResponse.json(
+      { error: error.message || 'Erro ao deletar contato' },
+      { status: 500 }
+    );
+  }
+}
