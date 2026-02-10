@@ -31,7 +31,7 @@ export default function ContactsPage() {
   return (
     <div className="px-4 sm:px-0">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Contatos</h1>
+        <h1 className="text-3xl font-bold text-black">Contatos</h1>
         <div className="space-x-2">
           <Link
             href="/import"
@@ -41,14 +41,13 @@ export default function ContactsPage() {
           </Link>
           <Link
             href="/contacts/new"
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-black hover:bg-gray-800"
           >
             + Novo Contato
           </Link>
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="bg-white p-4 rounded-lg shadow mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <input
@@ -56,12 +55,12 @@ export default function ContactsPage() {
             placeholder="Buscar por nome, email, telefone..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
           >
             <option value="all">Todos os status</option>
             <option value="NOVO">Novo</option>
@@ -74,7 +73,7 @@ export default function ContactsPage() {
           <select
             value={assignedFilter}
             onChange={(e) => setAssignedFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
           >
             <option value="all">Todos</option>
             <option value="me">Meus contatos</option>
@@ -83,7 +82,6 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* Lista */}
       {loading ? (
         <div className="text-center py-8">Carregando...</div>
       ) : (
@@ -100,17 +98,17 @@ export default function ContactsPage() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {contacts.map((contact) => (
-                <tr key={contact.id}>
+                <tr key={contact.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/contacts/${contact.id}`} className="text-blue-600 hover:text-blue-900">
+                    <Link href={`/contacts/${contact.id}`} className="text-black hover:text-gray-600 font-medium">
                       {contact.name}
                     </Link>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {contact.email || '—'}
+                    {contact.email || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {contact.phone || '—'}
+                    {contact.phone || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(contact.status)}`}>
@@ -118,7 +116,7 @@ export default function ContactsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <Link href={`/contacts/${contact.id}`} className="text-blue-600 hover:text-blue-900">
+                    <Link href={`/contacts/${contact.id}`} className="text-black hover:text-gray-600 font-medium">
                       Ver detalhes
                     </Link>
                   </td>
@@ -140,10 +138,10 @@ export default function ContactsPage() {
 function getStatusColor(status: string) {
   const colors: Record<string, string> = {
     NOVO: 'bg-gray-100 text-gray-800',
-    EM_PROSPECCAO: 'bg-blue-100 text-blue-800',
-    CONTATADO: 'bg-yellow-100 text-yellow-800',
+    EM_PROSPECCAO: 'bg-yellow-100 text-yellow-800',
+    CONTATADO: 'bg-blue-100 text-blue-800',
     REUNIAO_MARCADA: 'bg-green-100 text-green-800',
-    CONVERTIDO: 'bg-purple-100 text-purple-800',
+    CONVERTIDO: 'bg-emerald-100 text-emerald-800',
     PERDIDO: 'bg-red-100 text-red-800',
   };
   return colors[status] || 'bg-gray-100 text-gray-800';

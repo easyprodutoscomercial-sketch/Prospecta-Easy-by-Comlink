@@ -58,7 +58,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-0">
       <div className="mb-6">
-        <Link href="/contacts" className="text-blue-600 hover:text-blue-700">
+        <Link href="/contacts" className="text-black hover:text-gray-600 font-medium">
           ← Voltar para contatos
         </Link>
       </div>
@@ -66,13 +66,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       <div className="bg-white shadow rounded-lg p-6 mb-6">
         <div className="flex justify-between items-start mb-4">
           <div>
-            <h1 className="text-3xl font-bold">{contact.name}</h1>
+            <h1 className="text-3xl font-bold text-black">{contact.name}</h1>
             {contact.company && <p className="text-gray-600">{contact.company}</p>}
           </div>
           <select
             value={contact.status}
             onChange={(e) => handleStatusChange(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-md"
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
           >
             <option value="NOVO">Novo</option>
             <option value="EM_PROSPECCAO">Em Prospecção</option>
@@ -87,25 +87,25 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
           {contact.email && (
             <div>
               <p className="text-sm text-gray-600">Email</p>
-              <p className="font-medium">{contact.email}</p>
+              <p className="font-medium text-black">{contact.email}</p>
             </div>
           )}
           {contact.phone && (
             <div>
               <p className="text-sm text-gray-600">Telefone</p>
-              <p className="font-medium">{contact.phone}</p>
+              <p className="font-medium text-black">{contact.phone}</p>
             </div>
           )}
           {contact.cpf && (
             <div>
               <p className="text-sm text-gray-600">CPF</p>
-              <p className="font-medium">{contact.cpf}</p>
+              <p className="font-medium text-black">{contact.cpf}</p>
             </div>
           )}
           {contact.cnpj && (
             <div>
               <p className="text-sm text-gray-600">CNPJ</p>
-              <p className="font-medium">{contact.cnpj}</p>
+              <p className="font-medium text-black">{contact.cnpj}</p>
             </div>
           )}
         </div>
@@ -113,18 +113,17 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         {contact.notes && (
           <div>
             <p className="text-sm text-gray-600 mb-1">Observações</p>
-            <p className="text-gray-900">{contact.notes}</p>
+            <p className="text-black">{contact.notes}</p>
           </div>
         )}
       </div>
 
-      {/* Interações */}
       <div className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold">Interações</h2>
+          <h2 className="text-xl font-bold text-black">Interações</h2>
           <button
             onClick={() => setShowInteractionForm(!showInteractionForm)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800"
           >
             + Nova Interação
           </button>
@@ -138,7 +137,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 <select
                   value={newInteraction.type}
                   onChange={(e) => setNewInteraction({ ...newInteraction, type: e.target.value as any })}
-                  className="w-full px-3 py-2 border rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
                 >
                   <option value="LIGACAO">Ligação</option>
                   <option value="WHATSAPP">WhatsApp</option>
@@ -152,7 +151,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 <select
                   value={newInteraction.outcome}
                   onChange={(e) => setNewInteraction({ ...newInteraction, outcome: e.target.value as any })}
-                  className="w-full px-3 py-2 border rounded-md"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
                 >
                   <option value="SEM_RESPOSTA">Sem Resposta</option>
                   <option value="RESPONDEU">Respondeu</option>
@@ -169,18 +168,18 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                 rows={3}
                 value={newInteraction.note}
                 onChange={(e) => setNewInteraction({ ...newInteraction, note: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
               />
             </div>
             <div className="flex justify-end space-x-2">
               <button
                 type="button"
                 onClick={() => setShowInteractionForm(false)}
-                className="px-4 py-2 border rounded-md"
+                className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50"
               >
                 Cancelar
               </button>
-              <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-md">
+              <button type="submit" className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800">
                 Salvar
               </button>
             </div>
@@ -189,10 +188,10 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
         <div className="space-y-4">
           {interactions.map((interaction) => (
-            <div key={interaction.id} className="border-l-4 border-blue-500 pl-4 py-2">
+            <div key={interaction.id} className="border-l-4 border-black pl-4 py-2">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="font-medium">
+                  <p className="font-medium text-black">
                     {interaction.type.replace(/_/g, ' ')} - {interaction.outcome.replace(/_/g, ' ')}
                   </p>
                   <p className="text-sm text-gray-600">

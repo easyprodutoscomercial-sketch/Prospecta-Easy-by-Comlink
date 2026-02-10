@@ -35,7 +35,6 @@ export default function NewContactPage() {
       const data = await res.json();
 
       if (res.status === 409) {
-        // Duplicado
         setDuplicate(data.duplicate);
         setError('Contato já existe no sistema');
       } else if (!res.ok) {
@@ -53,12 +52,12 @@ export default function NewContactPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-0">
       <div className="mb-6">
-        <Link href="/contacts" className="text-blue-600 hover:text-blue-700">
+        <Link href="/contacts" className="text-black hover:text-gray-600 font-medium">
           ← Voltar para contatos
         </Link>
       </div>
 
-      <h1 className="text-3xl font-bold mb-6">Novo Contato</h1>
+      <h1 className="text-3xl font-bold text-black mb-6">Novo Contato</h1>
 
       {error && (
         <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
@@ -86,7 +85,7 @@ export default function NewContactPage() {
             required
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
           />
         </div>
 
@@ -99,7 +98,7 @@ export default function NewContactPage() {
               type="text"
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
               placeholder="(11) 99999-9999"
             />
           </div>
@@ -112,7 +111,7 @@ export default function NewContactPage() {
               type="email"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
             />
           </div>
         </div>
@@ -126,7 +125,7 @@ export default function NewContactPage() {
               type="text"
               value={formData.cpf}
               onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
               placeholder="000.000.000-00"
             />
           </div>
@@ -139,7 +138,7 @@ export default function NewContactPage() {
               type="text"
               value={formData.cnpj}
               onChange={(e) => setFormData({ ...formData, cnpj: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
               placeholder="00.000.000/0000-00"
             />
           </div>
@@ -153,7 +152,7 @@ export default function NewContactPage() {
             type="text"
             value={formData.company}
             onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
           />
         </div>
 
@@ -165,7 +164,7 @@ export default function NewContactPage() {
             rows={4}
             value={formData.notes}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-black focus:border-black"
           />
         </div>
 
@@ -179,7 +178,7 @@ export default function NewContactPage() {
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
           >
             {loading ? 'Salvando...' : 'Criar Contato'}
           </button>

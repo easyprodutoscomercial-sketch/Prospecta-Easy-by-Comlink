@@ -22,7 +22,6 @@ export default function ImportPage() {
     setLoading(true);
     setResult(null);
 
-    // Parse CSV
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
@@ -48,12 +47,12 @@ export default function ImportPage() {
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-0">
       <div className="mb-6">
-        <Link href="/contacts" className="text-blue-600 hover:text-blue-700">
+        <Link href="/contacts" className="text-black hover:text-gray-600 font-medium">
           ← Voltar para contatos
         </Link>
       </div>
 
-      <h1 className="text-3xl font-bold mb-6">Importar Contatos (CSV)</h1>
+      <h1 className="text-3xl font-bold text-black mb-6">Importar Contatos (CSV)</h1>
 
       <div className="bg-white shadow rounded-lg p-6 mb-6">
         <h2 className="text-lg font-semibold mb-4">Formato do CSV</h2>
@@ -77,15 +76,15 @@ export default function ImportPage() {
               file:mr-4 file:py-2 file:px-4
               file:rounded-md file:border-0
               file:text-sm file:font-semibold
-              file:bg-blue-50 file:text-blue-700
-              hover:file:bg-blue-100"
+              file:bg-gray-100 file:text-black
+              hover:file:bg-gray-200"
           />
         </div>
 
         <button
           onClick={handleImport}
           disabled={!file || loading}
-          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+          className="w-full px-4 py-2 bg-black text-white rounded-md hover:bg-gray-800 disabled:opacity-50"
         >
           {loading ? 'Importando...' : 'Importar Contatos'}
         </button>
@@ -93,24 +92,24 @@ export default function ImportPage() {
 
       {result && (
         <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-xl font-bold mb-4">Resultado da Importação</h2>
-          
+          <h2 className="text-xl font-bold text-black mb-4">Resultado da Importação</h2>
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-blue-50 p-4 rounded">
+            <div className="bg-gray-50 p-4 rounded border">
               <p className="text-sm text-gray-600">Total</p>
-              <p className="text-2xl font-bold">{result.total_rows}</p>
+              <p className="text-2xl font-bold text-black">{result.total_rows}</p>
             </div>
-            <div className="bg-green-50 p-4 rounded">
+            <div className="bg-green-50 p-4 rounded border border-green-200">
               <p className="text-sm text-gray-600">Criados</p>
-              <p className="text-2xl font-bold text-green-600">{result.created_count}</p>
+              <p className="text-2xl font-bold text-green-700">{result.created_count}</p>
             </div>
-            <div className="bg-yellow-50 p-4 rounded">
+            <div className="bg-yellow-50 p-4 rounded border border-yellow-200">
               <p className="text-sm text-gray-600">Duplicados</p>
-              <p className="text-2xl font-bold text-yellow-600">{result.duplicate_count}</p>
+              <p className="text-2xl font-bold text-yellow-700">{result.duplicate_count}</p>
             </div>
-            <div className="bg-red-50 p-4 rounded">
+            <div className="bg-red-50 p-4 rounded border border-red-200">
               <p className="text-sm text-gray-600">Inválidos</p>
-              <p className="text-2xl font-bold text-red-600">{result.invalid_count}</p>
+              <p className="text-2xl font-bold text-red-700">{result.invalid_count}</p>
             </div>
           </div>
 
@@ -143,7 +142,7 @@ export default function ImportPage() {
                         </td>
                         <td className="px-4 py-2 text-sm">
                           {item.contact_id && (
-                            <Link href={`/contacts/${item.contact_id}`} className="text-blue-600">
+                            <Link href={`/contacts/${item.contact_id}`} className="text-black font-medium">
                               Ver contato
                             </Link>
                           )}
