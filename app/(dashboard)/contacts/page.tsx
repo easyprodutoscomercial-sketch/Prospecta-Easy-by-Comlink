@@ -1,30 +1,50 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Contact } from '@/lib/types';
+import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS } from '@/lib/utils/labels';
 
 export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [tipoFilter, setTipoFilter] = useState('all');
   const [assignedFilter, setAssignedFilter] = useState('all');
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Debounce search input (400ms)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   useEffect(() => {
     loadContacts();
-  }, [search, statusFilter, assignedFilter]);
+  }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter]);
 
   const loadContacts = async () => {
+    // Cancel previous request
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     const params = new URLSearchParams();
-    if (search) params.set('search', search);
+    if (debouncedSearch) params.set('search', debouncedSearch);
     if (statusFilter !== 'all') params.set('status', statusFilter);
+    if (tipoFilter !== 'all') params.set('tipo', tipoFilter);
     if (assignedFilter !== 'all') params.set('assigned', assignedFilter);
 
-    const res = await fetch(`/api/contacts?${params.toString()}`);
-    const data = await res.json();
-    setContacts(data.contacts || []);
+    try {
+      const res = await fetch(`/api/contacts?${params.toString()}`, { signal: controller.signal });
+      const data = await res.json();
+      setContacts(data.contacts || []);
+    } catch (e: any) {
+      if (e.name === 'AbortError') return;
+    }
     setLoading(false);
   };
 
@@ -48,8 +68,8 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      <div className="border border-neutral-200 rounded-lg p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <input
             type="text"
             placeholder="Buscar por nome, email, telefone..."
@@ -71,6 +91,15 @@ export default function ContactsPage() {
             <option value="PERDIDO">Perdido</option>
           </select>
           <select
+            value={tipoFilter}
+            onChange={(e) => setTipoFilter(e.target.value)}
+            className="px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
+          >
+            <option value="all">Todos os tipos</option>
+            <option value="FORNECEDOR">Fornecedor</option>
+            <option value="COMPRADOR">Comprador</option>
+          </select>
+          <select
             value={assignedFilter}
             onChange={(e) => setAssignedFilter(e.target.value)}
             className="px-3 py-2 text-sm border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent"
@@ -85,11 +114,13 @@ export default function ContactsPage() {
       {loading ? (
         <div className="text-center py-12 text-sm text-neutral-500">Carregando...</div>
       ) : (
-        <div className="border border-neutral-200 rounded-lg overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm overflow-hidden">
           <table className="min-w-full divide-y divide-neutral-200">
             <thead className="bg-neutral-50">
               <tr>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Nome</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Tipo</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Empresa</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Email</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Telefone</th>
                 <th className="px-5 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wide">Status</th>
@@ -103,6 +134,22 @@ export default function ContactsPage() {
                     <Link href={`/contacts/${contact.id}`} className="text-sm font-medium text-neutral-900 hover:underline">
                       {contact.name}
                     </Link>
+                  </td>
+                  <td className="px-5 py-3 whitespace-nowrap">
+                    <div className="flex gap-1">
+                      {contact.tipo && contact.tipo.length > 0 ? (
+                        contact.tipo.map((t) => (
+                          <span key={t} className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${CONTACT_TYPE_COLORS[t] || 'bg-neutral-100 text-neutral-600'}`}>
+                            {CONTACT_TYPE_LABELS[t] || t}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-xs text-neutral-400">-</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 whitespace-nowrap text-sm text-neutral-500">
+                    {contact.company || '-'}
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap text-sm text-neutral-500">
                     {contact.email || '-'}
@@ -133,28 +180,4 @@ export default function ContactsPage() {
       )}
     </div>
   );
-}
-
-function formatStatus(status: string) {
-  const labels: Record<string, string> = {
-    NOVO: 'Novo',
-    EM_PROSPECCAO: 'Em Prospecção',
-    CONTATADO: 'Contatado',
-    REUNIAO_MARCADA: 'Reunião Marcada',
-    CONVERTIDO: 'Convertido',
-    PERDIDO: 'Perdido',
-  };
-  return labels[status] || status.replace(/_/g, ' ');
-}
-
-function getStatusColor(status: string) {
-  const colors: Record<string, string> = {
-    NOVO: 'bg-neutral-100 text-neutral-700',
-    EM_PROSPECCAO: 'bg-amber-100 text-amber-700',
-    CONTATADO: 'bg-blue-100 text-blue-700',
-    REUNIAO_MARCADA: 'bg-green-100 text-green-700',
-    CONVERTIDO: 'bg-emerald-100 text-emerald-700',
-    PERDIDO: 'bg-red-100 text-red-700',
-  };
-  return colors[status] || 'bg-neutral-100 text-neutral-700';
 }

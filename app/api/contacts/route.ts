@@ -1,38 +1,37 @@
 import { createClient } from '@/lib/supabase/server';
+import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { contactSchema } from '@/lib/utils/validation';
 import { normalizeContactData } from '@/lib/utils/normalize';
+import { ensureProfile } from '@/lib/ensure-profile';
 
 // GET /api/contacts - Listar contatos com filtros
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    // Pegar organization_id
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single();
+    const profile = await ensureProfile(supabase, user);
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
     }
 
+    const admin = getAdminClient();
     const searchParams = request.nextUrl.searchParams;
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status');
+    const tipo = searchParams.get('tipo'); // 'FORNECEDOR' | 'COMPRADOR'
     const assigned = searchParams.get('assigned'); // 'me' | 'unassigned' | 'all'
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
 
-    let query = supabase
+    let query = admin
       .from('contacts')
       .select('*', { count: 'exact' })
       .eq('organization_id', profile.organization_id);
@@ -45,6 +44,11 @@ export async function GET(request: NextRequest) {
     // Filtro de status
     if (status && status !== 'all') {
       query = query.eq('status', status);
+    }
+
+    // Filtro de tipo
+    if (tipo && tipo !== 'all') {
+      query = query.contains('tipo', [tipo]);
     }
 
     // Filtro de atribuição
@@ -83,36 +87,32 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    // Pegar profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single();
+    const profile = await ensureProfile(supabase, user);
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
     }
 
+    const admin = getAdminClient();
     const body = await request.json();
-    
+
     // Validar dados
     const validated = contactSchema.parse(body);
-    
+
     // Normalizar dados
     const normalized = normalizeContactData(validated);
 
     // DEDUPLICAÇÃO - buscar duplicados
     const duplicateChecks = [];
-    
+
     if (normalized.email_normalized) {
       duplicateChecks.push(
-        supabase
+        admin
           .from('contacts')
           .select('id, name, email, phone')
           .eq('organization_id', profile.organization_id)
@@ -121,10 +121,10 @@ export async function POST(request: NextRequest) {
           .single()
       );
     }
-    
+
     if (normalized.phone_normalized) {
       duplicateChecks.push(
-        supabase
+        admin
           .from('contacts')
           .select('id, name, email, phone')
           .eq('organization_id', profile.organization_id)
@@ -133,10 +133,10 @@ export async function POST(request: NextRequest) {
           .single()
       );
     }
-    
+
     if (normalized.cpf_digits) {
       duplicateChecks.push(
-        supabase
+        admin
           .from('contacts')
           .select('id, name, email, phone')
           .eq('organization_id', profile.organization_id)
@@ -145,10 +145,10 @@ export async function POST(request: NextRequest) {
           .single()
       );
     }
-    
+
     if (normalized.cnpj_digits) {
       duplicateChecks.push(
-        supabase
+        admin
           .from('contacts')
           .select('id, name, email, phone')
           .eq('organization_id', profile.organization_id)
@@ -160,10 +160,10 @@ export async function POST(request: NextRequest) {
 
     // Executar todas as verificações
     const results = await Promise.all(duplicateChecks);
-    
+
     // Procurar por duplicado (ignorar erros de "not found")
     const duplicate = results.find(r => r.data && !r.error);
-    
+
     if (duplicate && duplicate.data) {
       return NextResponse.json(
         {
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar contato
-    const { data: newContact, error } = await supabase
+    const { data: newContact, error } = await admin
       .from('contacts')
       .insert({
         organization_id: profile.organization_id,
@@ -191,14 +191,14 @@ export async function POST(request: NextRequest) {
 
   } catch (error: any) {
     console.error('Error creating contact:', error);
-    
+
     if (error.name === 'ZodError') {
       return NextResponse.json(
         { error: 'Dados inválidos', details: error.errors },
         { status: 400 }
       );
     }
-    
+
     return NextResponse.json(
       { error: error.message || 'Erro ao criar contato' },
       { status: 500 }

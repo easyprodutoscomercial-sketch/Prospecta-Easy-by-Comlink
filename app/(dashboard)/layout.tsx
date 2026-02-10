@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
+import { ensureProfile } from '@/lib/ensure-profile';
 
 export default async function DashboardLayout({
   children,
@@ -14,11 +15,7 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('user_id', user.id)
-    .single();
+  const profile = await ensureProfile(supabase, user);
 
   const handleSignOut = async () => {
     'use server';
@@ -28,7 +25,7 @@ export default async function DashboardLayout({
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-neutral-50">
       <Sidebar profileName={profile?.name ?? null} signOutAction={handleSignOut} />
 
       <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">

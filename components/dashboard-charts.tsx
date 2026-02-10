@@ -36,7 +36,7 @@ export default function DashboardCharts({ statusData, monthlyData }: DashboardCh
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       {/* Status pie chart */}
-      <div className="border border-neutral-200 rounded-lg p-5">
+      <div className="bg-white rounded-lg p-5 shadow-sm">
         <h3 className="text-sm font-medium text-neutral-900 mb-4">Contatos por Status</h3>
         {hasStatusData ? (
           <div className="flex items-center gap-4">
@@ -91,7 +91,7 @@ export default function DashboardCharts({ statusData, monthlyData }: DashboardCh
       </div>
 
       {/* Monthly bar chart */}
-      <div className="border border-neutral-200 rounded-lg p-5">
+      <div className="bg-white rounded-lg p-5 shadow-sm">
         <h3 className="text-sm font-medium text-neutral-900 mb-4">Contatos por Mês</h3>
         {hasMonthlyData ? (
           <div className="h-48">
@@ -117,7 +117,7 @@ export default function DashboardCharts({ statusData, monthlyData }: DashboardCh
                     border: '1px solid #e5e5e5',
                     boxShadow: 'none',
                   }}
-                  formatter={(value: number) => [value, 'Contatos']}
+                  formatter={(value: any) => [value, 'Contatos']}
                 />
                 <Bar dataKey="count" fill="#171717" radius={[4, 4, 0, 0]} />
               </BarChart>

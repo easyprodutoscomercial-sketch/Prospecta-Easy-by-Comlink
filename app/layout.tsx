@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Mini CRM - Identificador de Contatos",
-  description: "Sistema de gestão de contatos comerciais com deduplicação",
+  title: "Prospecta Easy by Comlink",
+  description: "Sistema de prospecção e gestão de contatos comerciais",
 };
 
 export default function RootLayout({

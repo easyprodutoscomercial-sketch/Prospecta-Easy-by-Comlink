@@ -31,14 +31,35 @@ CREATE TABLE contacts (
   cnpj TEXT,
   company TEXT,
   notes TEXT,
-  
+
+  -- Tipo e classificação
+  tipo TEXT[] DEFAULT '{}',
+  referencia TEXT,
+  classe TEXT CHECK (classe IS NULL OR classe IN ('A', 'B', 'C', 'D')),
+  produtos_fornecidos TEXT,
+
+  -- Pessoa de contato
+  contato_nome TEXT,
+  cargo TEXT,
+
+  -- Endereço
+  endereco TEXT,
+  cidade TEXT,
+  estado TEXT,
+  cep TEXT,
+
+  -- Presença digital
+  website TEXT,
+  instagram TEXT,
+  whatsapp TEXT,
+
   -- Dados normalizados (para deduplicação)
   name_normalized TEXT NOT NULL,
   phone_normalized TEXT,
   email_normalized TEXT,
   cpf_digits TEXT,
   cnpj_digits TEXT,
-  
+
   -- Status e atribuição
   status TEXT NOT NULL DEFAULT 'NOVO' CHECK (status IN ('NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO')),
   assigned_to_user_id UUID REFERENCES profiles(user_id) ON DELETE SET NULL,
@@ -55,8 +76,8 @@ CREATE TABLE interactions (
   organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   contact_id UUID NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
   
-  type TEXT NOT NULL CHECK (type IN ('LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'OUTRO')),
-  outcome TEXT NOT NULL CHECK (outcome IN ('SEM_RESPOSTA', 'RESPONDEU', 'REUNIAO_MARCADA', 'NAO_INTERESSADO', 'CONVERTIDO', 'SEGUIR_TENTANDO')),
+  type TEXT NOT NULL CHECK (type IN ('LIGACAO', 'WHATSAPP', 'EMAIL', 'REUNIAO', 'OUTRO', 'VISITA', 'PROPOSTA_ENVIADA', 'FOLLOW_UP', 'NEGOCIACAO', 'POS_VENDA', 'SUPORTE', 'INDICACAO', 'APRESENTACAO', 'ORCAMENTO')),
+  outcome TEXT NOT NULL CHECK (outcome IN ('SEM_RESPOSTA', 'RESPONDEU', 'REUNIAO_MARCADA', 'NAO_INTERESSADO', 'CONVERTIDO', 'SEGUIR_TENTANDO', 'PROPOSTA_ACEITA', 'AGUARDANDO_RETORNO', 'EM_NEGOCIACAO', 'INDICOU_TERCEIRO', 'FECHADO_PARCIAL')),
   note TEXT,
   happened_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   
@@ -113,6 +134,7 @@ CREATE INDEX idx_contacts_status ON contacts(organization_id, status);
 CREATE INDEX idx_contacts_assigned_to ON contacts(organization_id, assigned_to_user_id);
 CREATE INDEX idx_contacts_name_normalized ON contacts(organization_id, name_normalized);
 CREATE INDEX idx_contacts_created_at ON contacts(created_at);
+CREATE INDEX idx_contacts_tipo ON contacts USING GIN (tipo);
 
 -- Interactions
 CREATE INDEX idx_interactions_organization_id ON interactions(organization_id);

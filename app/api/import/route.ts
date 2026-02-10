@@ -1,7 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
+import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeContactData } from '@/lib/utils/normalize';
 import { ImportResult } from '@/lib/types';
+import { ensureProfile } from '@/lib/ensure-profile';
 
 const MAX_ROWS = 2000;
 
@@ -9,21 +11,18 @@ export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single();
+    const profile = await ensureProfile(supabase, user);
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
     }
 
+    const admin = getAdminClient();
     const body = await request.json();
     const { rows } = body; // Array de objetos {name, phone, email, cpf, cnpj, company, notes}
 
@@ -39,7 +38,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Criar import_run
-    const { data: importRun, error: runError } = await supabase
+    const { data: importRun, error: runError } = await admin
       .from('import_runs')
       .insert({
         organization_id: profile.organization_id,
@@ -77,6 +76,12 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
+        // Parse tipo from CSV (comma-separated in a single field)
+        let tipo: string[] = [];
+        if (row.tipo) {
+          tipo = row.tipo.split(',').map((t: string) => t.trim().toUpperCase()).filter((t: string) => ['FORNECEDOR', 'COMPRADOR'].includes(t));
+        }
+
         // Normalizar
         const normalized = normalizeContactData({
           name: row.name,
@@ -86,6 +91,19 @@ export async function POST(request: NextRequest) {
           cnpj: row.cnpj,
           company: row.company,
           notes: row.notes,
+          tipo,
+          referencia: row.referencia,
+          classe: row.classe,
+          produtos_fornecidos: row.produtos_fornecidos,
+          contato_nome: row.contato_nome,
+          cargo: row.cargo,
+          endereco: row.endereco,
+          cidade: row.cidade,
+          estado: row.estado,
+          cep: row.cep,
+          website: row.website,
+          instagram: row.instagram,
+          whatsapp: row.whatsapp,
         });
 
         // Verificar duplicidade
@@ -94,14 +112,14 @@ export async function POST(request: NextRequest) {
 
         // Checar por email
         if (normalized.email_normalized) {
-          const { data } = await supabase
+          const { data } = await admin
             .from('contacts')
             .select('id')
             .eq('organization_id', profile.organization_id)
             .eq('email_normalized', normalized.email_normalized)
             .limit(1)
             .maybeSingle();
-          
+
           if (data) {
             isDuplicate = true;
             duplicateId = data.id;
@@ -110,14 +128,14 @@ export async function POST(request: NextRequest) {
 
         // Checar por telefone
         if (!isDuplicate && normalized.phone_normalized) {
-          const { data } = await supabase
+          const { data } = await admin
             .from('contacts')
             .select('id')
             .eq('organization_id', profile.organization_id)
             .eq('phone_normalized', normalized.phone_normalized)
             .limit(1)
             .maybeSingle();
-          
+
           if (data) {
             isDuplicate = true;
             duplicateId = data.id;
@@ -126,14 +144,14 @@ export async function POST(request: NextRequest) {
 
         // Checar por CPF
         if (!isDuplicate && normalized.cpf_digits) {
-          const { data } = await supabase
+          const { data } = await admin
             .from('contacts')
             .select('id')
             .eq('organization_id', profile.organization_id)
             .eq('cpf_digits', normalized.cpf_digits)
             .limit(1)
             .maybeSingle();
-          
+
           if (data) {
             isDuplicate = true;
             duplicateId = data.id;
@@ -142,14 +160,14 @@ export async function POST(request: NextRequest) {
 
         // Checar por CNPJ
         if (!isDuplicate && normalized.cnpj_digits) {
-          const { data } = await supabase
+          const { data } = await admin
             .from('contacts')
             .select('id')
             .eq('organization_id', profile.organization_id)
             .eq('cnpj_digits', normalized.cnpj_digits)
             .limit(1)
             .maybeSingle();
-          
+
           if (data) {
             isDuplicate = true;
             duplicateId = data.id;
@@ -166,7 +184,7 @@ export async function POST(request: NextRequest) {
           });
         } else {
           // Criar contato
-          const { data: newContact, error } = await supabase
+          const { data: newContact, error } = await admin
             .from('contacts')
             .insert({
               organization_id: profile.organization_id,
@@ -199,7 +217,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Atualizar import_run com resultados
-    await supabase
+    await admin
       .from('import_runs')
       .update({
         created_count: result.created_count,
@@ -219,7 +237,7 @@ export async function POST(request: NextRequest) {
     }));
 
     if (importItems.length > 0) {
-      await supabase.from('import_run_items').insert(importItems);
+      await admin.from('import_run_items').insert(importItems);
     }
 
     return NextResponse.json(result);

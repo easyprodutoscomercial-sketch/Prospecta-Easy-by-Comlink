@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getAdminClient } from '@/lib/supabase/admin';
 
-export async function ensureProfile(supabase: SupabaseClient, user: { id: string; email?: string; user_metadata?: any }) {
+export async function ensureProfile(supabase: SupabaseClient, user: { id: string; email?: string; user_metadata?: any }): Promise<{ user_id: string; organization_id: string; name: string; email: string } | null> {
   const admin = getAdminClient();
 
   const { data: profile, error: fetchError } = await admin

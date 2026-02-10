@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
@@ -70,9 +71,9 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
   const navContent = (
     <>
       {/* Logo */}
-      <div className="flex items-center h-14 px-5">
-        <Link href="/dashboard" className="text-lg font-semibold text-white tracking-tight">
-          Mini CRM
+      <div className="flex items-center h-16 px-4">
+        <Link href="/dashboard" className="flex items-center gap-2">
+          <Image src="/logo.png" alt="Prospecta Easy" width={140} height={40} className="brightness-0 invert" />
         </Link>
       </div>
 
@@ -120,7 +121,7 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center h-14 bg-neutral-900 px-4">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center h-14 bg-black px-4">
         <button
           onClick={() => setMobileOpen(true)}
           className="text-neutral-400 hover:text-white"
@@ -130,7 +131,7 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <span className="ml-3 text-sm font-semibold text-white">Mini CRM</span>
+        <Image src="/logo.png" alt="Prospecta Easy" width={110} height={30} className="ml-3 brightness-0 invert" />
       </div>
 
       {/* Mobile overlay */}
@@ -143,7 +144,7 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
 
       {/* Mobile sidebar */}
       <aside
-        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-neutral-900 flex flex-col transform transition-transform duration-200 ease-in-out ${
+        className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-black flex flex-col transform transition-transform duration-200 ease-in-out ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -151,7 +152,7 @@ export default function Sidebar({ profileName, signOutAction }: SidebarProps) {
       </aside>
 
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col bg-neutral-900">
+      <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col bg-black">
         {navContent}
       </aside>
     </>

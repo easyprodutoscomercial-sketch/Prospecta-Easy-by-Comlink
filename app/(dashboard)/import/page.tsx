@@ -62,8 +62,8 @@ export default function ImportPage() {
             <p className="text-sm text-neutral-500 mt-1">
               O CSV deve conter as colunas abaixo. Apenas <strong>name</strong> é obrigatório. Limite: 2.000 linhas.
             </p>
-            <code className="inline-block bg-neutral-100 text-neutral-700 px-3 py-1.5 rounded text-xs mt-3">
-              name, phone, email, cpf, cnpj, company, notes
+            <code className="inline-block bg-neutral-100 text-neutral-700 px-3 py-1.5 rounded text-xs mt-3 leading-relaxed">
+              name, phone, email, cpf, cnpj, company, notes, tipo, referencia, classe, produtos_fornecidos, contato_nome, cargo, endereco, cidade, estado, cep, website, instagram, whatsapp
             </code>
           </div>
           <a

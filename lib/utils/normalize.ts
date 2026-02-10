@@ -41,7 +41,23 @@ export interface NormalizedContact {
   cnpj: string | null;
   company: string | null;
   notes: string | null;
-  
+  // Tipo e classificação
+  tipo: string[];
+  referencia: string | null;
+  classe: string | null;
+  produtos_fornecidos: string | null;
+  // Pessoa de contato
+  contato_nome: string | null;
+  cargo: string | null;
+  // Endereço
+  endereco: string | null;
+  cidade: string | null;
+  estado: string | null;
+  cep: string | null;
+  // Presença digital
+  website: string | null;
+  instagram: string | null;
+  whatsapp: string | null;
   // Dados normalizados
   name_normalized: string;
   phone_normalized: string | null;
@@ -58,6 +74,19 @@ export function normalizeContactData(data: {
   cnpj?: string | null;
   company?: string | null;
   notes?: string | null;
+  tipo?: string[] | null;
+  referencia?: string | null;
+  classe?: string | null;
+  produtos_fornecidos?: string | null;
+  contato_nome?: string | null;
+  cargo?: string | null;
+  endereco?: string | null;
+  cidade?: string | null;
+  estado?: string | null;
+  cep?: string | null;
+  website?: string | null;
+  instagram?: string | null;
+  whatsapp?: string | null;
 }): NormalizedContact {
   return {
     name: data.name.trim(),
@@ -67,7 +96,24 @@ export function normalizeContactData(data: {
     cnpj: data.cnpj || null,
     company: data.company || null,
     notes: data.notes || null,
-    
+    // Tipo e classificação
+    tipo: data.tipo || [],
+    referencia: data.referencia || null,
+    classe: data.classe || null,
+    produtos_fornecidos: data.produtos_fornecidos || null,
+    // Pessoa de contato
+    contato_nome: data.contato_nome || null,
+    cargo: data.cargo || null,
+    // Endereço
+    endereco: data.endereco || null,
+    cidade: data.cidade || null,
+    estado: data.estado || null,
+    cep: data.cep || null,
+    // Presença digital
+    website: data.website || null,
+    instagram: data.instagram || null,
+    whatsapp: data.whatsapp || null,
+    // Normalizados
     name_normalized: normalizeName(data.name),
     phone_normalized: normalizePhone(data.phone),
     email_normalized: normalizeEmail(data.email),

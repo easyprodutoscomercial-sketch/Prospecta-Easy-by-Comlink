@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
+import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { contactUpdateSchema } from '@/lib/utils/validation';
+import { normalizeEmail, normalizePhone, normalizeCPF, normalizeCNPJ, normalizeName } from '@/lib/utils/normalize';
 
 // GET /api/contacts/:id - Buscar contato
 export async function GET(
@@ -11,12 +13,14 @@ export async function GET(
     const { id } = await params;
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
-    const { data: contact, error } = await supabase
+    const admin = getAdminClient();
+
+    const { data: contact, error } = await admin
       .from('contacts')
       .select('*')
       .eq('id', id)
@@ -27,7 +31,7 @@ export async function GET(
     }
 
     // Buscar interações
-    const { data: interactions } = await supabase
+    const { data: interactions } = await admin
       .from('interactions')
       .select('*')
       .eq('contact_id', id)
@@ -44,7 +48,7 @@ export async function GET(
   }
 }
 
-// PATCH /api/contacts/:id - Atualizar contato (status, atribuição)
+// PATCH /api/contacts/:id - Atualizar contato (todos os campos)
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -53,17 +57,37 @@ export async function PATCH(
     const { id } = await params;
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    const admin = getAdminClient();
     const body = await request.json();
     const validated = contactUpdateSchema.parse(body);
 
-    const { data: contact, error } = await supabase
+    // Re-normalize identity fields when they change
+    const updateData: Record<string, any> = { ...validated };
+
+    if (validated.name !== undefined) {
+      updateData.name_normalized = normalizeName(validated.name);
+    }
+    if (validated.email !== undefined) {
+      updateData.email_normalized = normalizeEmail(validated.email);
+    }
+    if (validated.phone !== undefined) {
+      updateData.phone_normalized = normalizePhone(validated.phone);
+    }
+    if (validated.cpf !== undefined) {
+      updateData.cpf_digits = normalizeCPF(validated.cpf);
+    }
+    if (validated.cnpj !== undefined) {
+      updateData.cnpj_digits = normalizeCNPJ(validated.cnpj);
+    }
+
+    const { data: contact, error } = await admin
       .from('contacts')
-      .update(validated)
+      .update(updateData)
       .eq('id', id)
       .select()
       .single();
@@ -74,14 +98,14 @@ export async function PATCH(
 
   } catch (error: any) {
     console.error('Error updating contact:', error);
-    
+
     if (error.name === 'ZodError') {
       return NextResponse.json(
         { error: 'Dados inválidos', details: error.errors },
         { status: 400 }
       );
     }
-    
+
     return NextResponse.json(
       { error: error.message || 'Erro ao atualizar contato' },
       { status: 500 }
@@ -103,11 +127,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    const admin = getAdminClient();
+
     // Deletar interações primeiro
-    await supabase.from('interactions').delete().eq('contact_id', id);
+    await admin.from('interactions').delete().eq('contact_id', id);
 
     // Deletar contato
-    const { error } = await supabase.from('contacts').delete().eq('id', id);
+    const { error } = await admin.from('contacts').delete().eq('id', id);
 
     if (error) throw error;
 
