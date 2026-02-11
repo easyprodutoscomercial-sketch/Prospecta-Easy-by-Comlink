@@ -34,7 +34,7 @@ const ALL_STATUSES: ContactStatus[] = [
 // Collision detection que prioriza colunas sobre cards
 const columnFirstCollision: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
-  const columnHit = pointerCollisions.find((c) => ALL_STATUSES.includes(c.id as string));
+  const columnHit = pointerCollisions.find((c) => ALL_STATUSES.includes(c.id as ContactStatus));
   if (columnHit) return [columnHit];
   if (pointerCollisions.length > 0) return pointerCollisions;
   return rectIntersection(args);
