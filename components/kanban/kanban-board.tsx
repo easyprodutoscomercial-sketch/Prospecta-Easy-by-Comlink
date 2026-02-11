@@ -21,10 +21,12 @@ interface KanbanBoardProps {
   userMap: Record<string, UserInfo>;
   currentUserId?: string;
   onClaimContact?: (contactId: string) => void;
+  onJumpForward?: (contactId: string) => void;
+  onJumpBackward?: (contactId: string) => void;
   pipelineSettings?: PipelineSettings | null;
 }
 
-export function KanbanBoard({ grouped, activeContact, userMap, currentUserId, onClaimContact, pipelineSettings }: KanbanBoardProps) {
+export function KanbanBoard({ grouped, activeContact, userMap, currentUserId, onClaimContact, onJumpForward, onJumpBackward, pipelineSettings }: KanbanBoardProps) {
   return (
     <>
       <div className="flex gap-3 overflow-x-auto pb-4 min-h-0 xl:grid xl:grid-cols-6 xl:overflow-x-visible">
@@ -38,6 +40,8 @@ export function KanbanBoard({ grouped, activeContact, userMap, currentUserId, on
             columnColor={getColumnColor(status, pipelineSettings)}
             currentUserId={currentUserId}
             onClaimContact={onClaimContact}
+            onJumpForward={onJumpForward}
+            onJumpBackward={onJumpBackward}
           />
         ))}
       </div>

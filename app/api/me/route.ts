@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { NextResponse } from 'next/server';
 
@@ -17,11 +18,26 @@ export async function GET() {
       return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
     }
 
+    // Se role não existe no banco, detectar: primeiro usuário da org = admin
+    let role = profile.role;
+    if (!role) {
+      const admin = getAdminClient();
+      const { data: firstUser } = await admin
+        .from('profiles')
+        .select('user_id')
+        .eq('organization_id', profile.organization_id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .single();
+
+      role = (firstUser && firstUser.user_id === profile.user_id) ? 'admin' : 'user';
+    }
+
     return NextResponse.json({
       user_id: profile.user_id,
       name: profile.name,
       email: profile.email,
-      role: profile.role,
+      role,
       organization_id: profile.organization_id,
       avatar_url: profile.avatar_url || null,
     });

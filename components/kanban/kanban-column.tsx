@@ -13,9 +13,11 @@ interface KanbanColumnProps {
   columnColor?: string;
   currentUserId?: string;
   onClaimContact?: (contactId: string) => void;
+  onJumpForward?: (contactId: string) => void;
+  onJumpBackward?: (contactId: string) => void;
 }
 
-export function KanbanColumn({ status, contacts, userMap, columnLabel, columnColor, currentUserId, onClaimContact }: KanbanColumnProps) {
+export function KanbanColumn({ status, contacts, userMap, columnLabel, columnColor, currentUserId, onClaimContact, onJumpForward, onJumpBackward }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const color = columnColor || '#a3a3a3';
   const label = columnLabel || status;
@@ -53,6 +55,8 @@ export function KanbanColumn({ status, contacts, userMap, columnLabel, columnCol
               userMap={userMap}
               currentUserId={currentUserId}
               onClaimContact={onClaimContact}
+              onJumpForward={onJumpForward}
+              onJumpBackward={onJumpBackward}
             />
           ))}
         </SortableContext>

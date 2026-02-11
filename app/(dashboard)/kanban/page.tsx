@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
-  closestCorners,
+  pointerWithin,
+  rectIntersection,
   PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
   type DragStartEvent,
   type DragEndEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import type { Contact, ContactStatus, ContactType, PipelineSettings } from '@/lib/types';
 import { useToast } from '@/lib/toast-context';
@@ -29,20 +31,80 @@ const ALL_STATUSES: ContactStatus[] = [
   'PERDIDO',
 ];
 
+// Collision detection que prioriza colunas sobre cards
+const columnFirstCollision: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  const columnHit = pointerCollisions.find((c) => ALL_STATUSES.includes(c.id as string));
+  if (columnHit) return [columnHit];
+  if (pointerCollisions.length > 0) return pointerCollisions;
+  return rectIntersection(args);
+};
+
+// Sons usando Web Audio API
+function playSound(type: 'celebrate' | 'sad') {
+  try {
+    const ctx = new AudioContext();
+    if (type === 'celebrate') {
+      // Som de "ihuuul" — notas ascendentes alegres
+      [0, 0.15, 0.3, 0.45].forEach((delay, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.value = 400 + i * 150;
+        gain.gain.value = 0.15;
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.4);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.4);
+      });
+    } else {
+      // Som de "nãooo" — nota descendente triste
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = 400;
+      osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.6);
+      gain.gain.value = 0.15;
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.7);
+    }
+  } catch {}
+}
+
+// Emoji particle
+interface EmojiParticle {
+  id: number;
+  emoji: string;
+  x: number;
+  y: number;
+  size: number;
+  delay: number;
+}
+
+const CELEBRATE_EMOJIS = ['👏', '🎉', '🥳', '🎊', '🏆', '⭐', '🔥', '💪', '🚀', '✨'];
+const SAD_EMOJIS = ['😢', '😭', '💔', '😞', '😿', '🥺', '😩', '😔', '💧', '🫠'];
+
 export default function KanbanPage() {
   const toast = useToast();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<'' | ContactType>('');
+  const [responsavelFilter, setResponsavelFilter] = useState('');
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
   const [showMotivoModal, setShowMotivoModal] = useState(false);
   const [pendingDrag, setPendingDrag] = useState<{ contactId: string; newStatus: 'CONVERTIDO' | 'PERDIDO'; oldStatus: ContactStatus } | null>(null);
+  const [pendingJump, setPendingJump] = useState<{ contactId: string; newStatus: 'CONVERTIDO' | 'PERDIDO'; oldStatus: ContactStatus } | null>(null);
   const [motivoLoading, setMotivoLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserRole, setCurrentUserRole] = useState<string>('user');
   const [pipelineSettings, setPipelineSettings] = useState<PipelineSettings | null>(null);
+  const [emojiParticles, setEmojiParticles] = useState<EmojiParticle[]>([]);
 
   // Pick-me speech bubble rotation
   const [talkingIndex, setTalkingIndex] = useState(0);
@@ -52,14 +114,10 @@ export default function KanbanPage() {
   useEffect(() => {
     const userKeys = Object.keys(userMap);
     if (userKeys.length === 0) return;
-    // Pick random phrase
     setCurrentPhrase(PICK_ME_PHRASES[Math.floor(Math.random() * PICK_ME_PHRASES.length)]);
     setPhraseKey((k) => k + 1);
     const interval = setInterval(() => {
-      setTalkingIndex((prev) => {
-        const next = (prev + 1) % userKeys.length;
-        return next;
-      });
+      setTalkingIndex((prev) => (prev + 1) % userKeys.length);
       setCurrentPhrase(PICK_ME_PHRASES[Math.floor(Math.random() * PICK_ME_PHRASES.length)]);
       setPhraseKey((k) => k + 1);
     }, 2800);
@@ -71,7 +129,6 @@ export default function KanbanPage() {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
-  // Fetch contacts + users + me + pipeline settings in parallel
   const fetchData = useCallback(async () => {
     try {
       const [contactsRes, usersRes, meRes, settingsRes] = await Promise.all([
@@ -101,7 +158,7 @@ export default function KanbanPage() {
       if (meRes.ok) {
         const meData = await meRes.json();
         setCurrentUserId(meData.user_id);
-        setCurrentUserRole(meData.role);
+        setCurrentUserRole(meData.role || 'user');
       }
 
       if (settingsRes.ok) {
@@ -120,6 +177,22 @@ export default function KanbanPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Emoji explosion effect
+  function triggerEmojis(type: 'celebrate' | 'sad') {
+    playSound(type);
+    const emojis = type === 'celebrate' ? CELEBRATE_EMOJIS : SAD_EMOJIS;
+    const particles: EmojiParticle[] = Array.from({ length: 30 }, (_, i) => ({
+      id: Date.now() + i,
+      emoji: emojis[Math.floor(Math.random() * emojis.length)],
+      x: Math.random() * 100,
+      y: Math.random() * 100,
+      size: 20 + Math.random() * 30,
+      delay: Math.random() * 0.5,
+    }));
+    setEmojiParticles(particles);
+    setTimeout(() => setEmojiParticles([]), 2500);
+  }
 
   // Filter contacts
   const filtered = useMemo(() => {
@@ -140,8 +213,16 @@ export default function KanbanPage() {
       result = result.filter((c) => c.tipo?.includes(tipoFilter));
     }
 
+    if (responsavelFilter) {
+      result = result.filter((c) =>
+        responsavelFilter === '_none'
+          ? !c.assigned_to_user_id
+          : c.assigned_to_user_id === responsavelFilter || c.created_by_user_id === responsavelFilter
+      );
+    }
+
     return result;
-  }, [contacts, search, tipoFilter]);
+  }, [contacts, search, tipoFilter, responsavelFilter]);
 
   // Group by status
   const grouped = useMemo(() => {
@@ -159,6 +240,50 @@ export default function KanbanPage() {
     setActiveContact(contact || null);
   }
 
+  async function moveContact(contactId: string, newStatus: ContactStatus, motivo?: string) {
+    const contact = contacts.find((c) => c.id === contactId);
+    if (!contact || contact.status === newStatus) return;
+
+    const oldStatus = contact.status;
+    const oldIdx = ALL_STATUSES.indexOf(oldStatus);
+    const newIdx = ALL_STATUSES.indexOf(newStatus);
+    const isForward = newIdx > oldIdx;
+
+    // Optimistic update
+    setContacts((prev) =>
+      prev.map((c) => (c.id === contactId ? { ...c, status: newStatus, ...(motivo ? { motivo_ganho_perdido: motivo } : {}) } : c))
+    );
+
+    // Trigger celebration or sad effect
+    if (isForward) {
+      triggerEmojis('celebrate');
+    } else {
+      triggerEmojis('sad');
+    }
+
+    try {
+      const body: Record<string, string> = { status: newStatus };
+      if (motivo) body.motivo_ganho_perdido = motivo;
+
+      const res = await fetch(`/api/contacts/${contactId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro');
+      }
+      toast.success(isForward ? 'Avançou no pipeline!' : 'Status atualizado');
+    } catch (err: any) {
+      setContacts((prev) =>
+        prev.map((c) => (c.id === contactId ? { ...c, status: oldStatus } : c))
+      );
+      toast.error(err.message || 'Erro ao atualizar status');
+    }
+  }
+
   async function handleDragEnd(event: DragEndEvent) {
     setActiveContact(null);
     const { active, over } = event;
@@ -167,91 +292,81 @@ export default function KanbanPage() {
     const contactId = active.id as string;
     let newStatus = over.id as string;
 
-    // If dropped on a card, get its column status
     const overContact = contacts.find((c) => c.id === newStatus);
     if (overContact) {
       newStatus = overContact.status;
     }
 
-    // Validate it's a real status
     if (!ALL_STATUSES.includes(newStatus as ContactStatus)) return;
 
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact || contact.status === newStatus) return;
 
-    // Intercept CONVERTIDO/PERDIDO to ask for motivo
+    // Ownership
+    if (contact.assigned_to_user_id && contact.assigned_to_user_id !== currentUserId && currentUserRole !== 'admin') {
+      const ownerName = userMap[contact.assigned_to_user_id]?.name || 'outro usuário';
+      toast.error(`Contato atribuído a ${ownerName}. Aponte para você primeiro.`);
+      return;
+    }
+
+    // Intercept CONVERTIDO/PERDIDO
     if (newStatus === 'CONVERTIDO' || newStatus === 'PERDIDO') {
       setPendingDrag({ contactId, newStatus, oldStatus: contact.status });
       setShowMotivoModal(true);
       return;
     }
 
-    const oldStatus = contact.status;
-
-    // Optimistic update
-    setContacts((prev) =>
-      prev.map((c) => (c.id === contactId ? { ...c, status: newStatus as ContactStatus } : c))
-    );
-
-    try {
-      const res = await fetch(`/api/contacts/${contactId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || 'Erro');
-      }
-      toast.success('Status atualizado');
-    } catch (err: any) {
-      // Rollback
-      setContacts((prev) =>
-        prev.map((c) => (c.id === contactId ? { ...c, status: oldStatus } : c))
-      );
-      toast.error(err.message || 'Erro ao atualizar status');
-    }
+    await moveContact(contactId, newStatus as ContactStatus);
   }
 
   async function handleMotivoConfirm(motivo: string) {
-    if (!pendingDrag) return;
-    const { contactId, newStatus, oldStatus } = pendingDrag;
+    const pending = pendingDrag || pendingJump;
+    if (!pending) return;
     setMotivoLoading(true);
 
-    // Optimistic update
-    setContacts((prev) =>
-      prev.map((c) => (c.id === contactId ? { ...c, status: newStatus as ContactStatus, motivo_ganho_perdido: motivo } : c))
-    );
-
-    try {
-      const res = await fetch(`/api/contacts/${contactId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus, motivo_ganho_perdido: motivo }),
-      });
-
-      if (!res.ok) throw new Error();
-      toast.success('Status atualizado');
-    } catch {
-      // Rollback
-      setContacts((prev) =>
-        prev.map((c) => (c.id === contactId ? { ...c, status: oldStatus } : c))
-      );
-      toast.error('Erro ao atualizar status');
-    }
+    await moveContact(pending.contactId, pending.newStatus as ContactStatus, motivo);
 
     setMotivoLoading(false);
     setShowMotivoModal(false);
     setPendingDrag(null);
+    setPendingJump(null);
   }
 
-  // Claim contact (apontar para mim)
+  // Jump forward/backward
+  async function handleJumpForward(contactId: string) {
+    const contact = contacts.find((c) => c.id === contactId);
+    if (!contact) return;
+
+    const idx = ALL_STATUSES.indexOf(contact.status);
+    if (idx >= ALL_STATUSES.length - 2) return; // Can't jump past CONVERTIDO (PERDIDO is separate)
+
+    const newStatus = ALL_STATUSES[idx + 1];
+
+    if (newStatus === 'CONVERTIDO' || newStatus === 'PERDIDO') {
+      setPendingJump({ contactId, newStatus: newStatus as 'CONVERTIDO' | 'PERDIDO', oldStatus: contact.status });
+      setShowMotivoModal(true);
+      return;
+    }
+
+    await moveContact(contactId, newStatus);
+  }
+
+  async function handleJumpBackward(contactId: string) {
+    const contact = contacts.find((c) => c.id === contactId);
+    if (!contact) return;
+
+    const idx = ALL_STATUSES.indexOf(contact.status);
+    if (idx <= 0) return; // Already at NOVO
+
+    const newStatus = ALL_STATUSES[idx - 1];
+    await moveContact(contactId, newStatus);
+  }
+
+  // Claim contact
   async function handleClaimContact(contactId: string) {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact || contact.assigned_to_user_id) return;
 
-    // Optimistic
     setContacts((prev) =>
       prev.map((c) => (c.id === contactId ? { ...c, assigned_to_user_id: currentUserId } : c))
     );
@@ -266,7 +381,6 @@ export default function KanbanPage() {
       if (!res.ok) throw new Error();
       toast.success('Contato atribuído a você');
     } catch {
-      // Rollback
       setContacts((prev) =>
         prev.map((c) => (c.id === contactId ? { ...c, assigned_to_user_id: null } : c))
       );
@@ -276,11 +390,31 @@ export default function KanbanPage() {
 
   return (
     <div className="p-4 lg:p-6 space-y-4">
+      {/* Emoji explosion overlay */}
+      {emojiParticles.length > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+          {emojiParticles.map((p) => (
+            <span
+              key={p.id}
+              className="absolute animate-emoji-fall"
+              style={{
+                left: `${p.x}%`,
+                top: `-5%`,
+                fontSize: `${p.size}px`,
+                animationDelay: `${p.delay}s`,
+              }}
+            >
+              {p.emoji}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-xl font-bold text-emerald-400">Pipeline</h1>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Search */}
           <div className="relative">
             <svg
@@ -301,7 +435,7 @@ export default function KanbanPage() {
               placeholder="Buscar..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-48"
+              className="pl-8 pr-3 py-1.5 text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-44"
             />
           </div>
 
@@ -315,6 +449,19 @@ export default function KanbanPage() {
             <option value="FORNECEDOR">Fornecedor</option>
             <option value="COMPRADOR">Comprador</option>
           </select>
+
+          {/* Responsavel filter */}
+          <select
+            value={responsavelFilter}
+            onChange={(e) => setResponsavelFilter(e.target.value)}
+            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Todos responsáveis</option>
+            <option value="_none">Sem responsável</option>
+            {Object.entries(userMap).map(([userId, user]) => (
+              <option key={userId} value={userId}>{user.name}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -326,7 +473,6 @@ export default function KanbanPage() {
             const isTalking = i === talkingIndex;
             return (
               <div key={u.name} className="flex flex-col items-center gap-1 relative">
-                {/* Speech bubble — só aparece no avatar da vez */}
                 {isTalking && (
                   <div key={phraseKey} className="speech-bubble">
                     {currentPhrase}
@@ -360,7 +506,7 @@ export default function KanbanPage() {
         <div className="bg-[#1e0f35]/50 rounded-xl p-4 border border-purple-800/20">
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCorners}
+            collisionDetection={columnFirstCollision}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
@@ -370,6 +516,8 @@ export default function KanbanPage() {
               userMap={userMap}
               currentUserId={currentUserId}
               onClaimContact={handleClaimContact}
+              onJumpForward={handleJumpForward}
+              onJumpBackward={handleJumpBackward}
               pipelineSettings={pipelineSettings}
             />
           </DndContext>
@@ -377,12 +525,12 @@ export default function KanbanPage() {
       )}
 
       {/* Motivo modal for CONVERTIDO/PERDIDO */}
-      {pendingDrag && (
+      {(pendingDrag || pendingJump) && (
         <MotivoModal
           isOpen={showMotivoModal}
-          onClose={() => { setShowMotivoModal(false); setPendingDrag(null); }}
+          onClose={() => { setShowMotivoModal(false); setPendingDrag(null); setPendingJump(null); }}
           onConfirm={handleMotivoConfirm}
-          tipo={pendingDrag.newStatus}
+          tipo={(pendingDrag || pendingJump)!.newStatus}
           loading={motivoLoading}
         />
       )}
