@@ -34,21 +34,7 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json();
     const { ids, status } = batchUpdateSchema.parse(body);
 
-    // Filter ids to only contacts owned by user (or all if admin)
-    let allowedIds = ids;
-    if (profile.role !== 'admin') {
-      const { data: ownedContacts } = await admin
-        .from('contacts')
-        .select('id')
-        .in('id', ids)
-        .or(`assigned_to_user_id.eq.${user.id},assigned_to_user_id.is.null`);
-
-      allowedIds = (ownedContacts || []).map((c: any) => c.id);
-    }
-
-    if (allowedIds.length === 0) {
-      return NextResponse.json({ error: 'Sem permissão para atualizar estes contatos' }, { status: 403 });
-    }
+    const allowedIds = ids;
 
     const { error } = await admin
       .from('contacts')

@@ -86,11 +86,6 @@ export async function PATCH(
     // "Apontar para mim": se contato não tem dono e estou me atribuindo
     const isClaiming = validated.assigned_to_user_id === user.id && !existingContact.assigned_to_user_id;
 
-    // Se movendo no pipeline (status change) e contato tem dono diferente de mim
-    if (validated.status && existingContact.assigned_to_user_id && existingContact.assigned_to_user_id !== user.id && profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Apenas o responsável ou admin pode alterar o status deste contato' }, { status: 403 });
-    }
-
     // Converter proxima_acao_data para ISO se presente
     if (validated.proxima_acao_data) {
       validated.proxima_acao_data = new Date(validated.proxima_acao_data).toISOString();

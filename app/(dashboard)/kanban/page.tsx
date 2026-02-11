@@ -179,13 +179,6 @@ export default function KanbanPage() {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact || contact.status === newStatus) return;
 
-    // Ownership enforcement: block if contact has owner != me and I'm not admin
-    if (contact.assigned_to_user_id && contact.assigned_to_user_id !== currentUserId && currentUserRole !== 'admin') {
-      const ownerName = userMap[contact.assigned_to_user_id]?.name || 'outro usuário';
-      toast.error(`Apenas o responsável (${ownerName}) ou admin pode mover este contato`);
-      return;
-    }
-
     // Intercept CONVERTIDO/PERDIDO to ask for motivo
     if (newStatus === 'CONVERTIDO' || newStatus === 'PERDIDO') {
       setPendingDrag({ contactId, newStatus, oldStatus: contact.status });
