@@ -302,11 +302,17 @@ export default function KanbanPage() {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact || contact.status === newStatus) return;
 
-    // Ownership
-    if (contact.assigned_to_user_id && contact.assigned_to_user_id !== currentUserId && currentUserRole !== 'admin') {
-      const ownerName = userMap[contact.assigned_to_user_id]?.name || 'outro usuário';
-      toast.error(`Contato atribuído a ${ownerName}. Aponte para você primeiro.`);
-      return;
+    // Ownership: só o responsável (ou admin) pode mover
+    if (currentUserRole !== 'admin') {
+      if (!contact.assigned_to_user_id) {
+        toast.error('Este contato não tem responsável. Aponte para você primeiro.');
+        return;
+      }
+      if (contact.assigned_to_user_id !== currentUserId) {
+        const ownerName = userMap[contact.assigned_to_user_id]?.name || 'outro usuário';
+        toast.error(`Contato atribuído a ${ownerName}. Aponte para você primeiro.`);
+        return;
+      }
     }
 
     // Intercept CONVERTIDO/PERDIDO
@@ -332,13 +338,24 @@ export default function KanbanPage() {
     setPendingJump(null);
   }
 
+  // Verifica se o usuário pode mover este contato
+  function canMoveContact(contact: Contact): boolean {
+    if (currentUserRole === 'admin') return true;
+    return !!contact.assigned_to_user_id && contact.assigned_to_user_id === currentUserId;
+  }
+
   // Jump forward/backward
   async function handleJumpForward(contactId: string) {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
 
+    if (!canMoveContact(contact)) {
+      toast.error('Você não é o responsável deste contato.');
+      return;
+    }
+
     const idx = ALL_STATUSES.indexOf(contact.status);
-    if (idx >= ALL_STATUSES.length - 2) return; // Can't jump past CONVERTIDO (PERDIDO is separate)
+    if (idx >= ALL_STATUSES.length - 2) return;
 
     const newStatus = ALL_STATUSES[idx + 1];
 
@@ -355,8 +372,13 @@ export default function KanbanPage() {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
 
+    if (!canMoveContact(contact)) {
+      toast.error('Você não é o responsável deste contato.');
+      return;
+    }
+
     const idx = ALL_STATUSES.indexOf(contact.status);
-    if (idx <= 0) return; // Already at NOVO
+    if (idx <= 0) return;
 
     const newStatus = ALL_STATUSES[idx - 1];
     await moveContact(contactId, newStatus);

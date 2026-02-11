@@ -86,6 +86,16 @@ export async function PATCH(
     // "Apontar para mim": se contato não tem dono e estou me atribuindo
     const isClaiming = validated.assigned_to_user_id === user.id && !existingContact.assigned_to_user_id;
 
+    // Ownership: só o responsável (ou admin) pode mover no pipeline
+    if (validated.status && profile.role !== 'admin') {
+      if (!existingContact.assigned_to_user_id) {
+        return NextResponse.json({ error: 'Este contato não tem responsável. Aponte para você primeiro.' }, { status: 403 });
+      }
+      if (existingContact.assigned_to_user_id !== user.id) {
+        return NextResponse.json({ error: 'Apenas o responsável ou admin pode alterar o status deste contato' }, { status: 403 });
+      }
+    }
+
     // Converter proxima_acao_data para ISO se presente
     if (validated.proxima_acao_data) {
       validated.proxima_acao_data = new Date(validated.proxima_acao_data).toISOString();
