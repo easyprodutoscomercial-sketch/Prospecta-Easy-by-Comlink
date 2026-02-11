@@ -24,15 +24,20 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = interactionSchema.parse(body);
 
-    // Pegar contact para verificar organization_id
+    // Pegar contact para verificar organization_id e ownership
     const { data: contact } = await admin
       .from('contacts')
-      .select('organization_id, status')
+      .select('organization_id, status, assigned_to_user_id')
       .eq('id', validated.contact_id)
       .single();
 
     if (!contact) {
       return NextResponse.json({ error: 'Contato não encontrado' }, { status: 404 });
+    }
+
+    // Ownership enforcement
+    if (contact.assigned_to_user_id && contact.assigned_to_user_id !== user.id && profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas o responsável ou admin pode registrar interações neste contato' }, { status: 403 });
     }
 
     // Criar interação

@@ -82,6 +82,10 @@ export async function POST(request: NextRequest) {
           tipo = row.tipo.split(',').map((t: string) => t.trim().toUpperCase()).filter((t: string) => ['FORNECEDOR', 'COMPRADOR'].includes(t));
         }
 
+        // Sanitizar classe (só aceita A, B, C, D ou null)
+        const classeRaw = row.classe ? String(row.classe).trim().toUpperCase() : null;
+        const classeValid = classeRaw && ['A', 'B', 'C', 'D'].includes(classeRaw) ? classeRaw : null;
+
         // Normalizar
         const normalized = normalizeContactData({
           name: row.name,
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
           notes: row.notes,
           tipo,
           referencia: row.referencia,
-          classe: row.classe,
+          classe: classeValid,
           produtos_fornecidos: row.produtos_fornecidos,
           contato_nome: row.contato_nome,
           cargo: row.cargo,
@@ -183,7 +187,7 @@ export async function POST(request: NextRequest) {
             data: row,
           });
         } else {
-          // Criar contato
+          // Criar contato (sem responsável — só via "Apontar")
           const { data: newContact, error } = await admin
             .from('contacts')
             .insert({

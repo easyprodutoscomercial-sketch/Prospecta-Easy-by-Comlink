@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Contact } from '@/lib/types';
-import { ESTADOS_BRASIL } from '@/lib/utils/labels';
+import { ESTADOS_BRASIL, TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS } from '@/lib/utils/labels';
 
 interface ContactFormData {
   name: string;
@@ -17,6 +17,10 @@ interface ContactFormData {
   referencia: string;
   classe: string;
   produtos_fornecidos: string;
+  temperatura: string;
+  origem: string;
+  proxima_acao_tipo: string;
+  proxima_acao_data: string;
   contato_nome: string;
   cargo: string;
   endereco: string;
@@ -51,6 +55,10 @@ function toFormData(contact?: Partial<Contact>): ContactFormData {
     referencia: contact?.referencia || '',
     classe: contact?.classe || '',
     produtos_fornecidos: contact?.produtos_fornecidos || '',
+    temperatura: contact?.temperatura || '',
+    origem: contact?.origem || '',
+    proxima_acao_tipo: contact?.proxima_acao_tipo || '',
+    proxima_acao_data: contact?.proxima_acao_data ? new Date(contact.proxima_acao_data).toISOString().slice(0, 16) : '',
     contato_nome: contact?.contato_nome || '',
     cargo: contact?.cargo || '',
     endereco: contact?.endereco || '',
@@ -282,6 +290,67 @@ export default function ContactForm({
                 <option value="D">Classe D</option>
               </select>
             </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Qualificação */}
+      <div className="bg-white rounded-lg shadow-sm p-5">
+        <h2 className="text-sm font-medium text-neutral-900 mb-4 uppercase tracking-wide">Qualificação</h2>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Temperatura</label>
+              <select
+                value={formData.temperatura}
+                onChange={(e) => update('temperatura', e.target.value)}
+                className={inputClass()}
+              >
+                <option value="">Sem temperatura</option>
+                {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Origem</label>
+              <select
+                value={formData.origem}
+                onChange={(e) => update('origem', e.target.value)}
+                className={inputClass()}
+              >
+                <option value="">Sem origem</option>
+                {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className={labelClass}>Próxima Ação</label>
+              <select
+                value={formData.proxima_acao_tipo}
+                onChange={(e) => update('proxima_acao_tipo', e.target.value)}
+                className={inputClass()}
+              >
+                <option value="">Sem próxima ação</option>
+                {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+            {formData.proxima_acao_tipo && (
+              <div>
+                <label className={labelClass}>Data da Próxima Ação</label>
+                <input
+                  type="datetime-local"
+                  value={formData.proxima_acao_data}
+                  onChange={(e) => update('proxima_acao_data', e.target.value)}
+                  className={inputClass()}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

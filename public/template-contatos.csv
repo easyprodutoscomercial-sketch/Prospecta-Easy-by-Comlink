@@ -1,4 +1,0 @@
-name,phone,email,cpf,cnpj,company,notes,tipo,referencia,classe,produtos_fornecidos,contato_nome,cargo,endereco,cidade,estado,cep,website,instagram,whatsapp
-João Silva,(11) 99999-0001,joao@exemplo.com,123.456.789-00,,Empresa ABC,Cliente em prospecção,COMPRADOR,LinkedIn,A,,,Diretor,,São Paulo,SP,,,,(11) 99999-0001
-Maria Souza,(21) 98888-0002,maria@exemplo.com,,,Empresa XYZ,Indicação do João,"FORNECEDOR,COMPRADOR",Indicação,B,Peças industriais,Maria Souza,Gerente,Rua das Flores 123,Rio de Janeiro,RJ,20000-000,https://empresaxyz.com,@empresaxyz,(21) 98888-0002
-Pedro Santos,(31) 97777-0003,pedro@exemplo.com,,12.345.678/0001-90,Tech Ltda,Reunião marcada para segunda,FORNECEDOR,Feira,A,Componentes eletrônicos,Pedro Santos,CEO,,Belo Horizonte,MG,,,,(31) 97777-0003

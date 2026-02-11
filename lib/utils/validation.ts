@@ -25,6 +25,12 @@ export const contactSchema = z.object({
   website: z.string().optional().nullable(),
   instagram: z.string().optional().nullable(),
   whatsapp: z.string().optional().nullable(),
+  // Qualificação
+  temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).optional().nullable(),
+  origem: z.enum(['MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO']).optional().nullable(),
+  proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'ENVIAR_PROPOSTA', 'OUTRO']).optional().nullable(),
+  proxima_acao_data: z.string().optional().nullable(),
+  motivo_ganho_perdido: z.string().optional().nullable(),
 });
 
 export const interactionSchema = z.object({
@@ -73,4 +79,27 @@ export const contactUpdateSchema = z.object({
   website: z.string().optional().nullable(),
   instagram: z.string().optional().nullable(),
   whatsapp: z.string().optional().nullable(),
+  temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).optional().nullable(),
+  origem: z.enum(['MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO']).optional().nullable(),
+  proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'ENVIAR_PROPOSTA', 'OUTRO']).optional().nullable(),
+  proxima_acao_data: z.string().optional().nullable(),
+  motivo_ganho_perdido: z.string().optional().nullable(),
+});
+
+export const accessRequestSchema = z.object({
+  contact_id: z.string().uuid(),
+});
+
+export const accessRequestResolveSchema = z.object({
+  status: z.enum(['APPROVED', 'REJECTED']),
+});
+
+export const pipelineSettingsSchema = z.object({
+  columns: z.record(
+    z.enum(['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO']),
+    z.object({
+      label: z.string().min(1).max(50),
+      color: z.string().min(4).max(9),
+    })
+  ),
 });

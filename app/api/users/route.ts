@@ -18,14 +18,28 @@ export async function GET() {
     }
 
     const admin = getAdminClient();
-    const { data: users, error } = await admin
+    // Try with avatar_url first, fallback without it if column doesn't exist yet
+    let users;
+    const { data: usersWithAvatar, error: avatarError } = await admin
       .from('profiles')
-      .select('user_id, name, email, created_at')
+      .select('user_id, name, email, role, avatar_url, created_at')
       .eq('organization_id', profile.organization_id)
       .order('created_at', { ascending: true });
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (avatarError) {
+      // avatar_url column may not exist yet, try without it
+      const { data: usersBasic, error: basicError } = await admin
+        .from('profiles')
+        .select('user_id, name, email, role, created_at')
+        .eq('organization_id', profile.organization_id)
+        .order('created_at', { ascending: true });
+
+      if (basicError) {
+        return NextResponse.json({ error: basicError.message }, { status: 500 });
+      }
+      users = usersBasic;
+    } else {
+      users = usersWithAvatar;
     }
 
     return NextResponse.json({ users });
@@ -129,6 +143,7 @@ export async function POST(request: Request) {
         organization_id: profile.organization_id,
         name,
         email,
+        role: 'user',
       })
       .select()
       .single();

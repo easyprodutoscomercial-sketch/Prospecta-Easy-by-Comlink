@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { contactUpdateSchema } from '@/lib/utils/validation';
 import { normalizeEmail, normalizePhone, normalizeCPF, normalizeCNPJ, normalizeName } from '@/lib/utils/normalize';
+import { ensureProfile } from '@/lib/ensure-profile';
 
 // GET /api/contacts/:id - Buscar contato
 export async function GET(
@@ -63,8 +64,37 @@ export async function PATCH(
     }
 
     const admin = getAdminClient();
+    const profile = await ensureProfile(supabase, user);
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
+    }
+
     const body = await request.json();
     const validated = contactUpdateSchema.parse(body);
+
+    // Ownership enforcement: buscar contato atual
+    const { data: existingContact } = await admin
+      .from('contacts')
+      .select('assigned_to_user_id')
+      .eq('id', id)
+      .single();
+
+    if (!existingContact) {
+      return NextResponse.json({ error: 'Contato não encontrado' }, { status: 404 });
+    }
+
+    // "Apontar para mim": se contato não tem dono e estou me atribuindo
+    const isClaiming = validated.assigned_to_user_id === user.id && !existingContact.assigned_to_user_id;
+
+    // Se movendo no pipeline (status change) e contato tem dono diferente de mim
+    if (validated.status && existingContact.assigned_to_user_id && existingContact.assigned_to_user_id !== user.id && profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas o responsável ou admin pode alterar o status deste contato' }, { status: 403 });
+    }
+
+    // Converter proxima_acao_data para ISO se presente
+    if (validated.proxima_acao_data) {
+      validated.proxima_acao_data = new Date(validated.proxima_acao_data).toISOString();
+    }
 
     // Re-normalize identity fields when they change
     const updateData: Record<string, any> = { ...validated };
@@ -85,12 +115,13 @@ export async function PATCH(
       updateData.cnpj_digits = normalizeCNPJ(validated.cnpj);
     }
 
-    const { data: contact, error } = await admin
-      .from('contacts')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
+    // Use conditional update for claiming to avoid race condition
+    let query = admin.from('contacts').update(updateData).eq('id', id);
+    if (isClaiming) {
+      query = query.is('assigned_to_user_id', null);
+    }
+
+    const { data: contact, error } = await query.select().single();
 
     if (error) throw error;
 

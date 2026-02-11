@@ -2,9 +2,9 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureProfile } from '@/lib/ensure-profile';
-import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
-// GET /api/contacts/export - Exportar contatos como CSV
+// GET /api/contacts/export - Exportar contatos como Excel
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -81,15 +81,16 @@ export async function GET(request: NextRequest) {
       'Criado em': c.created_at ? new Date(c.created_at).toLocaleDateString('pt-BR') : '',
     }));
 
-    const csv = Papa.unparse(rows);
-    // Add UTF-8 BOM for Excel compatibility
-    const bom = '\uFEFF';
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Contatos');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 
-    return new NextResponse(bom + csv, {
+    return new NextResponse(buf, {
       status: 200,
       headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="contatos_${new Date().toISOString().slice(0, 10)}.csv"`,
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="contatos_${new Date().toISOString().slice(0, 10)}.xlsx"`,
       },
     });
 

@@ -16,3 +16,230 @@
 .animate-fade-in {
   animation: fade-in 0.15s ease-out;
 }
+
+/* Avatar breathe — fade in/out pulsante (contatos) */
+@keyframes avatar-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+.avatar-breathe {
+  animation: avatar-breathe 2.4s ease-in-out infinite;
+  border-radius: 50% / 45%;
+}
+.avatar-breathe > img, .avatar-breathe > div { border-radius: 50% / 45%; }
+
+/* Avatar bounce — bate no teto e chão do card (pipeline) */
+@keyframes avatar-bounce {
+  0%, 100% { transform: translateY(6px); }
+  50% { transform: translateY(-6px); }
+}
+.avatar-bounce {
+  animation: avatar-bounce 1.2s ease-in-out infinite;
+  border-radius: 50% / 45%;
+}
+.avatar-bounce > img, .avatar-bounce > div { border-radius: 50% / 45%; }
+
+/* Avatar pick-me — pulinho animado para o avatar que está falando */
+@keyframes avatar-pick-me-talk {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+  10% { transform: translateY(-12px) rotate(-10deg) scale(1.15); }
+  20% { transform: translateY(2px) rotate(6deg) scale(1.05); }
+  30% { transform: translateY(-8px) rotate(-6deg) scale(1.12); }
+  40% { transform: translateY(0) rotate(3deg) scale(1); }
+  50% { transform: translateY(-5px) rotate(-3deg) scale(1.08); }
+  60% { transform: translateY(0) rotate(0deg) scale(1); }
+}
+@keyframes avatar-idle {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+.avatar-pick-me-talking {
+  animation: avatar-pick-me-talk 1.8s ease-in-out infinite;
+  border-radius: 50% / 45%;
+  cursor: pointer;
+  filter: brightness(1.15);
+}
+.avatar-pick-me-talking > img, .avatar-pick-me-talking > div { border-radius: 50% / 45%; }
+
+.avatar-pick-me-idle {
+  animation: avatar-idle 3s ease-in-out infinite;
+  border-radius: 50% / 45%;
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.3s, filter 0.3s;
+}
+.avatar-pick-me-idle:hover { opacity: 1; filter: brightness(1.1); }
+.avatar-pick-me-idle > img, .avatar-pick-me-idle > div { border-radius: 50% / 45%; }
+
+/* Speech bubble / Balão de fala */
+@keyframes speech-pop {
+  0% { opacity: 0; transform: translateY(4px) scale(0.7); }
+  15% { opacity: 1; transform: translateY(-2px) scale(1.05); }
+  25% { transform: translateY(0) scale(1); }
+  85% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-4px) scale(0.9); }
+}
+.speech-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #10b981, #8b5cf6);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: speech-pop 2.5s ease-in-out forwards;
+  z-index: 10;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3), 0 2px 6px rgba(139, 92, 246, 0.2);
+}
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #8b5cf6;
+}
+
+/* Avatar triste — cabeça baixa, sem brilho (dashboard perdedores) */
+@keyframes avatar-sad {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  30% { transform: translateY(3px) rotate(-3deg); }
+  60% { transform: translateY(1px) rotate(2deg); }
+}
+.avatar-sad {
+  animation: avatar-sad 3s ease-in-out infinite;
+  border-radius: 50% / 45%;
+  filter: grayscale(0.6) brightness(0.7);
+  opacity: 0.6;
+}
+.avatar-sad > img, .avatar-sad > div { border-radius: 50% / 45%; }
+
+/* Avatar winner — brilhante, comemorando (dashboard 1o lugar) */
+@keyframes avatar-winner {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+  15% { transform: translateY(-8px) rotate(-6deg) scale(1.1); }
+  30% { transform: translateY(0) rotate(4deg) scale(1.02); }
+  45% { transform: translateY(-5px) rotate(-3deg) scale(1.07); }
+  60% { transform: translateY(0) rotate(0deg) scale(1); }
+}
+.avatar-winner {
+  animation: avatar-winner 2s ease-in-out infinite;
+  border-radius: 50% / 45%;
+  filter: brightness(1.15);
+}
+.avatar-winner > img, .avatar-winner > div { border-radius: 50% / 45%; }
+
+/* Sad speech bubble */
+.speech-bubble-sad {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #6b7280, #4b5563);
+  color: #d1d5db;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: speech-pop 3s ease-in-out forwards;
+  z-index: 10;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.speech-bubble-sad::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #4b5563;
+}
+
+/* Avatar orbit ring animation */
+@keyframes orbit-ring {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@keyframes orbit-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(16,185,129,0.3), 0 0 16px rgba(139,92,246,0.15); }
+  50% { box-shadow: 0 0 14px rgba(16,185,129,0.5), 0 0 28px rgba(139,92,246,0.3); }
+}
+
+/* Oval avatar shape */
+.avatar-oval { border-radius: 50% / 45%; }
+.avatar-oval img, .avatar-oval > div { border-radius: 50% / 45%; }
+
+.avatar-orbit {
+  position: relative;
+  animation: orbit-glow 3s ease-in-out infinite;
+  border-radius: 50% / 45%;
+}
+.avatar-orbit > img, .avatar-orbit > div { border-radius: 50% / 45%; }
+.avatar-orbit::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50% / 45%;
+  border: 3px solid transparent;
+  border-top-color: #10b981;
+  border-right-color: #8b5cf6;
+  animation: orbit-ring 1.8s linear infinite;
+  pointer-events: none;
+}
+.avatar-orbit::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 50% / 45%;
+  border: 3px solid transparent;
+  border-bottom-color: #10b981;
+  border-left-color: #8b5cf6;
+  animation: orbit-ring 1.8s linear infinite reverse;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Smaller orbit variant for compact views */
+.avatar-orbit-sm {
+  position: relative;
+  animation: orbit-glow 3s ease-in-out infinite;
+  border-radius: 50% / 45%;
+}
+.avatar-orbit-sm > img, .avatar-orbit-sm > div { border-radius: 50% / 45%; }
+.avatar-orbit-sm::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50% / 45%;
+  border: 2.5px solid transparent;
+  border-top-color: #10b981;
+  border-right-color: #8b5cf6;
+  animation: orbit-ring 1.8s linear infinite;
+  pointer-events: none;
+}
+.avatar-orbit-sm::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50% / 45%;
+  border: 2.5px solid transparent;
+  border-bottom-color: #10b981;
+  border-left-color: #8b5cf6;
+  animation: orbit-ring 1.8s linear infinite reverse;
+  opacity: 0.5;
+  pointer-events: none;
+}

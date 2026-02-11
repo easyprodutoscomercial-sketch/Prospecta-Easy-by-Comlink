@@ -8,6 +8,12 @@ export type ContactStatus =
 
 export type ContactType = 'FORNECEDOR' | 'COMPRADOR';
 
+export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE';
+
+export type Origem = 'MANUAL' | 'INDICACAO' | 'FEIRA' | 'LINKEDIN' | 'SITE' | 'WHATSAPP_INBOUND' | 'OUTRO';
+
+export type ProximaAcaoTipo = 'LIGAR' | 'ENVIAR_WHATSAPP' | 'ENVIAR_EMAIL' | 'REUNIAO' | 'VISITA' | 'FOLLOW_UP' | 'ENVIAR_PROPOSTA' | 'OUTRO';
+
 export type InteractionType =
   | 'LIGACAO'
   | 'WHATSAPP'
@@ -70,6 +76,12 @@ export interface Contact {
   email_normalized: string | null;
   cpf_digits: string | null;
   cnpj_digits: string | null;
+  // Qualificação
+  temperatura: Temperatura | null;
+  origem: Origem | null;
+  proxima_acao_tipo: ProximaAcaoTipo | null;
+  proxima_acao_data: string | null;
+  motivo_ganho_perdido: string | null;
   // Status e atribuição
   status: ContactStatus;
   assigned_to_user_id: string | null;
@@ -93,12 +105,36 @@ export interface Interaction {
   updated_at: string;
 }
 
+export type UserRole = 'admin' | 'user';
+
 export interface Profile {
   user_id: string;
   organization_id: string;
   name: string;
   email: string;
+  role: UserRole;
+  avatar_url: string | null;
   created_at: string;
+}
+
+export interface AccessRequest {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  requester_user_id: string;
+  owner_user_id: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  created_at: string;
+  resolved_at: string | null;
+  requester_name?: string;
+  requester_email?: string;
+  owner_name?: string;
+  owner_email?: string;
+  contact_name?: string;
+}
+
+export interface PipelineSettings {
+  columns: Record<ContactStatus, { label: string; color: string }>;
 }
 
 export interface ImportResult {

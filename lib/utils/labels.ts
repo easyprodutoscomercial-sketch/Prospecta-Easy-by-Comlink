@@ -91,6 +91,89 @@ export function formatInteractionOutcome(outcome: string): string {
   return INTERACTION_OUTCOME_LABELS[outcome] || outcome;
 }
 
+// Temperatura
+export const TEMPERATURA_LABELS: Record<string, string> = {
+  FRIO: 'Frio',
+  MORNO: 'Morno',
+  QUENTE: 'Quente',
+};
+
+export const TEMPERATURA_COLORS: Record<string, string> = {
+  FRIO: 'bg-blue-100 text-blue-700',
+  MORNO: 'bg-amber-100 text-amber-700',
+  QUENTE: 'bg-red-100 text-red-700',
+};
+
+// Origem
+export const ORIGEM_LABELS: Record<string, string> = {
+  MANUAL: 'Manual',
+  INDICACAO: 'Indicação',
+  FEIRA: 'Feira',
+  LINKEDIN: 'LinkedIn',
+  SITE: 'Site',
+  WHATSAPP_INBOUND: 'WhatsApp Inbound',
+  OUTRO: 'Outro',
+};
+
+// Próxima Ação
+export const PROXIMA_ACAO_LABELS: Record<string, string> = {
+  LIGAR: 'Ligar',
+  ENVIAR_WHATSAPP: 'Enviar WhatsApp',
+  ENVIAR_EMAIL: 'Enviar Email',
+  REUNIAO: 'Reunião',
+  VISITA: 'Visita',
+  FOLLOW_UP: 'Follow-up',
+  ENVIAR_PROPOSTA: 'Enviar Proposta',
+  OUTRO: 'Outro',
+};
+
+// Motivos de Ganho/Perdido
+export const MOTIVO_GANHO_LABELS: Record<string, string> = {
+  PRECO: 'Preço',
+  QUALIDADE: 'Qualidade',
+  ATENDIMENTO: 'Atendimento',
+  PRAZO: 'Prazo de Entrega',
+  CONFIANCA: 'Confiança',
+  OUTRO: 'Outro',
+};
+
+export const MOTIVO_PERDIDO_LABELS: Record<string, string> = {
+  PRECO: 'Preço',
+  CONCORRENTE: 'Concorrente',
+  SEM_INTERESSE: 'Sem Interesse',
+  SEM_ORCAMENTO: 'Sem Orçamento',
+  SEM_RESPOSTA: 'Sem Resposta',
+  TIMING: 'Timing',
+  OUTRO: 'Outro',
+};
+
+// Activity Templates (quick interaction templates)
+export const ACTIVITY_TEMPLATES = [
+  { label: 'Liguei — não atendeu', type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: 'Liguei — não atendeu' },
+  { label: 'WhatsApp enviado', type: 'WHATSAPP', outcome: 'AGUARDANDO_RETORNO', note: 'WhatsApp enviado' },
+  { label: 'Email enviado', type: 'EMAIL', outcome: 'AGUARDANDO_RETORNO', note: 'Email enviado' },
+  { label: 'Reunião realizada', type: 'REUNIAO', outcome: 'RESPONDEU', note: 'Reunião realizada' },
+  { label: 'Proposta enviada', type: 'PROPOSTA_ENVIADA', outcome: 'AGUARDANDO_RETORNO', note: 'Proposta enviada' },
+  { label: 'Follow-up realizado', type: 'FOLLOW_UP', outcome: 'SEGUIR_TENTANDO', note: 'Follow-up realizado' },
+] as const;
+
+// Pipeline settings helpers
+import type { PipelineSettings } from '@/lib/types';
+
+export function getColumnLabel(status: string, settings?: PipelineSettings | null): string {
+  if (settings?.columns?.[status as keyof typeof settings.columns]) {
+    return settings.columns[status as keyof typeof settings.columns].label;
+  }
+  return STATUS_LABELS[status] || status.replace(/_/g, ' ');
+}
+
+export function getColumnColor(status: string, settings?: PipelineSettings | null): string {
+  if (settings?.columns?.[status as keyof typeof settings.columns]) {
+    return settings.columns[status as keyof typeof settings.columns].color;
+  }
+  return STATUS_CHART_COLORS[status] || '#a3a3a3';
+}
+
 export const ESTADOS_BRASIL = [
   'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
   'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',

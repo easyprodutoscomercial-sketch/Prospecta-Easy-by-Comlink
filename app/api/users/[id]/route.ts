@@ -37,16 +37,26 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, email, password } = body;
+    const { name, email, password, role } = body;
 
-    if (!name && !email && !password) {
+    if (!name && !email && !password && role === undefined) {
       return NextResponse.json({ error: 'Nenhum dado para atualizar' }, { status: 400 });
+    }
+
+    // Role changes require admin
+    if (role !== undefined && profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas administradores podem alterar roles' }, { status: 403 });
+    }
+
+    if (role !== undefined && !['admin', 'user'].includes(role)) {
+      return NextResponse.json({ error: 'Role inválido' }, { status: 400 });
     }
 
     // Atualizar profile na tabela profiles
     const profileUpdate: Record<string, string> = {};
     if (name) profileUpdate.name = name;
     if (email) profileUpdate.email = email;
+    if (role !== undefined) profileUpdate.role = role;
 
     if (Object.keys(profileUpdate).length > 0) {
       const { error: updateError } = await admin

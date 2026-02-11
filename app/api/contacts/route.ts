@@ -108,6 +108,11 @@ export async function POST(request: NextRequest) {
     // Validar dados
     const validated = contactSchema.parse(body);
 
+    // Converter proxima_acao_data para ISO se presente
+    if (validated.proxima_acao_data) {
+      validated.proxima_acao_data = new Date(validated.proxima_acao_data).toISOString();
+    }
+
     // Normalizar dados
     const normalized = normalizeContactData(validated);
 
@@ -178,7 +183,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Criar contato
+    // Criar contato (sem responsável — só via "Apontar")
     const { data: newContact, error } = await admin
       .from('contacts')
       .insert({

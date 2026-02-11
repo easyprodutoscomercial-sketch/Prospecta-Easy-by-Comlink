@@ -71,6 +71,7 @@ function computeSegment(
     ).length;
     return {
       name: p.name.split(' ').slice(0, 2).join(' '),
+      avatar_url: p.avatar_url || null,
       contacts: userContacts,
       interactions: intCount,
       meetings,
@@ -88,6 +89,7 @@ function computeSegment(
     const rate = total > 0 ? Math.round((conversions / total) * 100) : 0;
     return {
       name: p.name,
+      avatar_url: p.avatar_url || null,
       conversions,
       total_interactions: total,
       conversion_rate: rate,
@@ -150,7 +152,7 @@ export default async function DashboardPage() {
     admin.from('contacts').select('id, status, created_at, created_by_user_id, tipo').eq('organization_id', orgId),
     admin.from('contacts').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(20),
     admin.from('interactions').select('contact_id, type, outcome, created_by_user_id, created_at').eq('organization_id', orgId),
-    admin.from('profiles').select('user_id, name').eq('organization_id', orgId),
+    admin.from('profiles').select('user_id, name, avatar_url').eq('organization_id', orgId),
     admin.from('contacts').select('id, created_by_user_id, tipo').eq('organization_id', orgId).gte('created_at', monthStart).lt('created_at', monthEnd),
     admin.from('interactions').select('contact_id, created_by_user_id, type, outcome').eq('organization_id', orgId).gte('created_at', monthStart).lt('created_at', monthEnd),
   ]);
@@ -212,7 +214,7 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-neutral-900 mb-8">Dashboard</h1>
+      <h1 className="text-2xl font-semibold text-emerald-400 mb-8">Dashboard</h1>
       <DashboardWithTabs geral={geral} fornecedor={fornecedor} comprador={comprador} />
     </div>
   );

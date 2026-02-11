@@ -36,8 +36,8 @@ export default function DashboardCharts({ statusData, monthlyData }: DashboardCh
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       {/* Status pie chart */}
-      <div className="bg-white rounded-lg p-5 shadow-sm">
-        <h3 className="text-sm font-medium text-neutral-900 mb-4">Contatos por Status</h3>
+      <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+        <h3 className="text-sm font-medium text-emerald-400 mb-4">Contatos por Status</h3>
         {hasStatusData ? (
           <div className="flex items-center gap-4">
             <div className="w-48 h-48 shrink-0">
@@ -62,8 +62,9 @@ export default function DashboardCharts({ statusData, monthlyData }: DashboardCh
                     contentStyle={{
                       fontSize: '12px',
                       borderRadius: '8px',
-                      border: '1px solid #e5e5e5',
-                      boxShadow: 'none',
+                      border: '1px solid rgba(139,92,246,0.3)',
+                      backgroundColor: '#1e0f35',
+                      color: '#e9d5ff',
                     }}
                   />
                 </PieChart>
@@ -78,7 +79,7 @@ export default function DashboardCharts({ statusData, monthlyData }: DashboardCh
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: item.color }}
                     />
-                    <span className="text-xs text-neutral-600">
+                    <span className="text-xs text-purple-300/60">
                       {item.name} ({item.value})
                     </span>
                   </div>
@@ -86,27 +87,27 @@ export default function DashboardCharts({ statusData, monthlyData }: DashboardCh
             </div>
           </div>
         ) : (
-          <p className="text-sm text-neutral-400 py-10 text-center">Nenhum dado disponível</p>
+          <p className="text-sm text-purple-300/40 py-10 text-center">Nenhum dado disponível</p>
         )}
       </div>
 
       {/* Monthly bar chart */}
-      <div className="bg-white rounded-lg p-5 shadow-sm">
-        <h3 className="text-sm font-medium text-neutral-900 mb-4">Contatos por Mês</h3>
+      <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+        <h3 className="text-sm font-medium text-emerald-400 mb-4">Contatos por Mês</h3>
         {hasMonthlyData ? (
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f5" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(139,92,246,0.1)" />
                 <XAxis
                   dataKey="month"
-                  tick={{ fontSize: 11, fill: '#737373' }}
-                  axisLine={{ stroke: '#e5e5e5' }}
+                  tick={{ fontSize: 11, fill: '#c4b5fd' }}
+                  axisLine={{ stroke: 'rgba(139,92,246,0.2)' }}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: '#737373' }}
-                  axisLine={{ stroke: '#e5e5e5' }}
+                  tick={{ fontSize: 11, fill: '#c4b5fd' }}
+                  axisLine={{ stroke: 'rgba(139,92,246,0.2)' }}
                   tickLine={false}
                   allowDecimals={false}
                 />
@@ -114,17 +115,18 @@ export default function DashboardCharts({ statusData, monthlyData }: DashboardCh
                   contentStyle={{
                     fontSize: '12px',
                     borderRadius: '8px',
-                    border: '1px solid #e5e5e5',
-                    boxShadow: 'none',
+                    border: '1px solid rgba(139,92,246,0.3)',
+                    backgroundColor: '#1e0f35',
+                    color: '#e9d5ff',
                   }}
                   formatter={(value: any) => [value, 'Contatos']}
                 />
-                <Bar dataKey="count" fill="#171717" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <p className="text-sm text-neutral-400 py-10 text-center">Nenhum dado disponível</p>
+          <p className="text-sm text-purple-300/40 py-10 text-center">Nenhum dado disponível</p>
         )}
       </div>
     </div>

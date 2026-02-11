@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import { ensureProfile } from '@/lib/ensure-profile';
 
 const batchUpdateSchema = z.object({
   ids: z.array(z.string().uuid()).min(1),
@@ -25,17 +26,38 @@ export async function PATCH(request: NextRequest) {
     }
 
     const admin = getAdminClient();
+    const profile = await ensureProfile(supabase, user);
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
+    }
+
     const body = await request.json();
     const { ids, status } = batchUpdateSchema.parse(body);
+
+    // Filter ids to only contacts owned by user (or all if admin)
+    let allowedIds = ids;
+    if (profile.role !== 'admin') {
+      const { data: ownedContacts } = await admin
+        .from('contacts')
+        .select('id')
+        .in('id', ids)
+        .or(`assigned_to_user_id.eq.${user.id},assigned_to_user_id.is.null`);
+
+      allowedIds = (ownedContacts || []).map((c: any) => c.id);
+    }
+
+    if (allowedIds.length === 0) {
+      return NextResponse.json({ error: 'Sem permissão para atualizar estes contatos' }, { status: 403 });
+    }
 
     const { error } = await admin
       .from('contacts')
       .update({ status })
-      .in('id', ids);
+      .in('id', allowedIds);
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, updated: ids.length });
+    return NextResponse.json({ success: true, updated: allowedIds.length });
 
   } catch (error: any) {
     console.error('Error batch updating contacts:', error);
