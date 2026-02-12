@@ -1,17 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Notification } from '@/lib/ai/types';
 import NotificationItem from './notification-item';
 
 interface NotificationDropdownProps {
   isOpen: boolean;
   onClose: () => void;
+  position: { top: number; left: number } | null;
 }
 
-export default function NotificationDropdown({ isOpen, onClose }: NotificationDropdownProps) {
+export default function NotificationDropdown({ isOpen, onClose, position }: NotificationDropdownProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const fetchNotifications = async () => {
     setLoading(true);
@@ -60,17 +65,20 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
     } catch { /* silent */ }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted || !position) return null;
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  return (
+  const dropdown = (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="fixed inset-0 z-[9998]" onClick={onClose} />
 
-      {/* Dropdown */}
-      <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-xl shadow-purple-900/30 z-50 overflow-hidden">
+      {/* Dropdown — fixed position via portal */}
+      <div
+        className="fixed w-80 sm:w-96 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-xl shadow-purple-900/30 z-[9999] overflow-hidden"
+        style={{ top: position.top, left: position.left, maxHeight: 'calc(100vh - 100px)' }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-purple-800/20">
           <h3 className="text-sm font-semibold text-white">Notificacoes</h3>
@@ -110,4 +118,6 @@ export default function NotificationDropdown({ isOpen, onClose }: NotificationDr
       </div>
     </>
   );
+
+  return createPortal(dropdown, document.body);
 }

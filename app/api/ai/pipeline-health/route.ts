@@ -111,16 +111,20 @@ export async function GET() {
     // Try to get coaching from cache
     let coachingTips: string[] = [];
     const cacheKey = `pipeline_${orgId}`;
-    const { data: cachedCoaching } = await admin
-      .from('ai_analysis_cache')
-      .select('result, expires_at')
-      .eq('organization_id', orgId)
-      .eq('analysis_type', 'coaching')
-      .eq('cache_key', cacheKey)
-      .gte('expires_at', now.toISOString())
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    let cachedCoaching: any = null;
+    try {
+      const { data } = await admin
+        .from('ai_analysis_cache')
+        .select('result, expires_at')
+        .eq('organization_id', orgId)
+        .eq('analysis_type', 'coaching')
+        .eq('cache_key', cacheKey)
+        .gte('expires_at', now.toISOString())
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      cachedCoaching = data;
+    } catch { /* table may not exist yet */ }
 
     if (cachedCoaching) {
       coachingTips = cachedCoaching.result as string[];
@@ -148,15 +152,17 @@ export async function GET() {
           temperature: 0.7,
         });
 
-        // Cache for 6 hours
-        const expiresAt = new Date(now.getTime() + 6 * 60 * 60 * 1000).toISOString();
-        await admin.from('ai_analysis_cache').insert({
-          organization_id: orgId,
-          analysis_type: 'coaching',
-          cache_key: cacheKey,
-          result: coachingTips,
-          expires_at: expiresAt,
-        });
+        // Cache for 6 hours (silently fail if table not ready)
+        try {
+          const expiresAt = new Date(now.getTime() + 6 * 60 * 60 * 1000).toISOString();
+          await admin.from('ai_analysis_cache').insert({
+            organization_id: orgId,
+            analysis_type: 'coaching',
+            cache_key: cacheKey,
+            result: coachingTips,
+            expires_at: expiresAt,
+          });
+        } catch { /* table may not exist yet */ }
       } catch (e) {
         console.error('Error generating coaching tips:', e);
         coachingTips = ['Configure a OPENAI_API_KEY para receber dicas de coaching com IA.'];

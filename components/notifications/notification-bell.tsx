@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import NotificationDropdown from './notification-dropdown';
 
 export default function NotificationBell() {
   const [count, setCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number } | null>(null);
 
   const fetchCount = async () => {
     try {
@@ -23,15 +25,23 @@ export default function NotificationBell() {
     return () => clearInterval(interval);
   }, []);
 
-  // Refresh count when dropdown closes
   useEffect(() => {
     if (!isOpen) fetchCount();
   }, [isOpen]);
 
+  const handleToggle = () => {
+    if (!isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPos({ top: rect.bottom + 8, left: rect.left });
+    }
+    setIsOpen(!isOpen);
+  };
+
   return (
-    <div className="relative">
+    <>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        ref={buttonRef}
+        onClick={handleToggle}
         className="relative text-purple-200/60 hover:text-emerald-400 transition-colors p-1"
         title="Notificacoes"
       >
@@ -45,7 +55,7 @@ export default function NotificationBell() {
         )}
       </button>
 
-      <NotificationDropdown isOpen={isOpen} onClose={() => setIsOpen(false)} />
-    </div>
+      <NotificationDropdown isOpen={isOpen} onClose={() => setIsOpen(false)} position={dropdownPos} />
+    </>
   );
 }

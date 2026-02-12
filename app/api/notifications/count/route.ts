@@ -22,10 +22,14 @@ export async function GET() {
       .eq('read', false)
       .eq('dismissed', false);
 
-    if (error) throw error;
+    if (error) {
+      // Table may not exist yet — return 0 instead of crashing
+      console.warn('Notifications table not ready:', error.message);
+      return NextResponse.json({ count: 0 });
+    }
     return NextResponse.json({ count: count || 0 });
   } catch (error: any) {
     console.error('Error fetching notification count:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ count: 0 });
   }
 }

@@ -25,10 +25,13 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
       .limit(limit);
 
-    if (error) throw error;
+    if (error) {
+      console.warn('Notifications table not ready:', error.message);
+      return NextResponse.json({ notifications: [] });
+    }
     return NextResponse.json({ notifications: data || [] });
   } catch (error: any) {
     console.error('Error fetching notifications:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ notifications: [] });
   }
 }
