@@ -240,7 +240,7 @@ export default function ContactsPage() {
               const isSelected = selectedIds.has(contact.id);
 
               return (
-                <div key={contact.id} className={`bg-[#1e0f35] rounded-xl border transition-all ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20' : 'border-purple-800/30 hover:border-purple-700/30'}`}>
+                <div key={contact.id} className={`bg-[#1e0f35] rounded-xl border card-hover transition-all ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
                   <div className="p-3 sm:p-4">
                     <div className="flex items-start gap-3">
                       <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(contact.id)} className="mt-1 rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500 shrink-0" />

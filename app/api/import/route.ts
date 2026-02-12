@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { normalizeContactData } from '@/lib/utils/normalize';
+import { normalizeContactData, normalizePhone, normalizeCPF, normalizeCNPJ, normalizeEmail } from '@/lib/utils/normalize';
 import { ImportResult } from '@/lib/types';
 import { ensureProfile } from '@/lib/ensure-profile';
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     const admin = getAdminClient();
     const body = await request.json();
-    const { rows } = body; // Array de objetos {name, phone, email, cpf, cnpj, company, notes}
+    const { rows } = body;
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'Nenhuma linha para importar' }, { status: 400 });
@@ -36,6 +36,35 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Pre-fetch existing contacts for batch duplicate check (more efficient)
+    const { data: existingContacts } = await admin
+      .from('contacts')
+      .select('id, email, phone, cpf, cnpj, email_normalized, phone_normalized, cpf_digits, cnpj_digits')
+      .eq('organization_id', profile.organization_id);
+
+    // Build lookup sets from existing contacts (using both raw and normalized fields)
+    const existingEmails = new Set<string>();
+    const existingPhones = new Set<string>();
+    const existingCpfs = new Set<string>();
+    const existingCnpjs = new Set<string>();
+
+    for (const c of existingContacts || []) {
+      const email = c.email_normalized || normalizeEmail(c.email);
+      const phone = c.phone_normalized || normalizePhone(c.phone);
+      const cpf = c.cpf_digits || normalizeCPF(c.cpf);
+      const cnpj = c.cnpj_digits || normalizeCNPJ(c.cnpj);
+      if (email) existingEmails.add(email);
+      if (phone) existingPhones.add(phone);
+      if (cpf) existingCpfs.add(cpf);
+      if (cnpj) existingCnpjs.add(cnpj);
+    }
+
+    // Track within-batch duplicates
+    const batchEmails = new Set<string>();
+    const batchPhones = new Set<string>();
+    const batchCpfs = new Set<string>();
+    const batchCnpjs = new Set<string>();
 
     // Criar import_run
     const { data: importRun, error: runError } = await admin
@@ -110,71 +139,51 @@ export async function POST(request: NextRequest) {
           whatsapp: row.whatsapp,
         });
 
-        // Verificar duplicidade
+        // Check duplicates against EXISTING contacts + within-batch
         let isDuplicate = false;
-        let duplicateId = null;
+        let duplicateReason = '';
 
-        // Checar por email
-        if (normalized.email_normalized) {
-          const { data } = await admin
-            .from('contacts')
-            .select('id')
-            .eq('organization_id', profile.organization_id)
-            .eq('email_normalized', normalized.email_normalized)
-            .limit(1)
-            .maybeSingle();
-
-          if (data) {
+        // 1) CPF (highest priority)
+        if (normalized.cpf_digits) {
+          if (existingCpfs.has(normalized.cpf_digits)) {
             isDuplicate = true;
-            duplicateId = data.id;
+            duplicateReason = `CPF ${row.cpf} já existe`;
+          } else if (batchCpfs.has(normalized.cpf_digits)) {
+            isDuplicate = true;
+            duplicateReason = `CPF ${row.cpf} duplicado na planilha`;
           }
         }
 
-        // Checar por telefone
-        if (!isDuplicate && normalized.phone_normalized) {
-          const { data } = await admin
-            .from('contacts')
-            .select('id')
-            .eq('organization_id', profile.organization_id)
-            .eq('phone_normalized', normalized.phone_normalized)
-            .limit(1)
-            .maybeSingle();
-
-          if (data) {
-            isDuplicate = true;
-            duplicateId = data.id;
-          }
-        }
-
-        // Checar por CPF
-        if (!isDuplicate && normalized.cpf_digits) {
-          const { data } = await admin
-            .from('contacts')
-            .select('id')
-            .eq('organization_id', profile.organization_id)
-            .eq('cpf_digits', normalized.cpf_digits)
-            .limit(1)
-            .maybeSingle();
-
-          if (data) {
-            isDuplicate = true;
-            duplicateId = data.id;
-          }
-        }
-
-        // Checar por CNPJ
+        // 2) CNPJ
         if (!isDuplicate && normalized.cnpj_digits) {
-          const { data } = await admin
-            .from('contacts')
-            .select('id')
-            .eq('organization_id', profile.organization_id)
-            .eq('cnpj_digits', normalized.cnpj_digits)
-            .limit(1)
-            .maybeSingle();
-
-          if (data) {
+          if (existingCnpjs.has(normalized.cnpj_digits)) {
             isDuplicate = true;
-            duplicateId = data.id;
+            duplicateReason = `CNPJ ${row.cnpj} já existe`;
+          } else if (batchCnpjs.has(normalized.cnpj_digits)) {
+            isDuplicate = true;
+            duplicateReason = `CNPJ ${row.cnpj} duplicado na planilha`;
+          }
+        }
+
+        // 3) Telefone
+        if (!isDuplicate && normalized.phone_normalized) {
+          if (existingPhones.has(normalized.phone_normalized)) {
+            isDuplicate = true;
+            duplicateReason = `Telefone ${row.phone} já existe`;
+          } else if (batchPhones.has(normalized.phone_normalized)) {
+            isDuplicate = true;
+            duplicateReason = `Telefone ${row.phone} duplicado na planilha`;
+          }
+        }
+
+        // 4) Email
+        if (!isDuplicate && normalized.email_normalized) {
+          if (existingEmails.has(normalized.email_normalized)) {
+            isDuplicate = true;
+            duplicateReason = `Email ${row.email} já existe`;
+          } else if (batchEmails.has(normalized.email_normalized)) {
+            isDuplicate = true;
+            duplicateReason = `Email ${row.email} duplicado na planilha`;
           }
         }
 
@@ -183,11 +192,11 @@ export async function POST(request: NextRequest) {
           result.items.push({
             row_number: rowNumber,
             status: 'duplicate',
-            contact_id: duplicateId!,
+            error_message: duplicateReason,
             data: row,
           });
         } else {
-          // Criar contato (sem responsável — só via "Apontar")
+          // Criar contato
           const { data: newContact, error } = await admin
             .from('contacts')
             .insert({
@@ -199,6 +208,24 @@ export async function POST(request: NextRequest) {
             .single();
 
           if (error) throw error;
+
+          // Add to batch tracking sets so next rows detect duplicates within batch
+          if (normalized.email_normalized) {
+            batchEmails.add(normalized.email_normalized);
+            existingEmails.add(normalized.email_normalized);
+          }
+          if (normalized.phone_normalized) {
+            batchPhones.add(normalized.phone_normalized);
+            existingPhones.add(normalized.phone_normalized);
+          }
+          if (normalized.cpf_digits) {
+            batchCpfs.add(normalized.cpf_digits);
+            existingCpfs.add(normalized.cpf_digits);
+          }
+          if (normalized.cnpj_digits) {
+            batchCnpjs.add(normalized.cnpj_digits);
+            existingCnpjs.add(normalized.cnpj_digits);
+          }
 
           result.created_count++;
           result.items.push({
@@ -230,7 +257,7 @@ export async function POST(request: NextRequest) {
       })
       .eq('id', importRun.id);
 
-    // Salvar items (opcional, para histórico)
+    // Salvar items
     const importItems = result.items.map(item => ({
       import_run_id: importRun.id,
       row_number: item.row_number,

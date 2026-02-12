@@ -232,7 +232,7 @@ export default function ImportPage() {
                             </Link>
                           )}
                           {item.error_message && (
-                            <span className="text-red-400 text-xs">{item.error_message}</span>
+                            <span className={`text-xs ${item.status === 'duplicate' ? 'text-amber-400' : 'text-red-400'}`}>{item.error_message}</span>
                           )}
                         </td>
                       </tr>

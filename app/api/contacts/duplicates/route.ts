@@ -2,9 +2,10 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextResponse } from 'next/server';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { normalizePhone, normalizeCPF, normalizeCNPJ } from '@/lib/utils/normalize';
 
 // GET /api/contacts/duplicates - Listar contatos duplicados (apenas admin)
-// Detecta duplicados por: 1) cpf_digits, 2) cnpj_digits, 3) phone_normalized
+// Detecta duplicados por: 1) CPF, 2) CNPJ, 3) Telefone
 export async function GET() {
   try {
     const supabase = await createClient();
@@ -31,17 +32,29 @@ export async function GET() {
 
     if (error) throw error;
 
-    // Group duplicates by cpf_digits, cnpj_digits, phone_normalized (in priority order)
+    if (!contacts || contacts.length === 0) {
+      return NextResponse.json({ groups: [], totalDuplicates: 0 });
+    }
+
+    // Normalize on-the-fly for contacts that may have NULL normalized columns
+    const normalized = contacts.map((c) => ({
+      ...c,
+      _cpf: c.cpf_digits || normalizeCPF(c.cpf),
+      _cnpj: c.cnpj_digits || normalizeCNPJ(c.cnpj),
+      _phone: c.phone_normalized || normalizePhone(c.phone),
+    }));
+
+    // Group duplicates by cpf, cnpj, phone (in priority order)
     const groups: { key: string; field: string; label: string; contacts: typeof contacts }[] = [];
     const usedIds = new Set<string>();
 
     // 1) Group by CPF
-    const cpfMap = new Map<string, typeof contacts>();
-    for (const c of contacts || []) {
-      if (c.cpf_digits && c.cpf_digits.length >= 11) {
-        const arr = cpfMap.get(c.cpf_digits) || [];
+    const cpfMap = new Map<string, typeof normalized>();
+    for (const c of normalized) {
+      if (c._cpf && c._cpf.length >= 11) {
+        const arr = cpfMap.get(c._cpf) || [];
         arr.push(c);
-        cpfMap.set(c.cpf_digits, arr);
+        cpfMap.set(c._cpf, arr);
       }
     }
     for (const [key, arr] of cpfMap) {
@@ -52,12 +65,12 @@ export async function GET() {
     }
 
     // 2) Group by CNPJ
-    const cnpjMap = new Map<string, typeof contacts>();
-    for (const c of contacts || []) {
-      if (c.cnpj_digits && c.cnpj_digits.length >= 14 && !usedIds.has(c.id)) {
-        const arr = cnpjMap.get(c.cnpj_digits) || [];
+    const cnpjMap = new Map<string, typeof normalized>();
+    for (const c of normalized) {
+      if (c._cnpj && c._cnpj.length >= 14 && !usedIds.has(c.id)) {
+        const arr = cnpjMap.get(c._cnpj) || [];
         arr.push(c);
-        cnpjMap.set(c.cnpj_digits, arr);
+        cnpjMap.set(c._cnpj, arr);
       }
     }
     for (const [key, arr] of cnpjMap) {
@@ -68,12 +81,12 @@ export async function GET() {
     }
 
     // 3) Group by phone
-    const phoneMap = new Map<string, typeof contacts>();
-    for (const c of contacts || []) {
-      if (c.phone_normalized && c.phone_normalized.length >= 10 && !usedIds.has(c.id)) {
-        const arr = phoneMap.get(c.phone_normalized) || [];
+    const phoneMap = new Map<string, typeof normalized>();
+    for (const c of normalized) {
+      if (c._phone && c._phone.length >= 10 && !usedIds.has(c.id)) {
+        const arr = phoneMap.get(c._phone) || [];
         arr.push(c);
-        phoneMap.set(c.phone_normalized, arr);
+        phoneMap.set(c._phone, arr);
       }
     }
     for (const [key, arr] of phoneMap) {

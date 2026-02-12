@@ -34,6 +34,7 @@ export default function DuplicatesPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<string>('');
   const [checkingRole, setCheckingRole] = useState(true);
+  const [backfilling, setBackfilling] = useState(false);
 
   useEffect(() => {
     checkAccess();
@@ -114,6 +115,24 @@ export default function DuplicatesPage() {
     );
   }
 
+  const handleBackfill = async () => {
+    setBackfilling(true);
+    try {
+      const res = await fetch('/api/contacts/backfill-normalized', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(data.message || 'Backfill completo');
+        loadDuplicates();
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'Erro no backfill');
+      }
+    } catch {
+      toast.error('Erro ao executar backfill');
+    }
+    setBackfilling(false);
+  };
+
   if (currentRole !== 'admin') return null;
 
   const fieldColors: Record<string, string> = {
@@ -137,13 +156,23 @@ export default function DuplicatesPage() {
               : 'Nenhum duplicado encontrado'}
           </p>
         </div>
-        <button
-          onClick={loadDuplicates}
-          disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 disabled:opacity-40 transition-colors"
-        >
-          {loading ? 'Buscando...' : 'Recarregar'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleBackfill}
+            disabled={backfilling || loading}
+            className="px-4 py-2 text-sm font-medium text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/10 disabled:opacity-40 transition-colors"
+            title="Normalizar dados antigos para detectar duplicados corretamente"
+          >
+            {backfilling ? 'Normalizando...' : 'Normalizar Dados'}
+          </button>
+          <button
+            onClick={loadDuplicates}
+            disabled={loading}
+            className="px-4 py-2 text-sm font-medium text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 disabled:opacity-40 transition-colors"
+          >
+            {loading ? 'Buscando...' : 'Recarregar'}
+          </button>
+        </div>
       </div>
 
       {/* Loading */}

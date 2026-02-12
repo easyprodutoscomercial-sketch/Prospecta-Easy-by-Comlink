@@ -149,15 +149,15 @@ export default function ContactForm({
   };
 
   const inputClass = (field?: string) =>
-    `w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent ${
-      field && validationErrors[field] ? 'border-red-300' : 'border-neutral-200'
+    `w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors ${
+      field && validationErrors[field] ? 'border-red-500/50' : 'border-purple-700/30'
     }`;
-  const labelClass = 'block text-sm font-medium text-neutral-700 mb-1';
+  const labelClass = 'block text-sm font-medium text-purple-200/80 mb-1';
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg text-sm animate-fade-in">
           {error}
           {duplicate && (
             <div className="mt-2">
@@ -170,8 +170,8 @@ export default function ContactForm({
       )}
 
       {/* Dados Básicos */}
-      <div className="bg-white rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-medium text-neutral-900 mb-4 uppercase tracking-wide">Dados Básicos</h2>
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Dados Básicos</h2>
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Nome *</label>
@@ -241,27 +241,27 @@ export default function ContactForm({
       </div>
 
       {/* Tipo e Classificação */}
-      <div className="bg-white rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-medium text-neutral-900 mb-4 uppercase tracking-wide">Tipo e Classificação</h2>
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Tipo e Classificação</h2>
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Tipo</label>
             <div className="flex gap-4 mt-1">
-              <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-purple-200/70 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.tipo.includes('FORNECEDOR')}
                   onChange={() => handleTipoChange('FORNECEDOR')}
-                  className="rounded border-neutral-300"
+                  className="rounded border-purple-700/30 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500"
                 />
                 <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">Fornecedor</span>
               </label>
-              <label className="flex items-center gap-2 text-sm text-neutral-700 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-purple-200/70 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={formData.tipo.includes('COMPRADOR')}
                   onChange={() => handleTipoChange('COMPRADOR')}
-                  className="rounded border-neutral-300"
+                  className="rounded border-purple-700/30 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500"
                 />
                 <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-700">Comprador</span>
               </label>
@@ -297,8 +297,8 @@ export default function ContactForm({
       </div>
 
       {/* Qualificação */}
-      <div className="bg-white rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-medium text-neutral-900 mb-4 uppercase tracking-wide">Qualificação</h2>
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Qualificação</h2>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -370,8 +370,8 @@ export default function ContactForm({
       </div>
 
       {/* Pessoa de Contato */}
-      <div className="bg-white rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-medium text-neutral-900 mb-4 uppercase tracking-wide">Pessoa de Contato</h2>
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Pessoa de Contato</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className={labelClass}>Nome do Contato</label>
@@ -395,8 +395,8 @@ export default function ContactForm({
       </div>
 
       {/* Endereço */}
-      <div className="bg-white rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-medium text-neutral-900 mb-4 uppercase tracking-wide">Endereço</h2>
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Endereço</h2>
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Endereço</label>
@@ -446,8 +446,8 @@ export default function ContactForm({
       </div>
 
       {/* Presença Digital */}
-      <div className="bg-white rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-medium text-neutral-900 mb-4 uppercase tracking-wide">Presença Digital</h2>
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Presença Digital</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className={labelClass}>Website</label>
@@ -483,8 +483,8 @@ export default function ContactForm({
       </div>
 
       {/* Produtos e Observações */}
-      <div className="bg-white rounded-lg shadow-sm p-5">
-        <h2 className="text-sm font-medium text-neutral-900 mb-4 uppercase tracking-wide">Produtos e Observações</h2>
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Produtos e Observações</h2>
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Produtos Fornecidos</label>
@@ -513,14 +513,14 @@ export default function ContactForm({
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 text-sm border border-neutral-200 rounded-lg text-neutral-700 hover:bg-neutral-50 transition-colors"
+          className="px-4 py-2 text-sm border border-purple-700/30 rounded-lg text-purple-200/70 hover:bg-purple-500/10 hover:text-white btn-press transition-colors"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 text-sm font-medium text-white bg-neutral-900 rounded-lg hover:bg-neutral-800 disabled:opacity-50 transition-colors"
+          className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 disabled:opacity-50 btn-press shadow-lg shadow-emerald-600/20 transition-colors"
         >
           {loading ? 'Salvando...' : mode === 'create' ? 'Criar Contato' : 'Salvar Alterações'}
         </button>

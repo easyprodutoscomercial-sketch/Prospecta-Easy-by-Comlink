@@ -70,16 +70,18 @@ export default function DailyTasksWidget() {
   }).length;
 
   return (
-    <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 mb-8">
+    <div className="bg-[#1e0f35] border border-amber-500/20 rounded-xl p-5 mb-8 shadow-lg shadow-amber-900/5">
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h3 className="text-sm font-medium text-emerald-400">Minhas Tarefas</h3>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
+            <svg className="w-4.5 h-4.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-bold text-white">Minhas Tarefas</h3>
           <span className="text-xs font-bold bg-amber-500/15 text-amber-400 px-2 py-0.5 rounded-full">{tasks.length}</span>
           {overdue > 0 && (
-            <span className="text-xs font-bold bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full animate-pulse">{overdue} atrasada{overdue > 1 ? 's' : ''}</span>
+            <span className="text-xs font-bold bg-red-500/15 text-red-400 px-2 py-0.5 rounded-full animate-pulse badge-glow">{overdue} atrasada{overdue > 1 ? 's' : ''}</span>
           )}
         </div>
       </div>

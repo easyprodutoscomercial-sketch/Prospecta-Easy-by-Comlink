@@ -24,12 +24,12 @@ export function KanbanColumn({ status, contacts, userMap, columnLabel, columnCol
 
   return (
     <div
-      className={`flex-shrink-0 w-60 md:w-64 xl:w-auto xl:flex-shrink xl:min-w-0 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-sm flex flex-col transition-colors overflow-hidden ${
-        isOver ? 'ring-2 ring-emerald-500/40 bg-[#2a1245]' : ''
+      className={`flex-shrink-0 w-60 md:w-64 xl:w-auto xl:flex-shrink xl:min-w-0 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-lg shadow-purple-900/10 flex flex-col transition-all duration-200 overflow-hidden ${
+        isOver ? 'ring-2 ring-emerald-500/40 bg-[#2a1245] scale-[1.02] shadow-xl shadow-emerald-900/10' : ''
       }`}
     >
       {/* Color bar */}
-      <div className="h-1.5 rounded-t-xl" style={{ backgroundColor: color }} />
+      <div className="h-2 rounded-t-xl" style={{ backgroundColor: color, boxShadow: `0 2px 8px ${color}40` }} />
 
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-2.5 border-b border-purple-800/20">

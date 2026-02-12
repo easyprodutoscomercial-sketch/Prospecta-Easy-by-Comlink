@@ -140,10 +140,10 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
             key={item.href}
             href={item.href}
             onClick={() => setMobileOpen(false)}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
               isActive(item.href)
-                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 shadow-sm shadow-emerald-500/10'
-                : 'text-purple-200/60 hover:bg-purple-500/10 hover:text-emerald-300 border border-transparent'
+                ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 shadow-md shadow-emerald-500/15'
+                : 'text-purple-200/60 hover:bg-purple-500/10 hover:text-emerald-300 hover:translate-x-1 border border-transparent'
             }`}
           >
             {item.icon}
@@ -154,7 +154,7 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
               </span>
             )}
             {item.href === '/dashboard' && tasksCount > 0 && (
-              <span className="ml-auto flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full min-w-[18px] text-center animate-pulse">
+              <span className="ml-auto flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full min-w-[18px] text-center animate-pulse badge-glow">
                 <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>

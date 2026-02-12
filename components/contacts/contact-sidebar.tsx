@@ -57,7 +57,7 @@ export default function ContactSidebar({
   const isOtherOwner = contact.assigned_to_user_id && !isOwner && !isAdmin;
 
   return (
-    <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5 space-y-5">
+    <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5 space-y-5 shadow-xl shadow-purple-900/20">
       {/* Name + Type badges */}
       <div>
         <div className="flex items-center gap-2 flex-wrap mb-2">

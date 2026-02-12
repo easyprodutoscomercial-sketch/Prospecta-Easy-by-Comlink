@@ -73,8 +73,8 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
       onClick={() => {
         if (!isDragging) router.push(`/contacts/${contact.id}`);
       }}
-      className={`bg-[#2a1245] rounded-lg p-3 shadow-sm border-l-[3px] border border-purple-800/30 cursor-grab hover:shadow-lg hover:shadow-purple-900/20 hover:border-purple-700/40 transition-all select-none ${
-        overlay ? 'shadow-lg ring-2 ring-emerald-500/20 rotate-2' : ''
+      className={`bg-[#2a1245] rounded-xl p-3 shadow-md shadow-purple-900/20 border-l-[3px] border border-purple-800/30 cursor-grab hover:shadow-xl hover:shadow-purple-900/30 hover:border-purple-600/50 hover:-translate-y-0.5 transition-all duration-200 select-none ${
+        overlay ? 'shadow-xl ring-2 ring-emerald-500/30 rotate-2 scale-105' : ''
       }`}
     >
       {/* Header: nome + avatar */}
