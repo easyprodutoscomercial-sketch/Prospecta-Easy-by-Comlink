@@ -38,7 +38,20 @@ export async function GET(
       .eq('contact_id', id)
       .order('happened_at', { ascending: false });
 
-    return NextResponse.json({ contact, interactions: interactions || [] });
+    // Buscar anexos
+    const { data: attachments } = await admin
+      .from('contact_attachments')
+      .select('*')
+      .eq('contact_id', id)
+      .order('created_at', { ascending: false });
+
+    // Add public URLs to attachments
+    const attachmentsWithUrls = (attachments || []).map((att: any) => {
+      const { data } = admin.storage.from('attachments').getPublicUrl(att.file_path);
+      return { ...att, public_url: data.publicUrl };
+    });
+
+    return NextResponse.json({ contact, interactions: interactions || [], attachments: attachmentsWithUrls });
 
   } catch (error: any) {
     console.error('Error fetching contact:', error);
@@ -149,7 +162,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/contacts/:id - Deletar contato
+// DELETE /api/contacts/:id - Deletar contato (apenas admin)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -163,9 +176,28 @@ export async function DELETE(
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    const profile = await ensureProfile(supabase, user);
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas administradores podem deletar contatos' }, { status: 403 });
+    }
+
     const admin = getAdminClient();
 
-    // Deletar interações primeiro
+    // Deletar anexos do storage primeiro
+    const { data: attachments } = await admin
+      .from('contact_attachments')
+      .select('file_path')
+      .eq('contact_id', id);
+
+    if (attachments && attachments.length > 0) {
+      const filePaths = attachments.map((a: any) => a.file_path);
+      await admin.storage.from('attachments').remove(filePaths);
+    }
+
+    // Deletar registros de anexos
+    await admin.from('contact_attachments').delete().eq('contact_id', id);
+
+    // Deletar interações
     await admin.from('interactions').delete().eq('contact_id', id);
 
     // Deletar contato

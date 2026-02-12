@@ -31,6 +31,7 @@ export const contactSchema = z.object({
   proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'ENVIAR_PROPOSTA', 'OUTRO']).optional().nullable(),
   proxima_acao_data: z.string().optional().nullable(),
   motivo_ganho_perdido: z.string().optional().nullable(),
+  valor_estimado: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
 });
 
 export const interactionSchema = z.object({
@@ -84,6 +85,7 @@ export const contactUpdateSchema = z.object({
   proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'ENVIAR_PROPOSTA', 'OUTRO']).optional().nullable(),
   proxima_acao_data: z.string().optional().nullable(),
   motivo_ganho_perdido: z.string().optional().nullable(),
+  valor_estimado: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
 });
 
 export const accessRequestSchema = z.object({

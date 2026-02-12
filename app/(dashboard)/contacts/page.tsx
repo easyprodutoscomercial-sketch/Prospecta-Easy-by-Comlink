@@ -34,6 +34,7 @@ export default function ContactsPage() {
 
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserRole, setCurrentUserRole] = useState<string>('user');
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -62,6 +63,7 @@ export default function ContactsPage() {
         if (meRes.ok) {
           const meData = await meRes.json();
           setCurrentUserId(meData.user_id);
+          setCurrentUserRole(meData.role || 'user');
         }
       } catch { /* silent */ }
     }
@@ -330,7 +332,7 @@ export default function ContactsPage() {
         </>
       )}
 
-      <BulkActionBar selectedCount={selectedIds.size} onChangeStatus={handleBulkStatusChange} onDelete={() => setShowBulkDeleteModal(true)} onExport={handleExport} onCancel={clearSelection} />
+      <BulkActionBar selectedCount={selectedIds.size} onChangeStatus={handleBulkStatusChange} onDelete={currentUserRole === 'admin' ? () => setShowBulkDeleteModal(true) : undefined} onExport={handleExport} onCancel={clearSelection} />
       <ConfirmModal isOpen={showBulkDeleteModal} onClose={() => setShowBulkDeleteModal(false)} onConfirm={handleBulkDelete}
         title="Deletar contatos" message={`Tem certeza que deseja deletar ${selectedIds.size} contato${selectedIds.size > 1 ? 's' : ''}?`} variant="danger" confirmLabel="Deletar" loading={bulkLoading} />
     </div>

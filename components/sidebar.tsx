@@ -84,6 +84,7 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [tasksCount, setTasksCount] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const isActive = (href: string) => {
@@ -94,19 +95,25 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [countRes, meRes] = await Promise.all([
+        const [countRes, meRes, tasksRes] = await Promise.all([
           fetch('/api/access-requests/count'),
           fetch('/api/me'),
+          fetch('/api/tasks/count'),
         ]);
         if (countRes.ok) { const data = await countRes.json(); setPendingCount(data.count || 0); }
         if (meRes.ok) { const data = await meRes.json(); setAvatarUrl(data.avatar_url || null); }
+        if (tasksRes.ok) { const data = await tasksRes.json(); setTasksCount(data.count || 0); }
       } catch { /* silent */ }
     };
     fetchData();
     const interval = setInterval(async () => {
       try {
-        const res = await fetch('/api/access-requests/count');
+        const [res, tasksRes] = await Promise.all([
+          fetch('/api/access-requests/count'),
+          fetch('/api/tasks/count'),
+        ]);
         if (res.ok) { const data = await res.json(); setPendingCount(data.count || 0); }
+        if (tasksRes.ok) { const data = await tasksRes.json(); setTasksCount(data.count || 0); }
       } catch { /* silent */ }
     }, 60000);
     return () => clearInterval(interval);
@@ -144,6 +151,14 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
             {'badge' in item && item.badge && pendingCount > 0 && (
               <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500 text-white rounded-full min-w-[18px] text-center animate-pulse">
                 {pendingCount}
+              </span>
+            )}
+            {item.href === '/dashboard' && tasksCount > 0 && (
+              <span className="ml-auto flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full min-w-[18px] text-center animate-pulse">
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                {tasksCount}
               </span>
             )}
           </Link>

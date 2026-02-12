@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Profile } from '@/lib/types';
 import { STATUS_LABELS, STATUS_CHART_COLORS } from '@/lib/utils/labels';
 
@@ -603,6 +604,26 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Duplicates Section */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">Duplicados</h2>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+          <h3 className="text-sm font-medium text-neutral-100 mb-1">Gerenciar Contatos Duplicados</h3>
+          <p className="text-xs text-purple-300/60 mb-4">
+            Detecta e permite remover contatos duplicados por CPF, CNPJ ou telefone.
+          </p>
+          <Link
+            href="/admin/duplicates"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-amber-600 text-white text-sm font-medium rounded-lg hover:bg-amber-500 shadow-lg shadow-amber-600/20 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            Ver Duplicados
+          </Link>
         </div>
       </div>
 

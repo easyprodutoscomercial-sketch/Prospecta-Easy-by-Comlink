@@ -82,6 +82,7 @@ export interface Contact {
   proxima_acao_tipo: ProximaAcaoTipo | null;
   proxima_acao_data: string | null;
   motivo_ganho_perdido: string | null;
+  valor_estimado: number | null;
   // Status e atribuição
   status: ContactStatus;
   assigned_to_user_id: string | null;
@@ -149,6 +150,19 @@ export interface ImportResult {
     error_message?: string;
     data: any;
   }[];
+}
+
+export interface ContactAttachment {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  uploaded_by_user_id: string;
+  uploaded_by_name: string;
+  created_at: string;
 }
 
 export interface LeaderboardEntry {

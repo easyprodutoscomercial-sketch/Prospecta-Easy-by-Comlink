@@ -30,6 +30,7 @@ interface ContactFormData {
   website: string;
   instagram: string;
   whatsapp: string;
+  valor_estimado: string;
 }
 
 interface ContactFormProps {
@@ -68,6 +69,7 @@ function toFormData(contact?: Partial<Contact>): ContactFormData {
     website: contact?.website || '',
     instagram: contact?.instagram || '',
     whatsapp: contact?.whatsapp || '',
+    valor_estimado: contact?.valor_estimado != null ? String(contact.valor_estimado) : '',
   };
 }
 
@@ -351,6 +353,18 @@ export default function ContactForm({
                 />
               </div>
             )}
+          </div>
+          <div>
+            <label className={labelClass}>Valor Estimado (R$)</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={formData.valor_estimado}
+              onChange={(e) => update('valor_estimado', e.target.value)}
+              className={inputClass()}
+              placeholder="0,00"
+            />
           </div>
         </div>
       </div>

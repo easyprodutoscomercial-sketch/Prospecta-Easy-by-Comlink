@@ -62,7 +62,7 @@ export async function PATCH(request: NextRequest) {
   }
 }
 
-// DELETE /api/contacts/batch - Deletar em massa
+// DELETE /api/contacts/batch - Deletar em massa (apenas admin)
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -70,6 +70,11 @@ export async function DELETE(request: NextRequest) {
 
     if (!user) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const profile = await ensureProfile(supabase, user);
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas administradores podem deletar contatos' }, { status: 403 });
     }
 
     const admin = getAdminClient();

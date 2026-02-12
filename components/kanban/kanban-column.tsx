@@ -71,6 +71,14 @@ export function KanbanColumn({ status, contacts, userMap, columnLabel, columnCol
         <p className="text-[10px] text-purple-300/40 font-medium">
           {contacts.length} {contacts.length === 1 ? 'contato' : 'contatos'}
         </p>
+        {(() => {
+          const total = contacts.reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
+          return total > 0 ? (
+            <p className="text-[10px] font-bold text-emerald-400 mt-0.5">
+              {total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </p>
+          ) : null;
+        })()}
       </div>
     </div>
   );

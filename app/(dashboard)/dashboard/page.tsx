@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import DashboardWithTabs, { SegmentData } from '@/components/dashboard-with-tabs';
+import DailyTasksWidget from '@/components/daily-tasks-widget';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { STATUS_CHART_COLORS, STATUS_LABELS, INTERACTION_TYPE_LABELS } from '@/lib/utils/labels';
 
@@ -96,12 +97,18 @@ function computeSegment(
     };
   });
 
+  // Total pipeline value (exclude CONVERTIDO and PERDIDO)
+  const totalPipelineValue = contacts
+    .filter((c) => c.status !== 'CONVERTIDO' && c.status !== 'PERDIDO')
+    .reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
+
   return {
     statusCounts,
     totalContacts,
     emProspeccao,
     reunioesMarcadas,
     convertidos,
+    totalPipelineValue,
     monthlyData,
     interactionsByType,
     responded,
@@ -149,7 +156,7 @@ export default async function DashboardPage() {
     monthContactsResult,
     monthInteractionsResult,
   ] = await Promise.all([
-    admin.from('contacts').select('id, status, created_at, created_by_user_id, tipo').eq('organization_id', orgId),
+    admin.from('contacts').select('id, status, created_at, created_by_user_id, tipo, valor_estimado, assigned_to_user_id').eq('organization_id', orgId),
     admin.from('contacts').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(20),
     admin.from('interactions').select('contact_id, type, outcome, created_by_user_id, created_at').eq('organization_id', orgId),
     admin.from('profiles').select('user_id, name, avatar_url').eq('organization_id', orgId),
@@ -215,6 +222,7 @@ export default async function DashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-emerald-400 mb-8">Dashboard</h1>
+      <DailyTasksWidget />
       <DashboardWithTabs geral={geral} fornecedor={fornecedor} comprador={comprador} />
     </div>
   );

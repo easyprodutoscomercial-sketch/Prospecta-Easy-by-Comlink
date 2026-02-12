@@ -15,6 +15,7 @@ export interface SegmentData {
   emProspeccao: number;
   reunioesMarcadas: number;
   convertidos: number;
+  totalPipelineValue: number;
   monthlyData: { month: string; count: number }[];
   interactionsByType: { name: string; count: number }[];
   responded: number;
@@ -155,7 +156,7 @@ export default function DashboardWithTabs({ geral, fornecedor, comprador }: Dash
       )}
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 border-l-4 border-l-neutral-400">
           <p className="text-xs text-purple-300/60 uppercase tracking-wide">Total de Contatos</p>
           <p className="text-2xl font-semibold text-neutral-100 mt-1">{data.totalContacts}</p>
@@ -171,6 +172,12 @@ export default function DashboardWithTabs({ geral, fornecedor, comprador }: Dash
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 border-l-4 border-l-emerald-400">
           <p className="text-xs text-purple-300/60 uppercase tracking-wide">Convertidos</p>
           <p className="text-2xl font-semibold text-neutral-100 mt-1">{data.convertidos}</p>
+        </div>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 border-l-4 border-l-emerald-500 col-span-2 md:col-span-1">
+          <p className="text-xs text-purple-300/60 uppercase tracking-wide">Valor no Pipeline</p>
+          <p className="text-2xl font-semibold text-emerald-400 mt-1">
+            {data.totalPipelineValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+          </p>
         </div>
       </div>
 

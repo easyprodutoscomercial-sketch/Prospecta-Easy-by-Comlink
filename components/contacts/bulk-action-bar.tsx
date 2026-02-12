@@ -5,7 +5,7 @@ import { useState } from 'react';
 interface BulkActionBarProps {
   selectedCount: number;
   onChangeStatus: (status: string) => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onExport: () => void;
   onCancel: () => void;
 }
@@ -54,12 +54,14 @@ export default function BulkActionBar({
         >
           Exportar
         </button>
-        <button
-          onClick={onDelete}
-          className="px-3 py-1.5 text-xs font-medium text-red-400 border border-red-800 rounded-lg hover:bg-red-900/30 transition-colors"
-        >
-          Deletar
-        </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            className="px-3 py-1.5 text-xs font-medium text-red-400 border border-red-800 rounded-lg hover:bg-red-900/30 transition-colors"
+          >
+            Deletar
+          </button>
+        )}
         <button
           onClick={onCancel}
           className="px-3 py-1.5 text-xs border border-neutral-600 rounded-lg hover:bg-neutral-800 transition-colors"
