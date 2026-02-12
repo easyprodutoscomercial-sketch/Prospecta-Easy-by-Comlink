@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import NotificationBell from '@/components/notifications/notification-bell';
 
 interface SidebarProps {
   profileName: string | null;
@@ -164,6 +165,12 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
           </Link>
         ))}
       </nav>
+
+      {/* Notification bell */}
+      <div className="px-5 py-2 flex items-center justify-between">
+        <span className="text-[10px] text-purple-200/40 font-semibold uppercase tracking-wider">Alertas</span>
+        <NotificationBell />
+      </div>
 
       {/* User area */}
       <div className="border-t border-purple-500/15 px-5 py-4">

@@ -174,3 +174,6 @@ export interface LeaderboardEntry {
   meetings_count: number;
   conversions_count: number;
 }
+
+// Re-export AI types for convenience
+export type { Notification, RiskAlert, ActionSuggestion, PipelineHealth } from '@/lib/ai/types';

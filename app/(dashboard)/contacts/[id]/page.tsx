@@ -13,6 +13,7 @@ import ContactDetails from '@/components/contacts/contact-details';
 import ContactInteractions from '@/components/contacts/contact-interactions';
 import ContactAttachments from '@/components/contacts/contact-attachments';
 import ContactHistory from '@/components/contacts/contact-history';
+import AICopilotPanel from '@/components/ai/ai-copilot-panel';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import { useToast } from '@/lib/toast-context';
 
@@ -130,6 +131,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     { key: 'atividades', label: 'Atividades', count: interactions.length },
     { key: 'detalhes', label: 'Detalhes' },
     { key: 'arquivos', label: 'Arquivos', count: attachments.length },
+    { key: 'ai-copilot', label: 'AI Copilot' },
   ];
 
   if (loading) {
@@ -221,6 +223,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   attachments={attachments}
                   setAttachments={setAttachments}
                   canModify={!!canModify}
+                />
+              )}
+              {activeTab === 'ai-copilot' && (
+                <AICopilotPanel
+                  contactId={id}
+                  contactName={contact.name}
+                  contactStatus={contact.status}
+                  onActionApplied={loadContact}
                 />
               )}
             </div>

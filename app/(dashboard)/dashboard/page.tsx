@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import DashboardWithTabs, { SegmentData } from '@/components/dashboard-with-tabs';
 import DailyTasksWidget from '@/components/daily-tasks-widget';
+import PipelineHealthWidget from '@/components/ai/pipeline-health-widget';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { STATUS_CHART_COLORS, STATUS_LABELS, INTERACTION_TYPE_LABELS } from '@/lib/utils/labels';
 
@@ -223,6 +224,7 @@ export default async function DashboardPage() {
     <div>
       <h1 className="text-2xl font-semibold text-emerald-400 mb-8">Dashboard</h1>
       <DailyTasksWidget />
+      <PipelineHealthWidget />
       <DashboardWithTabs geral={geral} fornecedor={fornecedor} comprador={comprador} />
     </div>
   );

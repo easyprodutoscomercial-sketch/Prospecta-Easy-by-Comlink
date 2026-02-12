@@ -179,3 +179,44 @@ export const ESTADOS_BRASIL = [
   'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO',
 ];
+
+// AI Copilot Labels
+export const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
+  RISK_ALERT: 'Alerta de Risco',
+  NEXT_ACTION: 'Proxima Acao',
+  COACHING_TIP: 'Dica de Coaching',
+  TASK_OVERDUE: 'Tarefa Atrasada',
+  STALE_DEAL: 'Negocio Parado',
+  NO_OWNER: 'Sem Responsavel',
+  SYSTEM: 'Sistema',
+};
+
+export const RISK_LEVEL_LABELS: Record<string, string> = {
+  CRITICAL: 'Critico',
+  HIGH: 'Alto',
+  MEDIUM: 'Medio',
+  LOW: 'Baixo',
+};
+
+export const RISK_LEVEL_COLORS: Record<string, string> = {
+  CRITICAL: 'bg-red-100 text-red-700',
+  HIGH: 'bg-orange-100 text-orange-700',
+  MEDIUM: 'bg-amber-100 text-amber-700',
+  LOW: 'bg-blue-100 text-blue-700',
+};
+
+export const MESSAGE_CHANNEL_LABELS: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  email: 'Email',
+  ligacao: 'Ligacao',
+};
+
+export const MESSAGE_INTENT_LABELS: Record<string, string> = {
+  primeiro_contato: 'Primeiro contato',
+  follow_up: 'Follow-up',
+  reagendar: 'Reagendar reuniao',
+  enviar_proposta: 'Enviar proposta',
+  cobrar_retorno: 'Cobrar retorno',
+  pos_reuniao: 'Pos-reuniao',
+  reativacao: 'Reativacao',
+};
