@@ -3,47 +3,23 @@
 import { useState, useEffect } from 'react';
 import { PipelineHealth } from '@/lib/ai/types';
 
-interface PipelineHealthWidgetProps {
-  userRole?: string;
-}
-
-export default function PipelineHealthWidget({ userRole }: PipelineHealthWidgetProps) {
+export default function PipelineHealthWidget() {
   const [health, setHealth] = useState<PipelineHealth | null>(null);
   const [loading, setLoading] = useState(true);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [analyzeResult, setAnalyzeResult] = useState<string | null>(null);
-  const isAdmin = userRole === 'admin';
 
-  const fetchHealth = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/ai/pipeline-health');
-      if (res.ok) {
-        const data = await res.json();
-        setHealth(data);
-      }
-    } catch { /* silent */ }
-    setLoading(false);
-  };
-
-  useEffect(() => { fetchHealth(); }, []);
-
-  const handleAnalyze = async () => {
-    setAnalyzing(true);
-    setAnalyzeResult(null);
-    try {
-      const res = await fetch('/api/ai/analyze', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setAnalyzeResult(`${data.created} notificacoes criadas de ${data.total_contacts_analyzed} contatos analisados`);
-        // Refresh health metrics
-        await fetchHealth();
-      }
-    } catch (e: any) {
-      setAnalyzeResult('Erro ao analisar');
-    }
-    setAnalyzing(false);
-  };
+  useEffect(() => {
+    const fetchHealth = async () => {
+      try {
+        const res = await fetch('/api/ai/pipeline-health');
+        if (res.ok) {
+          const data = await res.json();
+          setHealth(data);
+        }
+      } catch { /* silent */ }
+      setLoading(false);
+    };
+    fetchHealth();
+  }, []);
 
   if (loading) {
     return (
@@ -78,35 +54,9 @@ export default function PipelineHealthWidget({ userRole }: PipelineHealthWidgetP
             {health.totalActive} contatos ativos | R$ {health.totalValue.toLocaleString('pt-BR')} | {health.conversionRate}% conversao
           </span>
         </div>
-        {isAdmin && <button
-          onClick={handleAnalyze}
-          disabled={analyzing}
-          className="px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
-        >
-          {analyzing ? (
-            <>
-              <div className="w-3 h-3 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-              Analisando...
-            </>
-          ) : (
-            <>
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Analisar
-            </>
-          )}
-        </button>}
       </div>
 
       <div className="p-5">
-        {/* Analyze result */}
-        {analyzeResult && (
-          <div className="mb-4 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-400">
-            {analyzeResult}
-          </div>
-        )}
-
         {/* KPI Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           {kpis.map((kpi) => (

@@ -5,8 +5,61 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Profile } from '@/lib/types';
 import { STATUS_LABELS, STATUS_CHART_COLORS } from '@/lib/utils/labels';
+import NotificationBell from '@/components/notifications/notification-bell';
 
 const STATUSES = ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO'] as const;
+
+function AnalyzeButton() {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    setResult(null);
+    try {
+      const res = await fetch('/api/ai/analyze', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setResult(`${data.created} notificacoes criadas de ${data.total_contacts_analyzed} contatos analisados`);
+      } else {
+        const data = await res.json();
+        setResult(`Erro: ${data.error}`);
+      }
+    } catch {
+      setResult('Erro ao analisar');
+    }
+    setAnalyzing(false);
+  };
+
+  return (
+    <div>
+      <button
+        onClick={handleAnalyze}
+        disabled={analyzing}
+        className="w-full px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 disabled:opacity-40 transition-colors flex items-center justify-center gap-2"
+      >
+        {analyzing ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            Analisando...
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Rodar Analise IA
+          </>
+        )}
+      </button>
+      {result && (
+        <div className="mt-3 p-3 rounded-lg text-xs bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+          {result}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -603,6 +656,34 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* AI Copilot Section */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">IA Copilot</h2>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Notifications */}
+          <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+            <h3 className="text-sm font-medium text-neutral-100 mb-1">Notificacoes</h3>
+            <p className="text-xs text-purple-300/60 mb-4">
+              Alertas de risco, tarefas atrasadas e acoes sugeridas pela IA.
+            </p>
+            <div className="flex items-center gap-3">
+              <NotificationBell />
+              <span className="text-xs text-purple-300/60">Clique no sino para ver as notificacoes</span>
+            </div>
+          </div>
+
+          {/* Analyze */}
+          <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+            <h3 className="text-sm font-medium text-neutral-100 mb-1">Analisar Pipeline</h3>
+            <p className="text-xs text-purple-300/60 mb-4">
+              Roda o motor de riscos em todos os contatos ativos e cria notificacoes automaticamente.
+            </p>
+            <AnalyzeButton />
           </div>
         </div>
       </div>

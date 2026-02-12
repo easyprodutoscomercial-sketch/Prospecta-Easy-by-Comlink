@@ -1,7 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
-import TopBar from '@/components/top-bar';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { Providers } from '@/components/providers';
 
@@ -29,9 +28,8 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-[#1a0a2e]">
       <Sidebar profileName={profile?.name ?? null} userRole={profile?.role ?? 'user'} signOutAction={handleSignOut} />
-      <TopBar userRole={profile?.role ?? 'user'} profileName={profile?.name ?? null} />
 
-      <main className="lg:pl-64 pt-14 lg:pt-12 min-h-screen">
+      <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
         <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10 max-w-7xl">
           <Providers>{children}</Providers>
         </div>

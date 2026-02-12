@@ -32,11 +32,14 @@ export async function GET() {
       .not('proxima_acao_data', 'is', null)
       .lte('proxima_acao_data', threeDaysFromNow.toISOString());
 
-    if (error) throw error;
+    if (error) {
+      console.warn('Tasks count query error:', error.message);
+      return NextResponse.json({ count: 0 });
+    }
 
     return NextResponse.json({ count: count || 0 });
   } catch (error: any) {
     console.error('Error counting tasks:', error);
-    return NextResponse.json({ error: error.message || 'Erro ao contar tarefas' }, { status: 500 });
+    return NextResponse.json({ count: 0 });
   }
 }
