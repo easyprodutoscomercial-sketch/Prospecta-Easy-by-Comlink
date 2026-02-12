@@ -35,6 +35,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Contato não encontrado' }, { status: 404 });
     }
 
+    // Ownership: só o responsável ou admin podem criar interações
+    if (profile.role !== 'admin') {
+      if (!contact.assigned_to_user_id) {
+        return NextResponse.json({ error: 'Este contato não tem responsável. Aponte para você primeiro.' }, { status: 403 });
+      }
+      if (contact.assigned_to_user_id !== user.id) {
+        return NextResponse.json({ error: 'Apenas o responsável ou admin pode registrar interações neste contato.' }, { status: 403 });
+      }
+    }
+
     // Criar interação
     const { data: interaction, error } = await admin
       .from('interactions')

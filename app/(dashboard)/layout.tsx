@@ -30,7 +30,7 @@ export default async function DashboardLayout({
       <Sidebar profileName={profile?.name ?? null} userRole={profile?.role ?? 'user'} signOutAction={handleSignOut} />
 
       <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
-        <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10 max-w-6xl">
+        <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10 max-w-7xl">
           <Providers>{children}</Providers>
         </div>
       </main>

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
+import { ensureProfile } from '@/lib/ensure-profile';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
@@ -17,6 +18,38 @@ const interactionUpdateSchema = z.object({
   happened_at: z.string().datetime().optional(),
 });
 
+async function checkInteractionOwnership(admin: any, supabase: any, user: any, interactionId: string) {
+  const profile = await ensureProfile(supabase, user);
+  if (!profile) return { allowed: false, error: 'Profile nao encontrado', status: 404 };
+
+  // Buscar interacao com o contato associado
+  const { data: interaction } = await admin
+    .from('interactions')
+    .select('contact_id')
+    .eq('id', interactionId)
+    .single();
+
+  if (!interaction) return { allowed: false, error: 'Interacao nao encontrada', status: 404 };
+
+  // Admin pode tudo
+  if (profile.role === 'admin') return { allowed: true };
+
+  // Buscar contato para verificar ownership
+  const { data: contact } = await admin
+    .from('contacts')
+    .select('assigned_to_user_id')
+    .eq('id', interaction.contact_id)
+    .single();
+
+  if (!contact) return { allowed: false, error: 'Contato nao encontrado', status: 404 };
+
+  if (contact.assigned_to_user_id !== user.id) {
+    return { allowed: false, error: 'Apenas o responsavel ou admin pode modificar interacoes deste contato.', status: 403 };
+  }
+
+  return { allowed: true };
+}
+
 // PATCH /api/interactions/:id - Editar interação
 export async function PATCH(
   request: NextRequest,
@@ -32,6 +65,13 @@ export async function PATCH(
     }
 
     const admin = getAdminClient();
+
+    // Verificar ownership
+    const check = await checkInteractionOwnership(admin, supabase, user, id);
+    if (!check.allowed) {
+      return NextResponse.json({ error: check.error }, { status: check.status });
+    }
+
     const body = await request.json();
     const validated = interactionUpdateSchema.parse(body);
 
@@ -78,6 +118,12 @@ export async function DELETE(
     }
 
     const admin = getAdminClient();
+
+    // Verificar ownership
+    const check = await checkInteractionOwnership(admin, supabase, user, id);
+    if (!check.allowed) {
+      return NextResponse.json({ error: check.error }, { status: check.status });
+    }
 
     const { error } = await admin
       .from('interactions')
