@@ -224,7 +224,7 @@ export default async function DashboardPage() {
     <div>
       <h1 className="text-2xl font-semibold text-emerald-400 mb-8">Dashboard</h1>
       <DailyTasksWidget />
-      <PipelineHealthWidget />
+      <PipelineHealthWidget userRole={profile.role} />
       <DashboardWithTabs geral={geral} fornecedor={fornecedor} comprador={comprador} />
     </div>
   );

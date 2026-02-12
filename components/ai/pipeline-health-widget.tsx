@@ -3,11 +3,16 @@
 import { useState, useEffect } from 'react';
 import { PipelineHealth } from '@/lib/ai/types';
 
-export default function PipelineHealthWidget() {
+interface PipelineHealthWidgetProps {
+  userRole?: string;
+}
+
+export default function PipelineHealthWidget({ userRole }: PipelineHealthWidgetProps) {
   const [health, setHealth] = useState<PipelineHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeResult, setAnalyzeResult] = useState<string | null>(null);
+  const isAdmin = userRole === 'admin';
 
   const fetchHealth = async () => {
     setLoading(true);
@@ -73,7 +78,7 @@ export default function PipelineHealthWidget() {
             {health.totalActive} contatos ativos | R$ {health.totalValue.toLocaleString('pt-BR')} | {health.conversionRate}% conversao
           </span>
         </div>
-        <button
+        {isAdmin && <button
           onClick={handleAnalyze}
           disabled={analyzing}
           className="px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 rounded-lg hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex items-center gap-1.5"
@@ -91,7 +96,7 @@ export default function PipelineHealthWidget() {
               Analisar
             </>
           )}
-        </button>
+        </button>}
       </div>
 
       <div className="p-5">

@@ -166,12 +166,6 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
         ))}
       </nav>
 
-      {/* Notification bell */}
-      <div className="px-5 py-2 flex items-center justify-between">
-        <span className="text-[10px] text-purple-200/40 font-semibold uppercase tracking-wider">Alertas</span>
-        <NotificationBell />
-      </div>
-
       {/* User area */}
       <div className="border-t border-purple-500/15 px-5 py-4">
         <div className="flex items-center justify-between">
@@ -205,13 +199,16 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
   return (
     <>
       {/* Mobile top bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center h-14 bg-[#120826] px-4 border-b border-purple-500/10">
-        <button onClick={() => setMobileOpen(true)} className="text-purple-300/60 hover:text-emerald-400" aria-label="Abrir menu">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <Image src="/logo.png" alt="Prospecta Easy" width={180} height={50} className="ml-3 brightness-0 invert" priority />
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between h-14 bg-[#120826] px-4 border-b border-purple-500/10">
+        <div className="flex items-center">
+          <button onClick={() => setMobileOpen(true)} className="text-purple-300/60 hover:text-emerald-400" aria-label="Abrir menu">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <Image src="/logo.png" alt="Prospecta Easy" width={180} height={50} className="ml-3 brightness-0 invert" priority />
+        </div>
+        <NotificationBell />
       </div>
 
       {/* Mobile overlay */}

@@ -22,6 +22,7 @@ export async function POST() {
 
     const profile = await ensureProfile(supabase, user);
     if (!profile) return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
+    if (profile.role !== 'admin') return NextResponse.json({ error: 'Apenas administradores podem executar análise' }, { status: 403 });
 
     const admin = getAdminClient();
     const orgId = profile.organization_id;

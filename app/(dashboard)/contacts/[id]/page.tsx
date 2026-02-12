@@ -126,13 +126,15 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     } catch { toast.error('Erro'); } finally { setRequestingAccess(false); }
   };
 
-  const tabs = [
+  const baseTabs = [
     { key: 'historico', label: 'Historico', count: interactions.length + attachments.length },
     { key: 'atividades', label: 'Atividades', count: interactions.length },
     { key: 'detalhes', label: 'Detalhes' },
     { key: 'arquivos', label: 'Arquivos', count: attachments.length },
-    { key: 'ai-copilot', label: 'AI Copilot' },
   ];
+  const tabs = isAdmin
+    ? [...baseTabs, { key: 'ai-copilot', label: 'AI Copilot' }]
+    : baseTabs;
 
   if (loading) {
     return (
