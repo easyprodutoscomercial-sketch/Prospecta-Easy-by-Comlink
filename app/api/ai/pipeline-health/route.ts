@@ -22,7 +22,7 @@ export async function GET() {
     // Fetch active contacts
     const { data: contacts, error: contactsError } = await admin
       .from('contacts')
-      .select('id, name, status, temperatura, origem, proxima_acao_tipo, proxima_acao_data, valor_estimado, assigned_to_user_id, created_at, updated_at, company')
+      .select('*')
       .eq('organization_id', orgId)
       .in('status', ACTIVE_STATUSES);
 

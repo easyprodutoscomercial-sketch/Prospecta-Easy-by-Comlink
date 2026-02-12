@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import NotificationBell from '@/components/notifications/notification-bell';
 
 interface SidebarProps {
   profileName: string | null;
@@ -126,11 +127,12 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
 
   const navContent = (
     <>
-      {/* Logo */}
-      <div className="flex items-center justify-center py-5 px-4">
+      {/* Logo + Bell */}
+      <div className="flex items-center justify-between py-5 px-4">
         <Link href="/dashboard" className="flex items-center">
-          <Image src="/logo.png" alt="Prospecta Easy" width={220} height={64} className="brightness-0 invert" priority />
+          <Image src="/logo.png" alt="Prospecta Easy" width={180} height={52} className="brightness-0 invert" priority />
         </Link>
+        <NotificationBell />
       </div>
 
       {/* Navigation */}
@@ -198,13 +200,16 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
   return (
     <>
       {/* Mobile top bar */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center h-14 bg-[#120826] px-4 border-b border-purple-500/10">
-        <button onClick={() => setMobileOpen(true)} className="text-purple-300/60 hover:text-emerald-400" aria-label="Abrir menu">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <Image src="/logo.png" alt="Prospecta Easy" width={180} height={50} className="ml-3 brightness-0 invert" priority />
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 flex items-center justify-between h-14 bg-[#120826] px-4 border-b border-purple-500/10">
+        <div className="flex items-center">
+          <button onClick={() => setMobileOpen(true)} className="text-purple-300/60 hover:text-emerald-400" aria-label="Abrir menu">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <Image src="/logo.png" alt="Prospecta Easy" width={180} height={50} className="ml-3 brightness-0 invert" priority />
+        </div>
+        <NotificationBell />
       </div>
 
       {/* Mobile overlay */}

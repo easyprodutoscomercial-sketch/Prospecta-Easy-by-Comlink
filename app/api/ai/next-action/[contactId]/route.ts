@@ -24,7 +24,7 @@ export async function GET(
     // Fetch contact
     const { data: contact, error: contactError } = await admin
       .from('contacts')
-      .select('id, name, status, temperatura, origem, proxima_acao_tipo, proxima_acao_data, valor_estimado, assigned_to_user_id, created_at, updated_at, company')
+      .select('*')
       .eq('id', contactId)
       .eq('organization_id', profile.organization_id)
       .single();

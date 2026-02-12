@@ -30,7 +30,7 @@ export async function POST() {
     // Fetch active contacts with their interactions
     const { data: contacts, error: contactsError } = await admin
       .from('contacts')
-      .select('id, name, status, temperatura, origem, proxima_acao_tipo, proxima_acao_data, valor_estimado, assigned_to_user_id, created_at, updated_at, company')
+      .select('*')
       .eq('organization_id', orgId)
       .in('status', ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA']);
 
