@@ -101,11 +101,14 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   const handleEditSubmit = async (formData: Record<string, any>) => {
     setEditLoading(true); setEditError('');
+    console.log('[EDICAO] Dados enviados:', JSON.stringify(formData, null, 2));
     try {
       const r = await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
-      if (!r.ok) { const d = await r.json(); setEditError(d.error || 'Erro'); return; }
-      setContact(await r.json()); setIsEditing(false); toast.success('Contato atualizado!');
-    } catch { setEditError('Erro ao salvar'); } finally { setEditLoading(false); }
+      if (!r.ok) { const d = await r.json(); console.error('[EDICAO] Erro:', d.error, d.details || ''); setEditError(d.error || 'Erro'); return; }
+      const updated = await r.json();
+      console.log('[EDICAO] Contato atualizado:', updated.id);
+      setContact(updated); setIsEditing(false); toast.success('Contato atualizado!');
+    } catch (err: any) { console.error('[EDICAO] Erro de rede:', err.message); setEditError('Erro ao salvar'); } finally { setEditLoading(false); }
   };
 
   const handleClaimContact = async () => {

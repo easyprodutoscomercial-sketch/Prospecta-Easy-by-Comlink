@@ -14,6 +14,7 @@ import {
   type CollisionDetection,
 } from '@dnd-kit/core';
 import type { Contact, ContactStatus, ContactType, PipelineSettings } from '@/lib/types';
+import { TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS, ESTADOS_BRASIL } from '@/lib/utils/labels';
 import { useToast } from '@/lib/toast-context';
 import { KanbanBoard } from '@/components/kanban/kanban-board';
 import { KanbanSkeleton } from '@/components/kanban/kanban-skeleton';
@@ -95,6 +96,13 @@ export default function KanbanPage() {
   const [search, setSearch] = useState('');
   const [tipoFilter, setTipoFilter] = useState<'' | ContactType>('');
   const [responsavelFilter, setResponsavelFilter] = useState('');
+  const [temperaturaFilter, setTemperaturaFilter] = useState('');
+  const [origemFilter, setOrigemFilter] = useState('');
+  const [classeFilter, setClasseFilter] = useState('');
+  const [estadoFilter, setEstadoFilter] = useState('');
+  const [proximaAcaoFilter, setProximaAcaoFilter] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advSearch, setAdvSearch] = useState({ cpf: '', cnpj: '', whatsapp: '', empresa: '', cidade: '', telefone: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
   const [showMotivoModal, setShowMotivoModal] = useState(false);
@@ -221,8 +229,37 @@ export default function KanbanPage() {
       );
     }
 
+    if (temperaturaFilter) {
+      result = result.filter((c) => c.temperatura === temperaturaFilter);
+    }
+
+    if (origemFilter) {
+      result = result.filter((c) => c.origem === origemFilter);
+    }
+
+    if (classeFilter) {
+      result = result.filter((c) => c.classe === classeFilter);
+    }
+    if (estadoFilter) {
+      result = result.filter((c) => c.estado === estadoFilter);
+    }
+    if (proximaAcaoFilter) {
+      result = result.filter((c) => c.proxima_acao_tipo === proximaAcaoFilter);
+    }
+    const ilike = (val: string | null | undefined, q: string) => val ? val.toLowerCase().includes(q.toLowerCase()) : false;
+    if (advSearch.cpf) result = result.filter((c) => ilike(c.cpf, advSearch.cpf));
+    if (advSearch.cnpj) result = result.filter((c) => ilike(c.cnpj, advSearch.cnpj));
+    if (advSearch.whatsapp) result = result.filter((c) => ilike(c.whatsapp, advSearch.whatsapp));
+    if (advSearch.empresa) result = result.filter((c) => ilike(c.company, advSearch.empresa));
+    if (advSearch.cidade) result = result.filter((c) => ilike(c.cidade, advSearch.cidade));
+    if (advSearch.telefone) result = result.filter((c) => ilike(c.phone, advSearch.telefone));
+    if (advSearch.referencia) result = result.filter((c) => ilike(c.referencia, advSearch.referencia));
+    if (advSearch.contato_nome) result = result.filter((c) => ilike(c.contato_nome, advSearch.contato_nome));
+    if (advSearch.cargo) result = result.filter((c) => ilike(c.cargo, advSearch.cargo));
+    if (advSearch.produtos_fornecidos) result = result.filter((c) => ilike(c.produtos_fornecidos, advSearch.produtos_fornecidos));
+
     return result;
-  }, [contacts, search, tipoFilter, responsavelFilter]);
+  }, [contacts, search, tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
 
   // Group by status
   const grouped = useMemo(() => {
@@ -484,7 +521,72 @@ export default function KanbanPage() {
               <option key={userId} value={userId}>{user.name}</option>
             ))}
           </select>
+
+          {/* Temperatura filter */}
+          <select
+            value={temperaturaFilter}
+            onChange={(e) => setTemperaturaFilter(e.target.value)}
+            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Temperatura</option>
+            {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+
+          {/* Origem filter */}
+          <select
+            value={origemFilter}
+            onChange={(e) => setOrigemFilter(e.target.value)}
+            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Origem</option>
+            {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+
+          {/* Classe filter */}
+          <select
+            value={classeFilter}
+            onChange={(e) => setClasseFilter(e.target.value)}
+            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Classe</option>
+            <option value="A">Classe A</option>
+            <option value="B">Classe B</option>
+            <option value="C">Classe C</option>
+            <option value="D">Classe D</option>
+          </select>
+
+          <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <option value="">Estado</option>
+            {ESTADOS_BRASIL.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
+          </select>
+
+          <select value={proximaAcaoFilter} onChange={(e) => setProximaAcaoFilter(e.target.value)} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <option value="">Proxima Acao</option>
+            {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
+          </select>
+
+          <button onClick={() => setShowAdvanced((p) => !p)} className="text-xs text-emerald-400 hover:text-emerald-300 font-medium">
+            {showAdvanced ? 'Menos' : 'Mais filtros'}
+          </button>
         </div>
+        {showAdvanced && (
+          <div className="flex items-center gap-2 flex-wrap mt-2 pt-2 border-t border-purple-800/20">
+            <input type="text" placeholder="CPF..." value={advSearch.cpf} onChange={(e) => setAdvSearch((p) => ({ ...p, cpf: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+            <input type="text" placeholder="CNPJ..." value={advSearch.cnpj} onChange={(e) => setAdvSearch((p) => ({ ...p, cnpj: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-32" />
+            <input type="text" placeholder="Telefone..." value={advSearch.telefone} onChange={(e) => setAdvSearch((p) => ({ ...p, telefone: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+            <input type="text" placeholder="WhatsApp..." value={advSearch.whatsapp} onChange={(e) => setAdvSearch((p) => ({ ...p, whatsapp: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+            <input type="text" placeholder="Empresa..." value={advSearch.empresa} onChange={(e) => setAdvSearch((p) => ({ ...p, empresa: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+            <input type="text" placeholder="Cidade..." value={advSearch.cidade} onChange={(e) => setAdvSearch((p) => ({ ...p, cidade: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+            <input type="text" placeholder="Referencia..." value={advSearch.referencia} onChange={(e) => setAdvSearch((p) => ({ ...p, referencia: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+            <input type="text" placeholder="Nome Contato..." value={advSearch.contato_nome} onChange={(e) => setAdvSearch((p) => ({ ...p, contato_nome: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-32" />
+            <input type="text" placeholder="Cargo..." value={advSearch.cargo} onChange={(e) => setAdvSearch((p) => ({ ...p, cargo: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+            <input type="text" placeholder="Produtos..." value={advSearch.produtos_fornecidos} onChange={(e) => setAdvSearch((p) => ({ ...p, produtos_fornecidos: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+          </div>
+        )}
       </div>
 
       {/* Legenda de usuários com speech bubbles */}

@@ -62,6 +62,102 @@ export async function GET(request: NextRequest) {
       query = query.is('assigned_to_user_id', null);
     }
 
+    // Filtros adicionais
+    const temperatura = searchParams.get('temperatura');
+    if (temperatura && temperatura !== 'all') {
+      query = query.eq('temperatura', temperatura);
+    }
+
+    const origem = searchParams.get('origem');
+    if (origem && origem !== 'all') {
+      query = query.eq('origem', origem);
+    }
+
+    const classe = searchParams.get('classe');
+    if (classe && classe !== 'all') {
+      query = query.eq('classe', classe);
+    }
+
+    const cidade = searchParams.get('cidade');
+    if (cidade) {
+      query = query.ilike('cidade', `%${cidade}%`);
+    }
+
+    const estado = searchParams.get('estado');
+    if (estado && estado !== 'all') {
+      query = query.eq('estado', estado);
+    }
+
+    const telefone = searchParams.get('telefone');
+    if (telefone) {
+      query = query.ilike('phone', `%${telefone}%`);
+    }
+
+    const cpf = searchParams.get('cpf');
+    if (cpf) {
+      query = query.ilike('cpf', `%${cpf}%`);
+    }
+
+    const cnpj = searchParams.get('cnpj');
+    if (cnpj) {
+      query = query.ilike('cnpj', `%${cnpj}%`);
+    }
+
+    const whatsapp = searchParams.get('whatsapp');
+    if (whatsapp) {
+      query = query.ilike('whatsapp', `%${whatsapp}%`);
+    }
+
+    const empresa = searchParams.get('empresa');
+    if (empresa) {
+      query = query.ilike('company', `%${empresa}%`);
+    }
+
+    const referencia = searchParams.get('referencia');
+    if (referencia) {
+      query = query.ilike('referencia', `%${referencia}%`);
+    }
+
+    const contato_nome = searchParams.get('contato_nome');
+    if (contato_nome) {
+      query = query.ilike('contato_nome', `%${contato_nome}%`);
+    }
+
+    const cargo = searchParams.get('cargo');
+    if (cargo) {
+      query = query.ilike('cargo', `%${cargo}%`);
+    }
+
+    const endereco = searchParams.get('endereco');
+    if (endereco) {
+      query = query.ilike('endereco', `%${endereco}%`);
+    }
+
+    const cep = searchParams.get('cep');
+    if (cep) {
+      query = query.ilike('cep', `%${cep}%`);
+    }
+
+    const website = searchParams.get('website');
+    if (website) {
+      query = query.ilike('website', `%${website}%`);
+    }
+
+    const instagram = searchParams.get('instagram');
+    if (instagram) {
+      query = query.ilike('instagram', `%${instagram}%`);
+    }
+
+    const proxima_acao_tipo = searchParams.get('proxima_acao_tipo');
+    if (proxima_acao_tipo && proxima_acao_tipo !== 'all') {
+      query = query.eq('proxima_acao_tipo', proxima_acao_tipo);
+    }
+
+    const produtos_fornecidos = searchParams.get('produtos_fornecidos');
+    if (produtos_fornecidos) {
+      query = query.ilike('produtos_fornecidos', `%${produtos_fornecidos}%`);
+    }
+
     // Paginação e ordenação
     const { data: contacts, error, count } = await query
       .order(sortField, { ascending: sortDir })
@@ -105,8 +201,19 @@ export async function POST(request: NextRequest) {
     const admin = getAdminClient();
     const body = await request.json();
 
+    console.log('[API CONTACTS POST] Body recebido:', JSON.stringify(body, null, 2));
+    console.log('[API CONTACTS POST] CPF:', body.cpf, '| CNPJ:', body.cnpj);
+    console.log('[API CONTACTS POST] CPF digits:', (body.cpf || '').replace(/\D/g, '').length, '| CNPJ digits:', (body.cnpj || '').replace(/\D/g, '').length);
+
     // Validar dados
-    const validated = contactSchema.parse(body);
+    let validated;
+    try {
+      validated = contactSchema.parse(body);
+      console.log('[API CONTACTS POST] Validacao OK');
+    } catch (validationErr: any) {
+      console.error('[API CONTACTS POST] Erro de validacao:', JSON.stringify(validationErr.errors || validationErr.message, null, 2));
+      throw validationErr;
+    }
 
     // Converter proxima_acao_data para ISO se presente
     if (validated.proxima_acao_data) {
@@ -115,6 +222,7 @@ export async function POST(request: NextRequest) {
 
     // Normalizar dados
     const normalized = normalizeContactData(validated);
+    console.log('[API CONTACTS POST] Dados normalizados:', JSON.stringify(normalized, null, 2));
 
     // DEDUPLICAÇÃO - buscar duplicados
     const duplicateChecks = [];
@@ -174,6 +282,7 @@ export async function POST(request: NextRequest) {
     const duplicate = results.find(r => r.data && !r.error);
 
     if (duplicate && duplicate.data) {
+      console.warn('[API CONTACTS POST] Duplicado encontrado:', JSON.stringify(duplicate.data));
       return NextResponse.json(
         {
           error: 'Contato já existe',
@@ -194,8 +303,12 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('[API CONTACTS POST] Erro ao inserir no Supabase:', error);
+      throw error;
+    }
 
+    console.log('[API CONTACTS POST] Contato criado com sucesso, ID:', newContact?.id);
     return NextResponse.json(newContact, { status: 201 });
 
   } catch (error: any) {

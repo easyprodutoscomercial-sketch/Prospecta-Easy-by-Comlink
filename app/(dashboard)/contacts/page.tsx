@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { Contact } from '@/lib/types';
-import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS } from '@/lib/utils/labels';
+import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS, ESTADOS_BRASIL, PROXIMA_ACAO_LABELS } from '@/lib/utils/labels';
 import Pagination from '@/components/ui/pagination';
 import { SkeletonTable } from '@/components/ui/skeleton';
 import BulkActionBar from '@/components/contacts/bulk-action-bar';
@@ -30,6 +30,17 @@ export default function ContactsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [tipoFilter, setTipoFilter] = useState('all');
   const [assignedFilter, setAssignedFilter] = useState('all');
+  const [temperaturaFilter, setTemperaturaFilter] = useState('all');
+  const [origemFilter, setOrigemFilter] = useState('all');
+  const [classeFilter, setClasseFilter] = useState('all');
+  const [cidadeFilter, setCidadeFilter] = useState('');
+  const [debouncedCidade, setDebouncedCidade] = useState('');
+  const [estadoFilter, setEstadoFilter] = useState('all');
+  const [telefoneFilter, setTelefoneFilter] = useState('');
+  const [debouncedTelefone, setDebouncedTelefone] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [adv, setAdv] = useState({ cpf: '', cnpj: '', whatsapp: '', empresa: '', referencia: '', contato_nome: '', cargo: '', endereco: '', cep: '', website: '', instagram: '', produtos_fornecidos: '', proxima_acao_tipo: 'all' });
+  const [debouncedAdv, setDebouncedAdv] = useState(adv);
   const abortRef = useRef<AbortController | null>(null);
 
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
@@ -71,8 +82,11 @@ export default function ContactsPage() {
   }, []);
 
   useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 400); return () => clearTimeout(t); }, [search]);
-  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter]);
-  useEffect(() => { loadContacts(); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, page, sortBy, sortDir]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedCidade(cidadeFilter), 400); return () => clearTimeout(t); }, [cidadeFilter]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedTelefone(telefoneFilter), 400); return () => clearTimeout(t); }, [telefoneFilter]);
+  useEffect(() => { const t = setTimeout(() => setDebouncedAdv(adv), 400); return () => clearTimeout(t); }, [adv]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, temperaturaFilter, origemFilter, classeFilter, debouncedCidade, estadoFilter, debouncedTelefone, debouncedAdv]);
+  useEffect(() => { loadContacts(); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, temperaturaFilter, origemFilter, classeFilter, debouncedCidade, estadoFilter, debouncedTelefone, debouncedAdv, page, sortBy, sortDir]);
 
   const loadContacts = async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -84,6 +98,25 @@ export default function ContactsPage() {
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (tipoFilter !== 'all') params.set('tipo', tipoFilter);
     if (assignedFilter !== 'all') params.set('assigned', assignedFilter);
+    if (temperaturaFilter !== 'all') params.set('temperatura', temperaturaFilter);
+    if (origemFilter !== 'all') params.set('origem', origemFilter);
+    if (classeFilter !== 'all') params.set('classe', classeFilter);
+    if (debouncedCidade) params.set('cidade', debouncedCidade);
+    if (estadoFilter !== 'all') params.set('estado', estadoFilter);
+    if (debouncedTelefone) params.set('telefone', debouncedTelefone);
+    if (debouncedAdv.cpf) params.set('cpf', debouncedAdv.cpf);
+    if (debouncedAdv.cnpj) params.set('cnpj', debouncedAdv.cnpj);
+    if (debouncedAdv.whatsapp) params.set('whatsapp', debouncedAdv.whatsapp);
+    if (debouncedAdv.empresa) params.set('empresa', debouncedAdv.empresa);
+    if (debouncedAdv.referencia) params.set('referencia', debouncedAdv.referencia);
+    if (debouncedAdv.contato_nome) params.set('contato_nome', debouncedAdv.contato_nome);
+    if (debouncedAdv.cargo) params.set('cargo', debouncedAdv.cargo);
+    if (debouncedAdv.endereco) params.set('endereco', debouncedAdv.endereco);
+    if (debouncedAdv.cep) params.set('cep', debouncedAdv.cep);
+    if (debouncedAdv.website) params.set('website', debouncedAdv.website);
+    if (debouncedAdv.instagram) params.set('instagram', debouncedAdv.instagram);
+    if (debouncedAdv.proxima_acao_tipo !== 'all') params.set('proxima_acao_tipo', debouncedAdv.proxima_acao_tipo);
+    if (debouncedAdv.produtos_fornecidos) params.set('produtos_fornecidos', debouncedAdv.produtos_fornecidos);
     params.set('page', String(page));
     params.set('limit', String(limit));
     params.set('sortBy', sortBy);
@@ -113,6 +146,25 @@ export default function ContactsPage() {
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (tipoFilter !== 'all') params.set('tipo', tipoFilter);
     if (assignedFilter !== 'all') params.set('assigned', assignedFilter);
+    if (temperaturaFilter !== 'all') params.set('temperatura', temperaturaFilter);
+    if (origemFilter !== 'all') params.set('origem', origemFilter);
+    if (classeFilter !== 'all') params.set('classe', classeFilter);
+    if (debouncedCidade) params.set('cidade', debouncedCidade);
+    if (estadoFilter !== 'all') params.set('estado', estadoFilter);
+    if (debouncedTelefone) params.set('telefone', debouncedTelefone);
+    if (debouncedAdv.cpf) params.set('cpf', debouncedAdv.cpf);
+    if (debouncedAdv.cnpj) params.set('cnpj', debouncedAdv.cnpj);
+    if (debouncedAdv.whatsapp) params.set('whatsapp', debouncedAdv.whatsapp);
+    if (debouncedAdv.empresa) params.set('empresa', debouncedAdv.empresa);
+    if (debouncedAdv.referencia) params.set('referencia', debouncedAdv.referencia);
+    if (debouncedAdv.contato_nome) params.set('contato_nome', debouncedAdv.contato_nome);
+    if (debouncedAdv.cargo) params.set('cargo', debouncedAdv.cargo);
+    if (debouncedAdv.endereco) params.set('endereco', debouncedAdv.endereco);
+    if (debouncedAdv.cep) params.set('cep', debouncedAdv.cep);
+    if (debouncedAdv.website) params.set('website', debouncedAdv.website);
+    if (debouncedAdv.instagram) params.set('instagram', debouncedAdv.instagram);
+    if (debouncedAdv.proxima_acao_tipo !== 'all') params.set('proxima_acao_tipo', debouncedAdv.proxima_acao_tipo);
+    if (debouncedAdv.produtos_fornecidos) params.set('produtos_fornecidos', debouncedAdv.produtos_fornecidos);
     window.open(`/api/contacts/export?${params.toString()}`, '_blank');
     toast.success('Exportacao iniciada');
   };
@@ -175,8 +227,8 @@ export default function ContactsPage() {
 
       {/* Filters */}
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-3 sm:p-4">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-          <div className="relative col-span-2 sm:col-span-1">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
+          <div className="relative col-span-2 lg:col-span-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input type="text" placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
@@ -199,7 +251,59 @@ export default function ContactsPage() {
             <option value="me">Meus contatos</option>
             <option value="unassigned">Sem responsavel</option>
           </select>
+          <select value={temperaturaFilter} onChange={(e) => setTemperaturaFilter(e.target.value)} className={selectCls}>
+            <option value="all">Temperatura</option>
+            {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <select value={origemFilter} onChange={(e) => setOrigemFilter(e.target.value)} className={selectCls}>
+            <option value="all">Origem</option>
+            {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <select value={classeFilter} onChange={(e) => setClasseFilter(e.target.value)} className={selectCls}>
+            <option value="all">Classe</option>
+            <option value="A">Classe A</option>
+            <option value="B">Classe B</option>
+            <option value="C">Classe C</option>
+            <option value="D">Classe D</option>
+          </select>
+          <input type="text" placeholder="Telefone..." value={telefoneFilter} onChange={(e) => setTelefoneFilter(e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <input type="text" placeholder="Cidade..." value={cidadeFilter} onChange={(e) => setCidadeFilter(e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className={selectCls}>
+            <option value="all">Estado</option>
+            {ESTADOS_BRASIL.map((uf) => (
+              <option key={uf} value={uf}>{uf}</option>
+            ))}
+          </select>
         </div>
+        <button onClick={() => setShowAdvanced((p) => !p)} className="mt-2 text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
+          {showAdvanced ? 'Ocultar filtros avancados' : 'Mostrar filtros avancados'}
+        </button>
+        {showAdvanced && (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mt-3 pt-3 border-t border-purple-800/20">
+            <input type="text" placeholder="CPF..." value={adv.cpf} onChange={(e) => setAdv((p) => ({ ...p, cpf: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="CNPJ..." value={adv.cnpj} onChange={(e) => setAdv((p) => ({ ...p, cnpj: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="WhatsApp..." value={adv.whatsapp} onChange={(e) => setAdv((p) => ({ ...p, whatsapp: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="Empresa..." value={adv.empresa} onChange={(e) => setAdv((p) => ({ ...p, empresa: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="Referencia..." value={adv.referencia} onChange={(e) => setAdv((p) => ({ ...p, referencia: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="Nome Contato..." value={adv.contato_nome} onChange={(e) => setAdv((p) => ({ ...p, contato_nome: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="Cargo..." value={adv.cargo} onChange={(e) => setAdv((p) => ({ ...p, cargo: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="Endereco..." value={adv.endereco} onChange={(e) => setAdv((p) => ({ ...p, endereco: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="CEP..." value={adv.cep} onChange={(e) => setAdv((p) => ({ ...p, cep: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="Website..." value={adv.website} onChange={(e) => setAdv((p) => ({ ...p, website: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="Instagram..." value={adv.instagram} onChange={(e) => setAdv((p) => ({ ...p, instagram: e.target.value }))} className={selectCls} />
+            <input type="text" placeholder="Produtos Fornecidos..." value={adv.produtos_fornecidos} onChange={(e) => setAdv((p) => ({ ...p, produtos_fornecidos: e.target.value }))} className={selectCls} />
+            <select value={adv.proxima_acao_tipo} onChange={(e) => setAdv((p) => ({ ...p, proxima_acao_tipo: e.target.value }))} className={selectCls}>
+              <option value="all">Proxima Acao</option>
+              {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Content */}

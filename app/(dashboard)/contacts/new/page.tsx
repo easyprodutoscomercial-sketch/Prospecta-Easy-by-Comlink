@@ -18,6 +18,8 @@ export default function NewContactPage() {
     setError('');
     setDuplicate(null);
 
+    console.log('[CADASTRO] Dados enviados do formulario:', JSON.stringify(formData, null, 2));
+
     try {
       const res = await fetch('/api/contacts', {
         method: 'POST',
@@ -27,16 +29,23 @@ export default function NewContactPage() {
 
       const data = await res.json();
 
+      console.log('[CADASTRO] Status da resposta:', res.status);
+      console.log('[CADASTRO] Dados da resposta:', JSON.stringify(data, null, 2));
+
       if (res.status === 409) {
+        console.warn('[CADASTRO] Duplicado encontrado:', data.duplicate);
         setDuplicate(data.duplicate);
         setError('Contato já existe no sistema');
       } else if (!res.ok) {
+        console.error('[CADASTRO] Erro ao criar contato:', data.error, data.details || '');
         setError(data.error || 'Erro ao criar contato');
       } else {
+        console.log('[CADASTRO] Contato criado com sucesso, ID:', data.id);
         toast.success('Contato criado com sucesso!');
         router.push(`/contacts/${data.id}`);
       }
     } catch (err: any) {
+      console.error('[CADASTRO] Erro de rede/exception:', err.message, err);
       setError(err.message || 'Erro ao criar contato');
     } finally {
       setLoading(false);

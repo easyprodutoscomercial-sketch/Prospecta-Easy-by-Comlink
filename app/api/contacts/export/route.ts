@@ -47,6 +47,57 @@ export async function GET(request: NextRequest) {
       query = query.is('assigned_to_user_id', null);
     }
 
+    const temperatura = searchParams.get('temperatura');
+    if (temperatura && temperatura !== 'all') {
+      query = query.eq('temperatura', temperatura);
+    }
+    const origem = searchParams.get('origem');
+    if (origem && origem !== 'all') {
+      query = query.eq('origem', origem);
+    }
+    const classe = searchParams.get('classe');
+    if (classe && classe !== 'all') {
+      query = query.eq('classe', classe);
+    }
+    const cidade = searchParams.get('cidade');
+    if (cidade) {
+      query = query.ilike('cidade', `%${cidade}%`);
+    }
+    const estado = searchParams.get('estado');
+    if (estado && estado !== 'all') {
+      query = query.eq('estado', estado);
+    }
+    const telefone = searchParams.get('telefone');
+    if (telefone) {
+      query = query.ilike('phone', `%${telefone}%`);
+    }
+    const cpf = searchParams.get('cpf');
+    if (cpf) { query = query.ilike('cpf', `%${cpf}%`); }
+    const cnpj = searchParams.get('cnpj');
+    if (cnpj) { query = query.ilike('cnpj', `%${cnpj}%`); }
+    const whatsapp = searchParams.get('whatsapp');
+    if (whatsapp) { query = query.ilike('whatsapp', `%${whatsapp}%`); }
+    const empresa = searchParams.get('empresa');
+    if (empresa) { query = query.ilike('company', `%${empresa}%`); }
+    const referencia = searchParams.get('referencia');
+    if (referencia) { query = query.ilike('referencia', `%${referencia}%`); }
+    const contato_nome = searchParams.get('contato_nome');
+    if (contato_nome) { query = query.ilike('contato_nome', `%${contato_nome}%`); }
+    const cargo = searchParams.get('cargo');
+    if (cargo) { query = query.ilike('cargo', `%${cargo}%`); }
+    const endereco = searchParams.get('endereco');
+    if (endereco) { query = query.ilike('endereco', `%${endereco}%`); }
+    const cep = searchParams.get('cep');
+    if (cep) { query = query.ilike('cep', `%${cep}%`); }
+    const website = searchParams.get('website');
+    if (website) { query = query.ilike('website', `%${website}%`); }
+    const instagram = searchParams.get('instagram');
+    if (instagram) { query = query.ilike('instagram', `%${instagram}%`); }
+    const proxima_acao_tipo = searchParams.get('proxima_acao_tipo');
+    if (proxima_acao_tipo && proxima_acao_tipo !== 'all') { query = query.eq('proxima_acao_tipo', proxima_acao_tipo); }
+    const produtos_fornecidos = searchParams.get('produtos_fornecidos');
+    if (produtos_fornecidos) { query = query.ilike('produtos_fornecidos', `%${produtos_fornecidos}%`); }
+
     const { data: contacts, error } = await query.order('created_at', { ascending: false });
 
     if (error) throw error;

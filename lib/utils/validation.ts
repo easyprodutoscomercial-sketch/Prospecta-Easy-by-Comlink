@@ -32,7 +32,11 @@ export const contactSchema = z.object({
   proxima_acao_data: z.string().optional().nullable(),
   motivo_ganho_perdido: z.string().optional().nullable(),
   valor_estimado: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
-});
+}).refine((data) => {
+  const cpfDigits = data.cpf?.replace(/\D/g, '') || '';
+  const cnpjDigits = data.cnpj?.replace(/\D/g, '') || '';
+  return (cpfDigits.length === 11) || (cnpjDigits.length === 14);
+}, { message: 'CPF ou CNPJ é obrigatório', path: ['cpf'] });
 
 export const interactionSchema = z.object({
   contact_id: z.string().uuid(),

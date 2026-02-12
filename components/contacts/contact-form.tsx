@@ -131,13 +131,27 @@ export default function ContactForm({
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       errs.email = 'Email inválido';
     }
+    const cpfDigits = formData.cpf?.replace(/\D/g, '') || '';
+    const cnpjDigits = formData.cnpj?.replace(/\D/g, '') || '';
+    if (cpfDigits.length !== 11 && cnpjDigits.length !== 14) {
+      errs.cpf = 'Preencha pelo menos CPF ou CNPJ';
+    }
+    if (Object.keys(errs).length > 0) {
+      console.warn('[FORM] Erros de validacao:', errs);
+      console.warn('[FORM] CPF digits:', cpfDigits.length, '| CNPJ digits:', cnpjDigits.length);
+    }
     setValidationErrors(errs);
     return Object.keys(errs).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    console.log('[FORM] Tentando enviar formulario...', JSON.stringify(formData, null, 2));
+    if (!validate()) {
+      console.warn('[FORM] Validacao falhou:', validationErrors);
+      return;
+    }
+    console.log('[FORM] Validacao OK, enviando...');
     await onSubmit(formData);
   };
 
@@ -208,22 +222,23 @@ export default function ContactForm({
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>CPF</label>
+              <label className={labelClass}>CPF * <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></label>
               <input
                 type="text"
                 value={formData.cpf}
                 onChange={(e) => update('cpf', formatCPF(e.target.value))}
-                className={inputClass()}
+                className={inputClass('cpf')}
                 placeholder="000.000.000-00"
               />
+              {validationErrors.cpf && <p className="text-xs text-red-500 mt-1">{validationErrors.cpf}</p>}
             </div>
             <div>
-              <label className={labelClass}>CNPJ</label>
+              <label className={labelClass}>CNPJ * <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></label>
               <input
                 type="text"
                 value={formData.cnpj}
                 onChange={(e) => update('cnpj', formatCNPJ(e.target.value))}
-                className={inputClass()}
+                className={inputClass('cpf')}
                 placeholder="00.000.000/0000-00"
               />
             </div>

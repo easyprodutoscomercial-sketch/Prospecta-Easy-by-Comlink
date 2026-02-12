@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import DashboardCharts from './dashboard-charts';
 import TeamComparisonChart from './team-comparison-chart';
 import InteractionsByTypeChart from './interactions-by-type-chart';
 import ResponseRateCard from './response-rate-card';
 import ConversionRanking from './conversion-ranking';
 import Link from 'next/link';
-import { formatStatus, getStatusColor } from '@/lib/utils/labels';
+import { formatStatus, getStatusColor, STATUS_CHART_COLORS, STATUS_LABELS, INTERACTION_TYPE_LABELS, TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS, ESTADOS_BRASIL } from '@/lib/utils/labels';
 
 export interface SegmentData {
   statusCounts: { name: string; value: number; color: string }[];
@@ -27,9 +27,13 @@ export interface SegmentData {
 }
 
 interface DashboardWithTabsProps {
-  geral: SegmentData;
-  fornecedor: SegmentData;
-  comprador: SegmentData;
+  allContacts: any[];
+  recentContacts: any[];
+  allInteractions: any[];
+  allProfiles: any[];
+  monthContacts: any[];
+  monthInteractions: any[];
+  monthRanges: { start: string; end: string; label: string }[];
 }
 
 const TABS = [
@@ -38,19 +42,294 @@ const TABS = [
   { key: 'comprador', label: 'Compradores' },
 ] as const;
 
-export default function DashboardWithTabs({ geral, fornecedor, comprador }: DashboardWithTabsProps) {
-  const [activeTab, setActiveTab] = useState<string>('geral');
+const STATUS_CONFIG = Object.entries(STATUS_LABELS).map(([key, label]) => ({
+  key,
+  label,
+  color: STATUS_CHART_COLORS[key] || '#a3a3a3',
+}));
 
-  const segments: Record<string, SegmentData> = { geral, fornecedor, comprador };
-  const data = segments[activeTab];
+function computeSegment(
+  contacts: any[],
+  interactions: any[],
+  recentContacts: any[],
+  allProfiles: any[],
+  monthContacts: any[],
+  monthInteractions: any[],
+  monthRanges: { start: string; end: string; label: string }[]
+): SegmentData {
+  const statusMap: Record<string, number> = {};
+  for (const c of contacts) {
+    statusMap[c.status] = (statusMap[c.status] || 0) + 1;
+  }
+  const statusCounts = STATUS_CONFIG.map((s) => ({
+    name: s.label,
+    value: statusMap[s.key] || 0,
+    color: s.color,
+  }));
+
+  const totalContacts = contacts.length;
+  const emProspeccao = statusMap['EM_PROSPECCAO'] || 0;
+  const reunioesMarcadas = statusMap['REUNIAO_MARCADA'] || 0;
+  const convertidos = statusMap['CONVERTIDO'] || 0;
+
+  const monthlyData = monthRanges.map((range) => {
+    const count = contacts.filter(
+      (c) => c.created_at >= range.start && c.created_at < range.end
+    ).length;
+    return { month: range.label, count };
+  });
+
+  const typeCountMap: Record<string, number> = {};
+  for (const i of interactions) {
+    typeCountMap[i.type] = (typeCountMap[i.type] || 0) + 1;
+  }
+  const interactionsByType = Object.entries(INTERACTION_TYPE_LABELS).map(([key, label]) => ({
+    name: label,
+    count: typeCountMap[key] || 0,
+  }));
+
+  const responded = interactions.filter((i) => i.outcome !== 'SEM_RESPOSTA').length;
+  const noResponse = interactions.filter((i) => i.outcome === 'SEM_RESPOSTA').length;
+  const totalInteractions = interactions.length;
+
+  const teamComparison = allProfiles.map((p) => {
+    const userContacts = monthContacts.filter((c) => c.created_by_user_id === p.user_id).length;
+    const userInteractions = monthInteractions.filter((i) => i.created_by_user_id === p.user_id);
+    const intCount = userInteractions.length;
+    const meetings = userInteractions.filter((i) => i.type === 'REUNIAO' || i.type === 'VISITA').length;
+    const conversions = userInteractions.filter((i) =>
+      i.outcome === 'CONVERTIDO' || i.outcome === 'PROPOSTA_ACEITA' || i.outcome === 'FECHADO_PARCIAL'
+    ).length;
+    return {
+      name: p.name.split(' ').slice(0, 2).join(' '),
+      avatar_url: p.avatar_url || null,
+      contacts: userContacts,
+      interactions: intCount,
+      meetings,
+      conversions,
+    };
+  });
+
+  const conversionRanking = allProfiles.map((p) => {
+    const userInteractions = interactions.filter((i) => i.created_by_user_id === p.user_id);
+    const total = userInteractions.length;
+    const conversions = userInteractions.filter((i) =>
+      i.outcome === 'CONVERTIDO' || i.outcome === 'PROPOSTA_ACEITA' || i.outcome === 'FECHADO_PARCIAL'
+    ).length;
+    const rate = total > 0 ? Math.round((conversions / total) * 100) : 0;
+    return {
+      name: p.name,
+      avatar_url: p.avatar_url || null,
+      conversions,
+      total_interactions: total,
+      conversion_rate: rate,
+    };
+  });
+
+  const totalPipelineValue = contacts
+    .filter((c) => c.status !== 'CONVERTIDO' && c.status !== 'PERDIDO')
+    .reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
+
+  return {
+    statusCounts,
+    totalContacts,
+    emProspeccao,
+    reunioesMarcadas,
+    convertidos,
+    totalPipelineValue,
+    monthlyData,
+    interactionsByType,
+    responded,
+    noResponse,
+    totalInteractions,
+    teamComparison,
+    conversionRanking,
+    recentContacts: recentContacts.slice(0, 5),
+  };
+}
+
+export default function DashboardWithTabs({
+  allContacts,
+  recentContacts,
+  allInteractions,
+  allProfiles,
+  monthContacts,
+  monthInteractions,
+  monthRanges,
+}: DashboardWithTabsProps) {
+  const [activeTab, setActiveTab] = useState<string>('geral');
+  const [temperaturaFilter, setTemperaturaFilter] = useState('all');
+  const [origemFilter, setOrigemFilter] = useState('all');
+  const [classeFilter, setClasseFilter] = useState('all');
+  const [responsavelFilter, setResponsavelFilter] = useState('all');
+  const [estadoFilter, setEstadoFilter] = useState('all');
+  const [proximaAcaoFilter, setProximaAcaoFilter] = useState('all');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advSearch, setAdvSearch] = useState({ cpf: '', cnpj: '', telefone: '', whatsapp: '', empresa: '', cidade: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
+
+  const selectCls = 'px-2 py-1.5 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500';
+
+  // Build contact ID set and type map
+  const contactIdMap = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const c of allContacts) map.set(c.id, c);
+    for (const c of monthContacts) {
+      if (!map.has(c.id)) map.set(c.id, c);
+    }
+    return map;
+  }, [allContacts, monthContacts]);
+
+  // Apply global filters to contacts
+  const applyContactFilters = (contacts: any[]) => {
+    let result = contacts;
+    if (temperaturaFilter !== 'all') result = result.filter((c) => c.temperatura === temperaturaFilter);
+    if (origemFilter !== 'all') result = result.filter((c) => c.origem === origemFilter);
+    if (classeFilter !== 'all') result = result.filter((c) => c.classe === classeFilter);
+    if (responsavelFilter !== 'all') result = result.filter((c) => c.assigned_to_user_id === responsavelFilter);
+    if (estadoFilter !== 'all') result = result.filter((c) => c.estado === estadoFilter);
+    if (proximaAcaoFilter !== 'all') result = result.filter((c) => c.proxima_acao_tipo === proximaAcaoFilter);
+    const ilike = (val: string | null | undefined, q: string) => val ? val.toLowerCase().includes(q.toLowerCase()) : false;
+    if (advSearch.cpf) result = result.filter((c) => ilike(c.cpf, advSearch.cpf));
+    if (advSearch.cnpj) result = result.filter((c) => ilike(c.cnpj, advSearch.cnpj));
+    if (advSearch.telefone) result = result.filter((c) => ilike(c.phone, advSearch.telefone));
+    if (advSearch.whatsapp) result = result.filter((c) => ilike(c.whatsapp, advSearch.whatsapp));
+    if (advSearch.empresa) result = result.filter((c) => ilike(c.company, advSearch.empresa));
+    if (advSearch.cidade) result = result.filter((c) => ilike(c.cidade, advSearch.cidade));
+    if (advSearch.referencia) result = result.filter((c) => ilike(c.referencia, advSearch.referencia));
+    if (advSearch.contato_nome) result = result.filter((c) => ilike(c.contato_nome, advSearch.contato_nome));
+    if (advSearch.cargo) result = result.filter((c) => ilike(c.cargo, advSearch.cargo));
+    if (advSearch.produtos_fornecidos) result = result.filter((c) => ilike(c.produtos_fornecidos, advSearch.produtos_fornecidos));
+    return result;
+  };
+
+  // Filter interactions based on filtered contact IDs
+  const applyInteractionFilters = (interactions: any[], filteredContactIds: Set<string>) => {
+    return interactions.filter((i) => filteredContactIds.has(i.contact_id));
+  };
+
+  // Compute segments with filters applied
+  const segments = useMemo(() => {
+    const filteredContacts = applyContactFilters(allContacts);
+    const filteredContactIds = new Set(filteredContacts.map((c) => c.id));
+    const filteredInteractions = applyInteractionFilters(allInteractions, filteredContactIds);
+    const filteredRecent = applyContactFilters(recentContacts);
+    const filteredMonthContacts = applyContactFilters(monthContacts);
+    const filteredMonthInteractions = applyInteractionFilters(monthInteractions, filteredContactIds);
+
+    // Filter by tipo helpers
+    const filterByTipo = (items: any[], tipo: string) =>
+      items.filter((c) => (c.tipo || []).includes(tipo));
+
+    const filterInteractionsByTipo = (interactions: any[], tipo: string) =>
+      interactions.filter((i) => {
+        const contact = contactIdMap.get(i.contact_id);
+        return contact && (contact.tipo || []).includes(tipo);
+      });
+
+    const geral = computeSegment(
+      filteredContacts, filteredInteractions, filteredRecent,
+      allProfiles, filteredMonthContacts, filteredMonthInteractions, monthRanges
+    );
+
+    const fornecedor = computeSegment(
+      filterByTipo(filteredContacts, 'FORNECEDOR'),
+      filterInteractionsByTipo(filteredInteractions, 'FORNECEDOR'),
+      filteredRecent.filter((c) => (c.tipo || []).includes('FORNECEDOR')),
+      allProfiles,
+      filterByTipo(filteredMonthContacts, 'FORNECEDOR'),
+      filterInteractionsByTipo(filteredMonthInteractions, 'FORNECEDOR'),
+      monthRanges
+    );
+
+    const comprador = computeSegment(
+      filterByTipo(filteredContacts, 'COMPRADOR'),
+      filterInteractionsByTipo(filteredInteractions, 'COMPRADOR'),
+      filteredRecent.filter((c) => (c.tipo || []).includes('COMPRADOR')),
+      allProfiles,
+      filterByTipo(filteredMonthContacts, 'COMPRADOR'),
+      filterInteractionsByTipo(filteredMonthInteractions, 'COMPRADOR'),
+      monthRanges
+    );
+
+    return { geral, fornecedor, comprador };
+  }, [allContacts, allInteractions, recentContacts, allProfiles, monthContacts, monthInteractions, monthRanges, temperaturaFilter, origemFilter, classeFilter, responsavelFilter, estadoFilter, proximaAcaoFilter, advSearch, contactIdMap]);
+
+  const data = segments[activeTab as keyof typeof segments];
 
   // Build race data from team comparison (sorted by total score)
   const raceData = [...data.teamComparison]
     .map((m) => ({ ...m, score: Math.round(((m.contacts / 10) * 0.5 + m.interactions * 1.5 + m.meetings * 2 + m.conversions * 4) * 10) / 10 }))
     .sort((a, b) => b.score - a.score);
 
+  const hasActiveFilters = temperaturaFilter !== 'all' || origemFilter !== 'all' || classeFilter !== 'all' || responsavelFilter !== 'all' || estadoFilter !== 'all' || proximaAcaoFilter !== 'all' || Object.values(advSearch).some((v) => v !== '');
+
   return (
     <div>
+      {/* Filters */}
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-3 sm:p-4 mb-6">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-purple-300/60 font-medium">Filtros:</span>
+          <select value={temperaturaFilter} onChange={(e) => setTemperaturaFilter(e.target.value)} className={selectCls}>
+            <option value="all">Temperatura</option>
+            {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <select value={origemFilter} onChange={(e) => setOrigemFilter(e.target.value)} className={selectCls}>
+            <option value="all">Origem</option>
+            {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <select value={classeFilter} onChange={(e) => setClasseFilter(e.target.value)} className={selectCls}>
+            <option value="all">Classe</option>
+            <option value="A">Classe A</option>
+            <option value="B">Classe B</option>
+            <option value="C">Classe C</option>
+            <option value="D">Classe D</option>
+          </select>
+          <select value={responsavelFilter} onChange={(e) => setResponsavelFilter(e.target.value)} className={selectCls}>
+            <option value="all">Responsavel</option>
+            {allProfiles.map((p) => (
+              <option key={p.user_id} value={p.user_id}>{p.name}</option>
+            ))}
+          </select>
+          <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className={selectCls}>
+            <option value="all">Estado</option>
+            {ESTADOS_BRASIL.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
+          </select>
+          <select value={proximaAcaoFilter} onChange={(e) => setProximaAcaoFilter(e.target.value)} className={selectCls}>
+            <option value="all">Proxima Acao</option>
+            {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
+          </select>
+          <button onClick={() => setShowAdvanced((p) => !p)} className="text-xs text-emerald-400 hover:text-emerald-300 font-medium">
+            {showAdvanced ? 'Menos' : 'Mais filtros'}
+          </button>
+          {hasActiveFilters && (
+            <button
+              onClick={() => { setTemperaturaFilter('all'); setOrigemFilter('all'); setClasseFilter('all'); setResponsavelFilter('all'); setEstadoFilter('all'); setProximaAcaoFilter('all'); setAdvSearch({ cpf: '', cnpj: '', telefone: '', whatsapp: '', empresa: '', cidade: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' }); }}
+              className="px-2 py-1.5 text-xs font-medium text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/10 transition-colors"
+            >
+              Limpar filtros
+            </button>
+          )}
+        </div>
+        {showAdvanced && (
+          <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-purple-800/20">
+            <input type="text" placeholder="CPF..." value={advSearch.cpf} onChange={(e) => setAdvSearch((p) => ({ ...p, cpf: e.target.value }))} className={`${selectCls} w-28 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="CNPJ..." value={advSearch.cnpj} onChange={(e) => setAdvSearch((p) => ({ ...p, cnpj: e.target.value }))} className={`${selectCls} w-32 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="Telefone..." value={advSearch.telefone} onChange={(e) => setAdvSearch((p) => ({ ...p, telefone: e.target.value }))} className={`${selectCls} w-28 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="WhatsApp..." value={advSearch.whatsapp} onChange={(e) => setAdvSearch((p) => ({ ...p, whatsapp: e.target.value }))} className={`${selectCls} w-28 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="Empresa..." value={advSearch.empresa} onChange={(e) => setAdvSearch((p) => ({ ...p, empresa: e.target.value }))} className={`${selectCls} w-28 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="Cidade..." value={advSearch.cidade} onChange={(e) => setAdvSearch((p) => ({ ...p, cidade: e.target.value }))} className={`${selectCls} w-28 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="Referencia..." value={advSearch.referencia} onChange={(e) => setAdvSearch((p) => ({ ...p, referencia: e.target.value }))} className={`${selectCls} w-28 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="Nome Contato..." value={advSearch.contato_nome} onChange={(e) => setAdvSearch((p) => ({ ...p, contato_nome: e.target.value }))} className={`${selectCls} w-32 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="Cargo..." value={advSearch.cargo} onChange={(e) => setAdvSearch((p) => ({ ...p, cargo: e.target.value }))} className={`${selectCls} w-28 placeholder:text-purple-300/40`} />
+            <input type="text" placeholder="Produtos..." value={advSearch.produtos_fornecidos} onChange={(e) => setAdvSearch((p) => ({ ...p, produtos_fornecidos: e.target.value }))} className={`${selectCls} w-28 placeholder:text-purple-300/40`} />
+          </div>
+        )}
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-1 mb-8 bg-[#1e0f35] border border-purple-800/30 rounded-lg p-1 w-fit">
         {TABS.map((tab) => (
@@ -71,7 +350,7 @@ export default function DashboardWithTabs({ geral, fornecedor, comprador }: Dash
             <span className={`ml-2 text-xs ${
               activeTab === tab.key ? 'text-current/50' : 'text-purple-300/40'
             }`}>
-              {segments[tab.key].totalContacts}
+              {segments[tab.key as keyof typeof segments].totalContacts}
             </span>
           </button>
         ))}
