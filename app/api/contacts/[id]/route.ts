@@ -83,7 +83,16 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const validated = contactUpdateSchema.parse(body);
+
+    // Limpar strings vazias → null (formulario envia "" para campos opcionais)
+    const cleanedBody = Object.fromEntries(
+      Object.entries(body).map(([key, value]) => [
+        key,
+        value === '' ? null : value,
+      ])
+    );
+
+    const validated = contactUpdateSchema.parse(cleanedBody);
 
     // Ownership enforcement: buscar contato atual
     const { data: existingContact } = await admin

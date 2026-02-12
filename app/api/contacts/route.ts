@@ -205,10 +205,20 @@ export async function POST(request: NextRequest) {
     console.log('[API CONTACTS POST] CPF:', body.cpf, '| CNPJ:', body.cnpj);
     console.log('[API CONTACTS POST] CPF digits:', (body.cpf || '').replace(/\D/g, '').length, '| CNPJ digits:', (body.cnpj || '').replace(/\D/g, '').length);
 
+    // Limpar strings vazias → null (formulario envia "" para campos opcionais)
+    const REQUIRED_FIELDS = ['name'];
+    const cleanedBody = Object.fromEntries(
+      Object.entries(body).map(([key, value]) => [
+        key,
+        value === '' && !REQUIRED_FIELDS.includes(key) ? null : value,
+      ])
+    );
+    console.log('[API CONTACTS POST] Body limpo:', JSON.stringify(cleanedBody, null, 2));
+
     // Validar dados
     let validated;
     try {
-      validated = contactSchema.parse(body);
+      validated = contactSchema.parse(cleanedBody);
       console.log('[API CONTACTS POST] Validacao OK');
     } catch (validationErr: any) {
       console.error('[API CONTACTS POST] Erro de validacao:', JSON.stringify(validationErr.errors || validationErr.message, null, 2));
