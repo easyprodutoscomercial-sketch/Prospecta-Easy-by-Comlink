@@ -115,15 +115,25 @@ export async function PATCH(
       validated.proxima_acao_data = new Date(validated.proxima_acao_data).toISOString();
     }
 
-    // Remover campos que não existem na tabela contacts do Supabase
-    const dbFields = new Set([
+    // Campos que existem na tabela contacts do Supabase (schema.sql + migration v1)
+    // Campos da migration v2 (temperatura, origem, proxima_acao_tipo, proxima_acao_data,
+    // motivo_ganho_perdido) e v5 (valor_estimado) podem não ter sido executadas.
+    // Verificar dinamicamente quais colunas existem.
+    const baseFields = new Set([
       'name', 'phone', 'email', 'cpf', 'cnpj', 'company', 'notes', 'status',
-      'tipo', 'referencia', 'classe', 'produtos_fornecidos', 'temperatura',
-      'proxima_acao_tipo', 'proxima_acao_data', 'motivo_ganho_perdido',
+      'tipo', 'referencia', 'classe', 'produtos_fornecidos',
       'contato_nome', 'cargo', 'endereco', 'cidade', 'estado', 'cep',
-      'website', 'instagram', 'whatsapp', 'valor_estimado',
+      'website', 'instagram', 'whatsapp',
       'assigned_to_user_id',
     ]);
+
+    // Testar quais colunas extras existem no banco
+    const extraCols = ['temperatura', 'origem', 'proxima_acao_tipo', 'proxima_acao_data', 'motivo_ganho_perdido', 'valor_estimado'];
+    const dbFields = new Set(baseFields);
+    for (const col of extraCols) {
+      const { error: colErr } = await admin.from('contacts').select(col).limit(0);
+      if (!colErr) dbFields.add(col);
+    }
 
     // Re-normalize identity fields when they change
     const updateData: Record<string, any> = {};
