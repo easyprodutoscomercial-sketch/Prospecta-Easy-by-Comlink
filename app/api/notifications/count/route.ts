@@ -14,13 +14,16 @@ export async function GET() {
 
     const admin = getAdminClient();
 
+    const now = new Date().toISOString();
+
     const { count, error } = await admin
       .from('notifications')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('organization_id', profile.organization_id)
       .eq('read', false)
-      .eq('dismissed', false);
+      .eq('dismissed', false)
+      .or(`scheduled_for.is.null,scheduled_for.lte.${now}`);
 
     if (error) {
       // Table may not exist yet — return 0 instead of crashing

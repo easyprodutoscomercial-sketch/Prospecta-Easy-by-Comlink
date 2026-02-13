@@ -348,11 +348,118 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // === MEETING REMINDERS ===
+      // Buscar reunioes nas proximas 48h que ainda nao tiveram notificacoes geradas
+      let meetingNotifsCreated = 0;
+      try {
+        const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000).toISOString();
+        const { data: upcomingMeetings } = await admin
+          .from('meetings')
+          .select('id, contact_id, created_by_user_id, title, meeting_at, duration_minutes')
+          .eq('organization_id', orgId)
+          .eq('status', 'SCHEDULED')
+          .eq('notifications_generated', false)
+          .gte('meeting_at', now.toISOString())
+          .lte('meeting_at', in48h);
+
+        if (upcomingMeetings && upcomingMeetings.length > 0) {
+          const meetingContactIds = [...new Set(upcomingMeetings.map(m => m.contact_id))];
+          const { data: meetingContacts } = await admin
+            .from('contacts')
+            .select('id, name')
+            .in('id', meetingContactIds);
+
+          const contactNameMap = new Map<string, string>();
+          for (const c of meetingContacts || []) {
+            contactNameMap.set(c.id, c.name);
+          }
+
+          const REMINDER_OFFSETS = [
+            { minutes: 24 * 60, label: '24h' },
+            { minutes: 8 * 60, label: '8h' },
+            { minutes: 4 * 60, label: '4h' },
+            { minutes: 2 * 60, label: '2h' },
+            { minutes: 60, label: '1h' },
+            { minutes: 15, label: '15min' },
+          ];
+
+          const meetingNotifs: any[] = [];
+          const meetingIdsToUpdate: string[] = [];
+
+          for (const meeting of upcomingMeetings) {
+            const meetingAt = new Date(meeting.meeting_at);
+            const contactName = contactNameMap.get(meeting.contact_id) || 'Contato';
+            const timeStr = meetingAt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+
+            for (const offset of REMINDER_OFFSETS) {
+              const scheduledFor = new Date(meetingAt.getTime() - offset.minutes * 60 * 1000);
+              if (scheduledFor <= now) continue;
+
+              let title: string;
+              let body: string;
+
+              if (offset.minutes === 24 * 60) {
+                title = `Amanha: Reuniao com ${contactName} as ${timeStr}`;
+                body = `${meeting.title}. Prepare-se para a reuniao de amanha!`;
+              } else if (offset.minutes === 8 * 60) {
+                title = `Hoje as ${timeStr}: Reuniao com ${contactName}`;
+                body = `${meeting.title}. Prepare-se!`;
+              } else if (offset.minutes === 4 * 60) {
+                title = `Faltam 4h para reuniao com ${contactName}`;
+                body = `${meeting.title} as ${timeStr}. Revise seus materiais.`;
+              } else if (offset.minutes === 2 * 60) {
+                title = `Faltam 2h para reuniao com ${contactName}`;
+                body = `${meeting.title} as ${timeStr}. Revise seus materiais.`;
+              } else if (offset.minutes === 60) {
+                title = `Falta 1 hora! Reuniao com ${contactName} as ${timeStr}`;
+                body = `${meeting.title}. Ultima hora antes da reuniao!`;
+              } else {
+                title = `AGORA! Reuniao comeca em 15 minutos!`;
+                body = `${meeting.title} com ${contactName} as ${timeStr}. Va agora!`;
+              }
+
+              meetingNotifs.push({
+                organization_id: orgId,
+                user_id: meeting.created_by_user_id,
+                type: 'MEETING_REMINDER',
+                title,
+                body,
+                contact_id: meeting.contact_id,
+                scheduled_for: scheduledFor.toISOString(),
+                metadata: { meeting_id: meeting.id, offset_minutes: offset.minutes, source: 'cron' },
+              });
+            }
+
+            meetingIdsToUpdate.push(meeting.id);
+          }
+
+          if (meetingNotifs.length > 0) {
+            const { error: mErr } = await admin.from('notifications').insert(meetingNotifs);
+            if (mErr) {
+              console.error(`[daily-notify] Erro meeting notifs org ${orgId}:`, mErr.message);
+            } else {
+              meetingNotifsCreated = meetingNotifs.length;
+              totalNotifications += meetingNotifsCreated;
+            }
+          }
+
+          if (meetingIdsToUpdate.length > 0) {
+            await admin
+              .from('meetings')
+              .update({ notifications_generated: true })
+              .in('id', meetingIdsToUpdate);
+          }
+        }
+      } catch (meetingErr: any) {
+        console.error(`[daily-notify] Erro ao processar meetings org ${orgId}:`, meetingErr.message);
+      }
+
       orgResults.push({
         org_id: orgId,
         contacts_analyzed: contacts.length,
         users_notified: pendingByUser.size,
         notifications_created: notificationsToInsert.length,
+        meeting_notifications_created: meetingNotifsCreated,
       });
     }
 

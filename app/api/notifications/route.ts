@@ -15,12 +15,15 @@ export async function GET(request: NextRequest) {
     const admin = getAdminClient();
     const limit = parseInt(request.nextUrl.searchParams.get('limit') || '20');
 
+    const now = new Date().toISOString();
+
     const { data, error } = await admin
       .from('notifications')
       .select('*')
       .eq('user_id', user.id)
       .eq('organization_id', profile.organization_id)
       .eq('dismissed', false)
+      .or(`scheduled_for.is.null,scheduled_for.lte.${now}`)
       .order('read', { ascending: true })
       .order('created_at', { ascending: false })
       .limit(limit);

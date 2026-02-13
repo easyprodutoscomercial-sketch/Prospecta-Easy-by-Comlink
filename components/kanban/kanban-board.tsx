@@ -23,10 +23,12 @@ interface KanbanBoardProps {
   onClaimContact?: (contactId: string) => void;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
+  onScheduleMeeting?: (contactId: string, contactName: string) => void;
   pipelineSettings?: PipelineSettings | null;
+  contactsWithMeeting?: Set<string>;
 }
 
-export function KanbanBoard({ grouped, activeContact, userMap, currentUserId, onClaimContact, onJumpForward, onJumpBackward, pipelineSettings }: KanbanBoardProps) {
+export function KanbanBoard({ grouped, activeContact, userMap, currentUserId, onClaimContact, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting }: KanbanBoardProps) {
   return (
     <>
       <div className="flex gap-2.5 overflow-x-auto pb-4 min-h-0 xl:grid xl:grid-cols-6 xl:overflow-x-visible h-full">
@@ -42,6 +44,8 @@ export function KanbanBoard({ grouped, activeContact, userMap, currentUserId, on
             onClaimContact={onClaimContact}
             onJumpForward={onJumpForward}
             onJumpBackward={onJumpBackward}
+            onScheduleMeeting={onScheduleMeeting}
+            contactsWithMeeting={contactsWithMeeting}
           />
         ))}
       </div>

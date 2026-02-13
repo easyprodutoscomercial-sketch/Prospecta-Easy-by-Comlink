@@ -90,6 +90,12 @@ export default function AdminPage() {
   const [savingPipeline, setSavingPipeline] = useState(false);
   const [pipelineResult, setPipelineResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Broadcast notifications toggle
+  const [broadcastEnabled, setBroadcastEnabled] = useState(false);
+  const [broadcastDuration, setBroadcastDuration] = useState(3);
+  const [savingBroadcast, setSavingBroadcast] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   // Role change loading
   const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
 
@@ -150,6 +156,8 @@ export default function AdminPage() {
           }
           setPipelineColumns(defaults);
         }
+        setBroadcastEnabled(!!data.broadcast_notifications);
+        setBroadcastDuration(data.broadcast_duration_minutes || 3);
       }
     } catch {
       // Set defaults
@@ -330,6 +338,32 @@ export default function AdminPage() {
     }
   };
 
+  const handleSaveBroadcast = async (newEnabled?: boolean, newDuration?: number) => {
+    setSavingBroadcast(true);
+    setBroadcastResult(null);
+    const enabled = newEnabled ?? broadcastEnabled;
+    const duration = newDuration ?? broadcastDuration;
+    try {
+      const res = await fetch('/api/pipeline-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ columns: pipelineColumns, broadcast_notifications: enabled, broadcast_duration_minutes: duration }),
+      });
+      if (res.ok) {
+        setBroadcastEnabled(enabled);
+        setBroadcastDuration(duration);
+        setBroadcastResult({ type: 'success', message: enabled ? `Avisos ativados! Duracao: ${duration} min` : 'Avisos em tela desativados.' });
+      } else {
+        const data = await res.json();
+        setBroadcastResult({ type: 'error', message: data.error || 'Erro ao salvar' });
+      }
+    } catch {
+      setBroadcastResult({ type: 'error', message: 'Erro de conexao' });
+    } finally {
+      setSavingBroadcast(false);
+    }
+  };
+
   const handleSeed = async () => {
     if (!confirm('Inserir 10 contatos fictícios no banco?')) return;
     setLoading(true);
@@ -447,6 +481,77 @@ export default function AdminPage() {
               {savingPipeline ? 'Salvando...' : 'Salvar Configurações'}
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Broadcast Notifications Section */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">Avisos em Tela</h2>
+
+        {broadcastResult && (
+          <div className={`mb-4 p-3 rounded-lg text-sm ${
+            broadcastResult.type === 'success'
+              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+              : 'bg-red-500/15 text-red-400 border border-red-500/20'
+          }`}>
+            {broadcastResult.message}
+          </div>
+        )}
+
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-neutral-100 mb-1">Banner de Avisos Importantes</h3>
+              <p className="text-xs text-purple-300/60">
+                Quando ativado, exibe um banner rolante com informacoes importantes para todos os usuarios.
+              </p>
+            </div>
+            <button
+              onClick={() => handleSaveBroadcast(!broadcastEnabled)}
+              disabled={savingBroadcast}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-[#1e0f35] disabled:opacity-40 ${
+                broadcastEnabled ? 'bg-emerald-500' : 'bg-purple-800/50'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  broadcastEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {/* Duration selector */}
+          {broadcastEnabled && (
+            <div className="mt-4 pt-4 border-t border-purple-800/20 flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-medium text-neutral-100 mb-1">Tempo de exibicao</h3>
+                <p className="text-xs text-purple-300/60">
+                  Quanto tempo o letreiro fica visivel ao abrir a pagina.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={broadcastDuration}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setBroadcastDuration(val);
+                    handleSaveBroadcast(undefined, val);
+                  }}
+                  disabled={savingBroadcast}
+                  className="text-xs bg-[#120826] border border-purple-700/20 rounded-lg px-3 py-2 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                >
+                  <option value={1}>1 minuto</option>
+                  <option value={2}>2 minutos</option>
+                  <option value={3}>3 minutos</option>
+                  <option value={5}>5 minutos</option>
+                  <option value={10}>10 minutos</option>
+                  <option value={15}>15 minutos</option>
+                  <option value={30}>30 minutos</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

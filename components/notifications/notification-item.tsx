@@ -11,6 +11,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string; bg: string }> =
   STALE_DEAL: { icon: '~', color: 'text-amber-400', bg: 'bg-amber-500/20' },
   NO_OWNER: { icon: '?', color: 'text-purple-400', bg: 'bg-purple-500/20' },
   SYSTEM: { icon: 'i', color: 'text-neutral-400', bg: 'bg-neutral-500/20' },
+  MEETING_REMINDER: { icon: '\u25F4', color: 'text-cyan-400', bg: 'bg-cyan-500/20' },
 };
 
 interface NotificationItemProps {

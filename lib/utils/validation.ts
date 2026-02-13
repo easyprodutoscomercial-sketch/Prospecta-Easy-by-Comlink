@@ -108,4 +108,6 @@ export const pipelineSettingsSchema = z.object({
       color: z.string().min(4).max(9),
     })
   ),
+  broadcast_notifications: z.boolean().optional(),
+  broadcast_duration_minutes: z.number().min(1).max(30).optional(),
 });

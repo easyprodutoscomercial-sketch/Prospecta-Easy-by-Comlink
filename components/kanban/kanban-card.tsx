@@ -21,6 +21,8 @@ interface KanbanCardProps {
   onClaimContact?: (contactId: string) => void;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
+  onScheduleMeeting?: (contactId: string, contactName: string) => void;
+  hasMeeting?: boolean;
 }
 
 function daysInStage(updatedAt: string): number {
@@ -30,7 +32,7 @@ function daysInStage(updatedAt: string): number {
 
 const STATUS_ORDER = ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO'];
 
-export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onJumpForward, onJumpBackward }: KanbanCardProps) {
+export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting }: KanbanCardProps) {
   const router = useRouter();
   const {
     attributes,
@@ -73,10 +75,35 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
       onClick={() => { if (!isDragging) router.push(`/contacts/${contact.id}`); }}
-      className={`bg-[#1e0f35] rounded-xl p-3 border-l-[3px] border border-purple-800/20 cursor-grab select-none transition-all duration-200 hover:border-purple-600/40 hover:bg-[#241540] hover:-translate-y-0.5 hover:shadow-lg hover:shadow-purple-900/20 ${
+      className={`bg-[#1e0f35] rounded-xl p-3 border-l-[3px] border cursor-grab select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+        hasMeeting
+          ? 'border-cyan-500/40 shadow-md shadow-cyan-500/10 hover:border-cyan-400/60 hover:shadow-cyan-500/20'
+          : 'border-purple-800/20 hover:border-purple-600/40 hover:bg-[#241540] hover:shadow-purple-900/20'
+      } ${
         overlay ? 'shadow-2xl ring-2 ring-emerald-500/30 rotate-2 scale-105 bg-[#241540]' : ''
       }`}
     >
+      {/* Meeting highlight banner — click goes to calendar */}
+      {hasMeeting && !overlay && (
+        <div
+          onClick={(e) => { e.stopPropagation(); router.push('/calendar'); }}
+          className="flex items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/20 cursor-pointer hover:bg-cyan-500/20 transition-colors"
+          title="Ver no calendario"
+        >
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+          </span>
+          <svg className="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span className="text-[10px] font-bold text-cyan-400">Reuniao Agendada</span>
+          <svg className="w-3 h-3 text-cyan-400/50 ml-auto shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      )}
+
       {/* Header: name + avatar */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -181,6 +208,22 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
           </span>
         )}
       </div>
+
+      {/* Schedule meeting — only in REUNIAO_MARCADA */}
+      {!overlay && contact.status === 'REUNIAO_MARCADA' && onScheduleMeeting && (
+        <div className="mt-2 pt-2 border-t border-purple-800/15">
+          <button
+            onClick={(e) => { e.stopPropagation(); onScheduleMeeting(contact.id, contact.name); }}
+            className="w-full flex items-center justify-center gap-1.5 text-[10px] font-bold text-cyan-400/70 hover:text-cyan-400 hover:bg-cyan-500/10 px-2 py-1.5 rounded-md transition-colors"
+            title="Agendar reuniao"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            Agendar Reuniao
+          </button>
+        </div>
+      )}
 
       {/* Jump buttons — always visible */}
       {!overlay && (onJumpForward || onJumpBackward) && (

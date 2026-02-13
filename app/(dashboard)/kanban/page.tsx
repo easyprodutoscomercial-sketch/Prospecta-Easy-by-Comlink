@@ -21,8 +21,9 @@ import { KanbanSkeleton } from '@/components/kanban/kanban-skeleton';
 import type { UserInfo } from '@/components/kanban/kanban-card';
 import { getUserColor } from '@/lib/utils/user-colors';
 import MotivoModal from '@/components/ui/motivo-modal';
-import { PICK_ME_PHRASES } from '@/lib/utils/pick-me-phrases';
+import MeetingModal from '@/components/meetings/meeting-modal';
 import AiChatPanel from '@/components/ai-chat-panel';
+
 
 const ALL_STATUSES: ContactStatus[] = [
   'NOVO',
@@ -115,6 +116,10 @@ export default function KanbanPage() {
   const [pipelineSettings, setPipelineSettings] = useState<PipelineSettings | null>(null);
   const [emojiParticles, setEmojiParticles] = useState<EmojiParticle[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
+  const [showMeetingModal, setShowMeetingModal] = useState(false);
+  const [meetingContact, setMeetingContact] = useState<{ id: string; name: string } | null>(null);
+  const [meetingLoading, setMeetingLoading] = useState(false);
+  const [contactsWithMeeting, setContactsWithMeeting] = useState<Set<string>>(new Set());
 
   // Open chat if ?chat=1 in URL
   useEffect(() => {
@@ -123,24 +128,6 @@ export default function KanbanPage() {
     }
   }, []);
 
-  // Pick-me speech bubble rotation
-  const [talkingIndex, setTalkingIndex] = useState(0);
-  const [currentPhrase, setCurrentPhrase] = useState('');
-  const [phraseKey, setPhraseKey] = useState(0);
-
-  useEffect(() => {
-    const userKeys = Object.keys(userMap);
-    if (userKeys.length === 0) return;
-    setCurrentPhrase(PICK_ME_PHRASES[Math.floor(Math.random() * PICK_ME_PHRASES.length)]);
-    setPhraseKey((k) => k + 1);
-    const interval = setInterval(() => {
-      setTalkingIndex((prev) => (prev + 1) % userKeys.length);
-      setCurrentPhrase(PICK_ME_PHRASES[Math.floor(Math.random() * PICK_ME_PHRASES.length)]);
-      setPhraseKey((k) => k + 1);
-    }, 12500);
-    return () => clearInterval(interval);
-  }, [userMap]);
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
@@ -148,11 +135,12 @@ export default function KanbanPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [contactsRes, usersRes, meRes, settingsRes] = await Promise.all([
+      const [contactsRes, usersRes, meRes, settingsRes, meetingsRes] = await Promise.all([
         fetch('/api/contacts?limit=500'),
         fetch('/api/users'),
         fetch('/api/me'),
         fetch('/api/pipeline-settings'),
+        fetch('/api/meetings?status=SCHEDULED'),
       ]);
 
       if (!contactsRes.ok) throw new Error('Erro ao carregar contatos');
@@ -183,6 +171,12 @@ export default function KanbanPage() {
         if (settingsData.columns) {
           setPipelineSettings(settingsData);
         }
+      }
+
+      if (meetingsRes.ok) {
+        const meetingsData = await meetingsRes.json();
+        const ids = new Set<string>((meetingsData.meetings || []).map((m: any) => m.contact_id));
+        setContactsWithMeeting(ids);
       }
     } catch {
       toast.error('Erro ao carregar contatos');
@@ -494,6 +488,41 @@ export default function KanbanPage() {
     }
   }
 
+  // Schedule meeting
+  function handleScheduleMeeting(contactId: string, contactName: string) {
+    setMeetingContact({ id: contactId, name: contactName });
+    setShowMeetingModal(true);
+  }
+
+  async function handleMeetingConfirm(data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string }) {
+    if (!meetingContact) return;
+    setMeetingLoading(true);
+
+    try {
+      const res = await fetch('/api/meetings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: meetingContact.id,
+          ...data,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Erro ao agendar');
+      }
+
+      toast.success('Reuniao agendada com sucesso!');
+      setShowMeetingModal(false);
+      setMeetingContact(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao agendar reuniao');
+    } finally {
+      setMeetingLoading(false);
+    }
+  }
+
   const selectClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-full";
   const inputClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 w-full";
 
@@ -696,75 +725,6 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* === AVATAR CAINDO NO LADO DIREITO === */}
-      {!loading && Object.keys(userMap).length > 0 && (() => {
-        const users = Object.values(userMap);
-        const fallingUser = users[talkingIndex % users.length];
-        const dur = 12;
-        return (
-          <div
-            key={`fall-${talkingIndex}-${phraseKey}`}
-            className="fixed pointer-events-none z-20"
-            style={{
-              right: 'calc((100vw - 16rem) / 6 - 12px)',
-              top: 0,
-              width: '48px',
-              height: '48px',
-              animation: `avatar-fall-land-run ${dur}s linear forwards`,
-            }}
-          >
-            {/* Frase — posicionada absoluta à esquerda */}
-            {currentPhrase && (
-              <div
-                className="speech-bubble-land"
-                style={{ animation: `speech-land-appear ${dur}s linear forwards` }}
-              >
-                {currentPhrase}
-              </div>
-            )}
-
-            {/* Avatar — tamanho fixo 48x48 */}
-            <div className="w-12 h-12 rounded-full overflow-hidden shadow-lg shadow-purple-900/40 border-2 border-white/20">
-              {fallingUser.avatar_url ? (
-                <img src={fallingUser.avatar_url} alt={fallingUser.name} className="w-12 h-12 object-cover" />
-              ) : (
-                <div
-                  className="w-12 h-12 flex items-center justify-center text-sm font-bold"
-                  style={{ backgroundColor: fallingUser.color.bg, color: fallingUser.color.text }}
-                >
-                  {fallingUser.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
-                </div>
-              )}
-            </div>
-
-            {/* Perninhas — centralizadas abaixo do avatar */}
-            <div className="flex gap-[6px] justify-center -mt-[1px]" style={{ animation: `legs-appear ${dur}s linear forwards` }}>
-              <div
-                className="w-[3px] h-[14px] rounded-full origin-top"
-                style={{
-                  backgroundColor: fallingUser.color.bg,
-                  animation: `leg-run-left 0.18s linear infinite`,
-                  animationDelay: `${dur * 0.80}s`,
-                }}
-              />
-              <div
-                className="w-[3px] h-[14px] rounded-full origin-top"
-                style={{
-                  backgroundColor: fallingUser.color.bg,
-                  animation: `leg-run-right 0.18s linear infinite`,
-                  animationDelay: `${dur * 0.80}s`,
-                }}
-              />
-            </div>
-
-            {/* Nome */}
-            <p className="text-[9px] text-emerald-400 font-bold whitespace-nowrap text-center mt-0.5">
-              {fallingUser.name.split(' ')[0]}
-            </p>
-          </div>
-        );
-      })()}
-
       {/* === BOARD === */}
       <div className="flex-1 overflow-hidden px-4 lg:px-6 py-4">
         {loading ? (
@@ -784,7 +744,9 @@ export default function KanbanPage() {
               onClaimContact={handleClaimContact}
               onJumpForward={handleJumpForward}
               onJumpBackward={handleJumpBackward}
+              onScheduleMeeting={handleScheduleMeeting}
               pipelineSettings={pipelineSettings}
+              contactsWithMeeting={contactsWithMeeting}
             />
           </DndContext>
         )}
@@ -798,6 +760,17 @@ export default function KanbanPage() {
           onConfirm={handleMotivoConfirm}
           tipo={(pendingDrag || pendingJump)!.newStatus}
           loading={motivoLoading}
+        />
+      )}
+
+      {/* Meeting modal */}
+      {meetingContact && (
+        <MeetingModal
+          isOpen={showMeetingModal}
+          onClose={() => { setShowMeetingModal(false); setMeetingContact(null); }}
+          onConfirm={handleMeetingConfirm}
+          contactName={meetingContact.name}
+          loading={meetingLoading}
         />
       )}
 

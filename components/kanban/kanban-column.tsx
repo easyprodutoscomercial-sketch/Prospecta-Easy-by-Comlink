@@ -16,6 +16,8 @@ interface KanbanColumnProps {
   onClaimContact?: (contactId: string) => void;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
+  onScheduleMeeting?: (contactId: string, contactName: string) => void;
+  contactsWithMeeting?: Set<string>;
 }
 
 const STATUS_ICONS: Record<string, string> = {
@@ -53,7 +55,7 @@ function contactMatchesFilter(contact: Contact, query: string, userMap: Record<s
   return fields.some(f => f && f.toLowerCase().includes(q));
 }
 
-export function KanbanColumn({ status, contacts, userMap, columnLabel, columnColor, currentUserId, onClaimContact, onJumpForward, onJumpBackward }: KanbanColumnProps) {
+export function KanbanColumn({ status, contacts, userMap, columnLabel, columnColor, currentUserId, onClaimContact, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const [filter, setFilter] = useState('');
   const color = columnColor || '#a3a3a3';
@@ -143,6 +145,8 @@ export function KanbanColumn({ status, contacts, userMap, columnLabel, columnCol
               onClaimContact={onClaimContact}
               onJumpForward={onJumpForward}
               onJumpBackward={onJumpBackward}
+              onScheduleMeeting={onScheduleMeeting}
+              hasMeeting={contactsWithMeeting?.has(contact.id)}
             />
           ))}
         </SortableContext>

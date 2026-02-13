@@ -21,7 +21,8 @@ export type NotificationType =
   | 'TASK_OVERDUE'
   | 'STALE_DEAL'
   | 'NO_OWNER'
-  | 'SYSTEM';
+  | 'SYSTEM'
+  | 'MEETING_REMINDER';
 
 // Risk alert
 export interface RiskAlert {
@@ -56,6 +57,7 @@ export interface Notification {
   metadata: Record<string, any>;
   read: boolean;
   dismissed: boolean;
+  scheduled_for: string | null;
   created_at: string;
 }
 

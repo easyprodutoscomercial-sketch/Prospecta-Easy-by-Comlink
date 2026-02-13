@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { Providers } from '@/components/providers';
+import DashboardBanner from '@/components/dashboard-banner';
 
 export default async function DashboardLayout({
   children,
@@ -30,6 +31,7 @@ export default async function DashboardLayout({
       <Sidebar profileName={profile?.name ?? null} userRole={profile?.role ?? 'user'} signOutAction={handleSignOut} />
 
       <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
+        <DashboardBanner />
         <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10 max-w-7xl">
           <Providers>{children}</Providers>
         </div>

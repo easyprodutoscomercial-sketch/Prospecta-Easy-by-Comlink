@@ -175,5 +175,23 @@ export interface LeaderboardEntry {
   conversions_count: number;
 }
 
+export type MeetingStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+
+export interface Meeting {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  created_by_user_id: string;
+  title: string;
+  notes: string | null;
+  location: string | null;
+  meeting_at: string;
+  duration_minutes: number;
+  status: MeetingStatus;
+  notifications_generated: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Re-export AI types for convenience
 export type { Notification, RiskAlert, ActionSuggestion, PipelineHealth } from '@/lib/ai/types';
