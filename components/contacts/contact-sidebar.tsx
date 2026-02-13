@@ -51,10 +51,9 @@ export default function ContactSidebar({
   requestingAccess,
   pendingAccessRequest,
 }: ContactSidebarProps) {
-  const isOwner = currentUser && contact.assigned_to_user_id === currentUser.user_id;
   const isAdmin = currentUser?.role === 'admin';
-  const canModify = isOwner || isAdmin;
-  const isOtherOwner = contact.assigned_to_user_id && !isOwner && !isAdmin;
+  const canModify = !!currentUser;
+  const isOtherOwner = false;
 
   return (
     <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5 space-y-5 shadow-xl shadow-purple-900/20">

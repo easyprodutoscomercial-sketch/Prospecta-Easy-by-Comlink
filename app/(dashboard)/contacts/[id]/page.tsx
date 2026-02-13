@@ -71,9 +71,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
-  const isOwner = currentUser && contact && contact.assigned_to_user_id === currentUser.user_id;
   const isAdmin = currentUser?.role === 'admin';
-  const canModify = isOwner || isAdmin;
+  const canModify = !!currentUser;
 
   const handleStatusChange = async (status: string) => {
     if (status === 'CONVERTIDO' || status === 'PERDIDO') { setPendingStatus(status as any); setShowMotivoModal(true); return; }

@@ -22,6 +22,7 @@ import type { UserInfo } from '@/components/kanban/kanban-card';
 import { getUserColor } from '@/lib/utils/user-colors';
 import MotivoModal from '@/components/ui/motivo-modal';
 import { PICK_ME_PHRASES } from '@/lib/utils/pick-me-phrases';
+import AiChatPanel from '@/components/ai-chat-panel';
 
 const ALL_STATUSES: ContactStatus[] = [
   'NOVO',
@@ -101,7 +102,7 @@ export default function KanbanPage() {
   const [classeFilter, setClasseFilter] = useState('');
   const [estadoFilter, setEstadoFilter] = useState('');
   const [proximaAcaoFilter, setProximaAcaoFilter] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [advSearch, setAdvSearch] = useState({ cpf: '', cnpj: '', whatsapp: '', empresa: '', cidade: '', telefone: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
@@ -113,6 +114,14 @@ export default function KanbanPage() {
   const [currentUserRole, setCurrentUserRole] = useState<string>('user');
   const [pipelineSettings, setPipelineSettings] = useState<PipelineSettings | null>(null);
   const [emojiParticles, setEmojiParticles] = useState<EmojiParticle[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // Open chat if ?chat=1 in URL
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('chat=1')) {
+      setChatOpen(true);
+    }
+  }, []);
 
   // Pick-me speech bubble rotation
   const [talkingIndex, setTalkingIndex] = useState(0);
@@ -128,7 +137,7 @@ export default function KanbanPage() {
       setTalkingIndex((prev) => (prev + 1) % userKeys.length);
       setCurrentPhrase(PICK_ME_PHRASES[Math.floor(Math.random() * PICK_ME_PHRASES.length)]);
       setPhraseKey((k) => k + 1);
-    }, 2800);
+    }, 12500);
     return () => clearInterval(interval);
   }, [userMap]);
 
@@ -421,6 +430,44 @@ export default function KanbanPage() {
     await moveContact(contactId, newStatus);
   }
 
+  // KPI calculations
+  const kpis = useMemo(() => {
+    const active = contacts.filter(c => !['CONVERTIDO', 'PERDIDO'].includes(c.status));
+    const convertidos = contacts.filter(c => c.status === 'CONVERTIDO').length;
+    const perdidos = contacts.filter(c => c.status === 'PERDIDO').length;
+    const closedTotal = convertidos + perdidos;
+    const conversionRate = closedTotal > 0 ? Math.round((convertidos / closedTotal) * 100) : 0;
+    const totalValue = active.reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
+    const noOwner = active.filter(c => !c.assigned_to_user_id).length;
+    return { activeCount: active.length, totalValue, conversionRate, noOwner, convertidos, perdidos };
+  }, [contacts]);
+
+  // Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (tipoFilter) count++;
+    if (responsavelFilter) count++;
+    if (temperaturaFilter) count++;
+    if (origemFilter) count++;
+    if (classeFilter) count++;
+    if (estadoFilter) count++;
+    if (proximaAcaoFilter) count++;
+    Object.values(advSearch).forEach(v => { if (v) count++; });
+    return count;
+  }, [tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
+
+  function clearAllFilters() {
+    setTipoFilter('');
+    setResponsavelFilter('');
+    setTemperaturaFilter('');
+    setOrigemFilter('');
+    setClasseFilter('');
+    setEstadoFilter('');
+    setProximaAcaoFilter('');
+    setAdvSearch({ cpf: '', cnpj: '', whatsapp: '', empresa: '', cidade: '', telefone: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
+    setSearch('');
+  }
+
   // Claim contact
   async function handleClaimContact(contactId: string) {
     const contact = contacts.find((c) => c.id === contactId);
@@ -447,8 +494,11 @@ export default function KanbanPage() {
     }
   }
 
+  const selectClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-full";
+  const inputClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 w-full";
+
   return (
-    <div className="p-4 lg:p-6 space-y-4">
+    <div className="-mx-4 -my-6 sm:-mx-6 sm:-my-8 lg:-mx-10 lg:-my-10 min-h-screen flex flex-col">
       {/* Emoji explosion overlay */}
       {emojiParticles.length > 0 && (
         <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
@@ -456,12 +506,7 @@ export default function KanbanPage() {
             <span
               key={p.id}
               className="absolute animate-emoji-fall"
-              style={{
-                left: `${p.x}%`,
-                top: `-5%`,
-                fontSize: `${p.size}px`,
-                animationDelay: `${p.delay}s`,
-              }}
+              style={{ left: `${p.x}%`, top: `-5%`, fontSize: `${p.size}px`, animationDelay: `${p.delay}s` }}
             >
               {p.emoji}
             </span>
@@ -469,165 +514,262 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-xl font-bold text-emerald-400">Pipeline</h1>
+      {/* === TOP BAR: Header + Search + Filters === */}
+      <div className="bg-[#120826]/80 backdrop-blur-sm border-b border-purple-500/10 px-4 lg:px-6 py-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Title */}
+          <div className="flex items-center gap-2.5 mr-auto">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500/20 to-purple-600/20 border border-emerald-500/20 flex items-center justify-center">
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2m0 10V7m6 10V7" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-base font-bold text-white leading-tight">Pipeline</h1>
+              <p className="text-[10px] text-purple-300/40">{filtered.length} de {contacts.length} contatos</p>
+            </div>
+          </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
           {/* Search */}
           <div className="relative">
-            <svg
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-300/40"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
+            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-purple-300/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="text"
-              placeholder="Buscar..."
+              placeholder="Buscar nome, empresa, tel..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-44"
+              className="pl-8 pr-3 py-1.5 text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-52"
             />
           </div>
 
-          {/* Type filter */}
-          <select
-            value={tipoFilter}
-            onChange={(e) => setTipoFilter(e.target.value as '' | ContactType)}
-            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">Todos os tipos</option>
-            <option value="FORNECEDOR">Fornecedor</option>
-            <option value="COMPRADOR">Comprador</option>
-          </select>
+          {/* Filter toggle button */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFilters((p) => !p)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                showFilters || activeFilterCount > 0
+                  ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-[#1e0f35] text-purple-300/60 border border-purple-700/20 hover:text-purple-200 hover:border-purple-600/30'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center">{activeFilterCount}</span>
+              )}
+            </button>
+          </div>
 
-          {/* Responsavel filter */}
-          <select
-            value={responsavelFilter}
-            onChange={(e) => setResponsavelFilter(e.target.value)}
-            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">Todos responsáveis</option>
-            <option value="_none">Sem responsável</option>
-            {Object.entries(userMap).map(([userId, user]) => (
-              <option key={userId} value={userId}>{user.name}</option>
-            ))}
-          </select>
-
-          {/* Temperatura filter */}
-          <select
-            value={temperaturaFilter}
-            onChange={(e) => setTemperaturaFilter(e.target.value)}
-            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">Temperatura</option>
-            {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
-
-          {/* Origem filter */}
-          <select
-            value={origemFilter}
-            onChange={(e) => setOrigemFilter(e.target.value)}
-            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">Origem</option>
-            {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
-            ))}
-          </select>
-
-          {/* Classe filter */}
-          <select
-            value={classeFilter}
-            onChange={(e) => setClasseFilter(e.target.value)}
-            className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          >
-            <option value="">Classe</option>
-            <option value="A">Classe A</option>
-            <option value="B">Classe B</option>
-            <option value="C">Classe C</option>
-            <option value="D">Classe D</option>
-          </select>
-
-          <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <option value="">Estado</option>
-            {ESTADOS_BRASIL.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
-          </select>
-
-          <select value={proximaAcaoFilter} onChange={(e) => setProximaAcaoFilter(e.target.value)} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500">
-            <option value="">Proxima Acao</option>
-            {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
-          </select>
-
-          <button onClick={() => setShowAdvanced((p) => !p)} className="text-xs text-emerald-400 hover:text-emerald-300 font-medium">
-            {showAdvanced ? 'Menos' : 'Mais filtros'}
-          </button>
+          {activeFilterCount > 0 && (
+            <button onClick={clearAllFilters} className="text-[10px] text-red-400/70 hover:text-red-400 font-medium">
+              Limpar filtros
+            </button>
+          )}
         </div>
-        {showAdvanced && (
-          <div className="flex items-center gap-2 flex-wrap mt-2 pt-2 border-t border-purple-800/20">
-            <input type="text" placeholder="CPF..." value={advSearch.cpf} onChange={(e) => setAdvSearch((p) => ({ ...p, cpf: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
-            <input type="text" placeholder="CNPJ..." value={advSearch.cnpj} onChange={(e) => setAdvSearch((p) => ({ ...p, cnpj: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-32" />
-            <input type="text" placeholder="Telefone..." value={advSearch.telefone} onChange={(e) => setAdvSearch((p) => ({ ...p, telefone: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
-            <input type="text" placeholder="WhatsApp..." value={advSearch.whatsapp} onChange={(e) => setAdvSearch((p) => ({ ...p, whatsapp: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
-            <input type="text" placeholder="Empresa..." value={advSearch.empresa} onChange={(e) => setAdvSearch((p) => ({ ...p, empresa: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
-            <input type="text" placeholder="Cidade..." value={advSearch.cidade} onChange={(e) => setAdvSearch((p) => ({ ...p, cidade: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
-            <input type="text" placeholder="Referencia..." value={advSearch.referencia} onChange={(e) => setAdvSearch((p) => ({ ...p, referencia: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
-            <input type="text" placeholder="Nome Contato..." value={advSearch.contato_nome} onChange={(e) => setAdvSearch((p) => ({ ...p, contato_nome: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-32" />
-            <input type="text" placeholder="Cargo..." value={advSearch.cargo} onChange={(e) => setAdvSearch((p) => ({ ...p, cargo: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
-            <input type="text" placeholder="Produtos..." value={advSearch.produtos_fornecidos} onChange={(e) => setAdvSearch((p) => ({ ...p, produtos_fornecidos: e.target.value }))} className="text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 w-28" />
+
+        {/* Filter Panel (collapsible) */}
+        {showFilters && (
+          <div className="mt-3 pt-3 border-t border-purple-500/10 animate-fade-in">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+              <select value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value as '' | ContactType)} className={selectClass}>
+                <option value="">Tipo</option>
+                <option value="FORNECEDOR">Fornecedor</option>
+                <option value="COMPRADOR">Comprador</option>
+              </select>
+              <select value={responsavelFilter} onChange={(e) => setResponsavelFilter(e.target.value)} className={selectClass}>
+                <option value="">Responsavel</option>
+                <option value="_none">Sem responsavel</option>
+                {Object.entries(userMap).map(([userId, user]) => (
+                  <option key={userId} value={userId}>{user.name}</option>
+                ))}
+              </select>
+              <select value={temperaturaFilter} onChange={(e) => setTemperaturaFilter(e.target.value)} className={selectClass}>
+                <option value="">Temperatura</option>
+                {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+              <select value={origemFilter} onChange={(e) => setOrigemFilter(e.target.value)} className={selectClass}>
+                <option value="">Origem</option>
+                {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+              <select value={classeFilter} onChange={(e) => setClasseFilter(e.target.value)} className={selectClass}>
+                <option value="">Classe</option>
+                <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
+              </select>
+              <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className={selectClass}>
+                <option value="">Estado</option>
+                {ESTADOS_BRASIL.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
+              </select>
+              <select value={proximaAcaoFilter} onChange={(e) => setProximaAcaoFilter(e.target.value)} className={selectClass}>
+                <option value="">Proxima Acao</option>
+                {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
+              </select>
+            </div>
+            {/* Advanced text search */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-2">
+              <input type="text" placeholder="CPF" value={advSearch.cpf} onChange={(e) => setAdvSearch((p) => ({ ...p, cpf: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="CNPJ" value={advSearch.cnpj} onChange={(e) => setAdvSearch((p) => ({ ...p, cnpj: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="Telefone" value={advSearch.telefone} onChange={(e) => setAdvSearch((p) => ({ ...p, telefone: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="Empresa" value={advSearch.empresa} onChange={(e) => setAdvSearch((p) => ({ ...p, empresa: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="Cidade" value={advSearch.cidade} onChange={(e) => setAdvSearch((p) => ({ ...p, cidade: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="WhatsApp" value={advSearch.whatsapp} onChange={(e) => setAdvSearch((p) => ({ ...p, whatsapp: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="Referencia" value={advSearch.referencia} onChange={(e) => setAdvSearch((p) => ({ ...p, referencia: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="Contato" value={advSearch.contato_nome} onChange={(e) => setAdvSearch((p) => ({ ...p, contato_nome: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="Cargo" value={advSearch.cargo} onChange={(e) => setAdvSearch((p) => ({ ...p, cargo: e.target.value }))} className={inputClass} />
+              <input type="text" placeholder="Produtos" value={advSearch.produtos_fornecidos} onChange={(e) => setAdvSearch((p) => ({ ...p, produtos_fornecidos: e.target.value }))} className={inputClass} />
+            </div>
           </div>
         )}
       </div>
 
-      {/* Legenda de usuários com speech bubbles */}
-      {Object.keys(userMap).length > 0 && (
-        <div className="flex items-end gap-4 flex-wrap pt-8">
-          <span className="text-xs text-purple-300/60 font-medium self-center">Responsáveis:</span>
-          {Object.values(userMap).map((u, i) => {
-            const isTalking = i === talkingIndex;
-            return (
-              <div key={u.name} className="flex flex-col items-center gap-1 relative">
-                {isTalking && (
-                  <div key={phraseKey} className="speech-bubble">
-                    {currentPhrase}
-                  </div>
-                )}
-                <div className={isTalking ? 'avatar-pick-me-talking shrink-0' : 'avatar-pick-me-idle shrink-0'}>
-                  {u.avatar_url ? (
-                    <img src={u.avatar_url} alt={u.name} className="w-10 h-10 object-cover" />
-                  ) : (
-                    <div
-                      className="w-10 h-10 flex items-center justify-center text-xs font-bold"
-                      style={{ backgroundColor: u.color.bg, color: u.color.text }}
-                    >
-                      {u.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <span className={`text-[10px] transition-colors duration-300 ${isTalking ? 'text-emerald-400 font-bold' : 'text-purple-300/50'}`}>
-                  {u.name.split(' ')[0]}
-                </span>
+      {/* === KPI BAR === */}
+      {!loading && (
+        <div className="px-4 lg:px-6 py-3 border-b border-purple-500/10 bg-[#120826]/40">
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
+              <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Valor no Pipeline</p>
+              <p className="text-lg font-bold text-emerald-400 mt-0.5">
+                {kpis.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
+              </p>
+            </div>
+            <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
+              <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Contatos Ativos</p>
+              <p className="text-lg font-bold text-white mt-0.5">{kpis.activeCount}</p>
+            </div>
+            <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
+              <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Taxa Conversao</p>
+              <div className="flex items-end gap-2 mt-0.5">
+                <p className="text-lg font-bold text-white">{kpis.conversionRate}%</p>
+                <p className="text-[10px] text-purple-300/30 pb-0.5">{kpis.convertidos}W / {kpis.perdidos}L</p>
               </div>
-            );
-          })}
+            </div>
+            <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
+              <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Sem Responsavel</p>
+              <p className={`text-lg font-bold mt-0.5 ${kpis.noOwner > 0 ? 'text-amber-400' : 'text-white'}`}>{kpis.noOwner}</p>
+            </div>
+            <div className="hidden lg:flex bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20 items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium mb-1.5">Funil</p>
+                <div className="flex flex-col items-center gap-[2px]">
+                  {(() => {
+                    const funnelStatuses = ALL_STATUSES.filter(s => !['CONVERTIDO', 'PERDIDO'].includes(s));
+                    const funnelLabels: Record<string, string> = { NOVO: 'Novo', EM_PROSPECCAO: 'Prospecção', CONTATADO: 'Contatado', REUNIAO_MARCADA: 'Reunião' };
+                    const funnelColors = ['#a3a3a3', '#f59e0b', '#3b82f6', '#22c55e'];
+                    const total = funnelStatuses.length;
+                    return funnelStatuses.map((status, i) => {
+                      const count = grouped[status]?.length || 0;
+                      const widthPct = 100 - (i / total) * 60;
+                      return (
+                        <div
+                          key={status}
+                          className="flex items-center justify-center relative transition-all"
+                          style={{
+                            width: `${widthPct}%`,
+                            height: '14px',
+                            backgroundColor: `${funnelColors[i]}25`,
+                            borderLeft: `2px solid ${funnelColors[i]}50`,
+                            borderRight: `2px solid ${funnelColors[i]}50`,
+                            borderTop: i === 0 ? `2px solid ${funnelColors[i]}50` : 'none',
+                            borderBottom: i === total - 1 ? `2px solid ${funnelColors[i]}50` : 'none',
+                            borderRadius: i === 0 ? '4px 4px 0 0' : i === total - 1 ? '0 0 3px 3px' : '0',
+                          }}
+                          title={`${funnelLabels[status]}: ${count}`}
+                        >
+                          <span className="text-[7px] font-bold" style={{ color: funnelColors[i] }}>
+                            {funnelLabels[status]} ({count})
+                          </span>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Board */}
-      {loading ? (
-        <KanbanSkeleton />
-      ) : (
-        <div className="bg-[#1e0f35]/50 rounded-xl p-4 border border-purple-800/20">
+      {/* === AVATAR CAINDO NO LADO DIREITO === */}
+      {!loading && Object.keys(userMap).length > 0 && (() => {
+        const users = Object.values(userMap);
+        const fallingUser = users[talkingIndex % users.length];
+        const dur = 12;
+        return (
+          <div
+            key={`fall-${talkingIndex}-${phraseKey}`}
+            className="fixed pointer-events-none z-20"
+            style={{
+              right: 'calc((100vw - 16rem) / 6 - 12px)',
+              top: 0,
+              width: '48px',
+              height: '48px',
+              animation: `avatar-fall-land-run ${dur}s linear forwards`,
+            }}
+          >
+            {/* Frase — posicionada absoluta à esquerda */}
+            {currentPhrase && (
+              <div
+                className="speech-bubble-land"
+                style={{ animation: `speech-land-appear ${dur}s linear forwards` }}
+              >
+                {currentPhrase}
+              </div>
+            )}
+
+            {/* Avatar — tamanho fixo 48x48 */}
+            <div className="w-12 h-12 rounded-full overflow-hidden shadow-lg shadow-purple-900/40 border-2 border-white/20">
+              {fallingUser.avatar_url ? (
+                <img src={fallingUser.avatar_url} alt={fallingUser.name} className="w-12 h-12 object-cover" />
+              ) : (
+                <div
+                  className="w-12 h-12 flex items-center justify-center text-sm font-bold"
+                  style={{ backgroundColor: fallingUser.color.bg, color: fallingUser.color.text }}
+                >
+                  {fallingUser.name.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()}
+                </div>
+              )}
+            </div>
+
+            {/* Perninhas — centralizadas abaixo do avatar */}
+            <div className="flex gap-[6px] justify-center -mt-[1px]" style={{ animation: `legs-appear ${dur}s linear forwards` }}>
+              <div
+                className="w-[3px] h-[14px] rounded-full origin-top"
+                style={{
+                  backgroundColor: fallingUser.color.bg,
+                  animation: `leg-run-left 0.18s linear infinite`,
+                  animationDelay: `${dur * 0.80}s`,
+                }}
+              />
+              <div
+                className="w-[3px] h-[14px] rounded-full origin-top"
+                style={{
+                  backgroundColor: fallingUser.color.bg,
+                  animation: `leg-run-right 0.18s linear infinite`,
+                  animationDelay: `${dur * 0.80}s`,
+                }}
+              />
+            </div>
+
+            {/* Nome */}
+            <p className="text-[9px] text-emerald-400 font-bold whitespace-nowrap text-center mt-0.5">
+              {fallingUser.name.split(' ')[0]}
+            </p>
+          </div>
+        );
+      })()}
+
+      {/* === BOARD === */}
+      <div className="flex-1 overflow-hidden px-4 lg:px-6 py-4">
+        {loading ? (
+          <KanbanSkeleton />
+        ) : (
           <DndContext
             sensors={sensors}
             collisionDetection={columnFirstCollision}
@@ -645,10 +787,10 @@ export default function KanbanPage() {
               pipelineSettings={pipelineSettings}
             />
           </DndContext>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* Motivo modal for CONVERTIDO/PERDIDO */}
+      {/* Motivo modal */}
       {(pendingDrag || pendingJump) && (
         <MotivoModal
           isOpen={showMotivoModal}
@@ -658,6 +800,23 @@ export default function KanbanPage() {
           loading={motivoLoading}
         />
       )}
+
+      {/* AI Chat FAB */}
+      <button
+        onClick={() => setChatOpen(true)}
+        className={`fixed bottom-6 right-6 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-purple-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-105 flex items-center justify-center transition-all duration-200 ${
+          chatOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
+        }`}
+        title="Assistente IA"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+        </svg>
+        <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-400 rounded-full animate-pulse" />
+      </button>
+
+      {/* AI Chat Panel */}
+      <AiChatPanel isOpen={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   );
 }

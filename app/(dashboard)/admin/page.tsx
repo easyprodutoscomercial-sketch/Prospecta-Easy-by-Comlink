@@ -584,11 +584,11 @@ export default function AdminPage() {
                       /* Display mode */
                       <div className="flex items-center gap-3">
                         <label className="relative cursor-pointer shrink-0 group">
-                          <div className="avatar-orbit-sm">
+                          <div className="avatar-orbit-sm w-14 h-14 rounded-full overflow-hidden">
                             {(u as any).avatar_url ? (
-                              <img src={(u as any).avatar_url} alt={u.name} className="w-14 h-14 object-cover group-hover:brightness-75 transition-all" />
+                              <img src={(u as any).avatar_url} alt={u.name} className="w-14 h-14 object-cover rounded-full group-hover:brightness-75 transition-all" />
                             ) : (
-                              <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-purple-600 flex items-center justify-center text-base font-bold text-white group-hover:brightness-75 transition-all">
+                              <div className="w-14 h-14 bg-gradient-to-br from-emerald-500 to-purple-600 rounded-full flex items-center justify-center text-base font-bold text-white group-hover:brightness-75 transition-all">
                                 {u.name.charAt(0).toUpperCase()}
                               </div>
                             )}

@@ -379,22 +379,20 @@ export default function DashboardWithTabs({
               return (
                 <div key={member.name} className="flex items-center gap-3">
                   {/* Avatar */}
-                  <div className={`shrink-0 ${isFirst ? 'avatar-winner' : idx >= 3 ? 'avatar-sad' : ''}`}>
+                  <div className={`shrink-0 rounded-full overflow-hidden ${isFirst ? 'avatar-winner w-12 h-12' : idx >= 3 ? 'avatar-sad w-9 h-9' : 'w-9 h-9'}`}>
                     {member.avatar_url ? (
                       <img
                         src={member.avatar_url}
                         alt={member.name}
-                        className={isFirst ? 'w-12 h-12 object-cover' : 'w-9 h-9 object-cover'}
-                        style={{ borderRadius: '50% / 45%' }}
+                        className={isFirst ? 'w-12 h-12 object-cover rounded-full' : 'w-9 h-9 object-cover rounded-full'}
                       />
                     ) : (
                       <div
-                        className={`flex items-center justify-center font-bold text-white ${
+                        className={`flex items-center justify-center font-bold text-white rounded-full ${
                           isFirst
                             ? 'w-12 h-12 text-base bg-gradient-to-br from-emerald-400 to-purple-500'
                             : 'w-9 h-9 text-xs bg-purple-800/50'
                         }`}
-                        style={{ borderRadius: '50% / 45%' }}
                       >
                         {initials}
                       </div>

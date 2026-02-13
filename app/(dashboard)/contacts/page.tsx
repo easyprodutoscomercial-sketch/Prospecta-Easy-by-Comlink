@@ -404,11 +404,11 @@ export default function ContactsPage() {
                           )
                         ) : (
                           <div className="flex items-center gap-2" title={owner?.name || 'Responsavel'}>
-                            <div className="avatar-breathe shrink-0">
+                            <div className="avatar-breathe shrink-0 w-9 h-9 rounded-full overflow-hidden">
                               {owner?.avatar_url ? (
-                                <img src={owner.avatar_url} alt={owner.name} className="w-9 h-9 object-cover" />
+                                <img src={owner.avatar_url} alt={owner.name} className="w-9 h-9 object-cover rounded-full" />
                               ) : (
-                                <div className="w-9 h-9 flex items-center justify-center text-xs font-bold"
+                                <div className="w-9 h-9 flex items-center justify-center text-xs font-bold rounded-full"
                                   style={{ backgroundColor: ownerColor?.bg || '#404040', color: ownerColor?.text || '#fff' }}>
                                   {owner ? getUserInitials(owner.name) : '?'}
                                 </div>

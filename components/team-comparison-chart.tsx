@@ -84,22 +84,20 @@ export default function TeamComparisonChart({ data }: TeamComparisonChartProps) 
                   {idx + 1}
                 </span>
 
-                <div className={isFirst ? 'avatar-winner shrink-0' : idx >= 3 ? 'avatar-sad shrink-0' : 'shrink-0'}>
+                <div className={`shrink-0 rounded-full overflow-hidden ${isFirst ? 'avatar-winner w-10 h-10' : idx >= 3 ? 'avatar-sad w-8 h-8' : 'w-8 h-8'}`}>
                   {member.avatar_url ? (
                     <img
                       src={member.avatar_url}
                       alt={member.name}
-                      className={isFirst ? 'w-10 h-10 object-cover' : 'w-8 h-8 object-cover'}
-                      style={{ borderRadius: '50% / 45%' }}
+                      className={isFirst ? 'w-10 h-10 object-cover rounded-full' : 'w-8 h-8 object-cover rounded-full'}
                     />
                   ) : (
                     <div
-                      className={`flex items-center justify-center font-bold text-white ${
+                      className={`flex items-center justify-center font-bold text-white rounded-full ${
                         isFirst
                           ? 'w-10 h-10 text-sm bg-gradient-to-br from-emerald-400 to-purple-500'
                           : 'w-8 h-8 text-xs bg-purple-800/50'
                       }`}
-                      style={{ borderRadius: '50% / 45%' }}
                     >
                       {initials}
                     </div>

@@ -73,22 +73,20 @@ export default function ConversionRanking({ data }: ConversionRankingProps) {
               </span>
 
               {/* Avatar */}
-              <div className={`shrink-0 ${isFirst ? 'avatar-winner' : idx < 3 ? '' : 'avatar-sad'}`}>
+              <div className={`shrink-0 rounded-full overflow-hidden ${isFirst ? 'avatar-winner w-10 h-10' : idx < 3 ? 'w-8 h-8' : 'avatar-sad w-8 h-8'}`}>
                 {entry.avatar_url ? (
                   <img
                     src={entry.avatar_url}
                     alt={entry.name}
-                    className={`object-cover ${isFirst ? 'w-10 h-10' : 'w-8 h-8'}`}
-                    style={{ borderRadius: '50% / 45%' }}
+                    className={`object-cover rounded-full ${isFirst ? 'w-10 h-10' : 'w-8 h-8'}`}
                   />
                 ) : (
                   <div
-                    className={`flex items-center justify-center font-bold text-white ${
+                    className={`flex items-center justify-center font-bold text-white rounded-full ${
                       isFirst
                         ? 'w-10 h-10 text-sm bg-gradient-to-br from-emerald-400 to-purple-500'
                         : 'w-8 h-8 text-xs bg-purple-800/50'
                     }`}
-                    style={{ borderRadius: '50% / 45%' }}
                   >
                     {initials}
                   </div>
@@ -151,18 +149,16 @@ function PodiumSlot({ entry, position, height }: { entry: RankingEntry; position
       <span className="text-lg">{medals[position]}</span>
 
       {/* Avatar */}
-      <div className={position === 1 ? 'avatar-winner' : ''}>
+      <div className={`${avatarSize} rounded-full overflow-hidden ${position === 1 ? 'avatar-winner' : ''}`}>
         {entry.avatar_url ? (
           <img
             src={entry.avatar_url}
             alt={entry.name}
-            className={`${avatarSize} object-cover`}
-            style={{ borderRadius: '50% / 45%' }}
+            className={`${avatarSize} object-cover rounded-full`}
           />
         ) : (
           <div
-            className={`${avatarSize} flex items-center justify-center font-bold text-white bg-gradient-to-br ${podiumColors[position].split(' ').slice(0, 2).join(' ')}`}
-            style={{ borderRadius: '50% / 45%' }}
+            className={`${avatarSize} flex items-center justify-center font-bold text-white rounded-full bg-gradient-to-br ${podiumColors[position].split(' ').slice(0, 2).join(' ')}`}
           >
             {initials}
           </div>
