@@ -115,8 +115,23 @@ export async function PATCH(
       validated.proxima_acao_data = new Date(validated.proxima_acao_data).toISOString();
     }
 
+    // Remover campos que não existem na tabela contacts do Supabase
+    const dbFields = new Set([
+      'name', 'phone', 'email', 'cpf', 'cnpj', 'company', 'notes', 'status',
+      'tipo', 'referencia', 'classe', 'produtos_fornecidos', 'temperatura',
+      'proxima_acao_tipo', 'proxima_acao_data', 'motivo_ganho_perdido',
+      'contato_nome', 'cargo', 'endereco', 'cidade', 'estado', 'cep',
+      'website', 'instagram', 'whatsapp', 'valor_estimado',
+      'assigned_to_user_id',
+    ]);
+
     // Re-normalize identity fields when they change
-    const updateData: Record<string, any> = { ...validated };
+    const updateData: Record<string, any> = {};
+    for (const [key, value] of Object.entries(validated)) {
+      if (dbFields.has(key)) {
+        updateData[key] = value;
+      }
+    }
 
     if (validated.name !== undefined) {
       updateData.name_normalized = normalizeName(validated.name);
