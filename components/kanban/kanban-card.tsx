@@ -98,12 +98,12 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
           {isUnassigned ? (
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-dashed border-purple-500/25 text-purple-300/30" title="Sem responsavel">?</div>
           ) : (
-            <div className="shrink-0 w-4 h-4 rounded-full overflow-hidden opacity-60" title={owner?.name || ''}>
+            <div className="shrink-0 w-9 h-9 rounded-full overflow-hidden opacity-60" title={owner?.name || ''}>
               {owner?.avatar_url ? (
-                <img src={owner.avatar_url} alt={owner.name} className="w-4 h-4 object-cover rounded-full" />
+                <img src={owner.avatar_url} alt={owner.name} className="w-9 h-9 object-cover rounded-full" />
               ) : (
                 <div
-                  className="w-4 h-4 flex items-center justify-center text-[5px] font-bold rounded-full"
+                  className="w-9 h-9 flex items-center justify-center text-[9px] font-bold rounded-full"
                   style={{ backgroundColor: ownerColorVal.bg, color: ownerColorVal.text }}
                 >{ownerInitials}</div>
               )}
