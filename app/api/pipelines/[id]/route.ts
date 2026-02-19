@@ -36,22 +36,25 @@ export async function GET(
       return NextResponse.json({ error: 'Pipeline nao encontrado' }, { status: 404 });
     }
 
-    const [stagesRes, membersRes] = await Promise.all([
-      admin
-        .from('pipeline_stages')
-        .select('*')
-        .eq('pipeline_id', id)
-        .order('position', { ascending: true }),
-      admin
+    const { data: stagesData } = await admin
+      .from('pipeline_stages')
+      .select('*')
+      .eq('pipeline_id', id)
+      .order('position', { ascending: true });
+
+    let membersData: any[] = [];
+    try {
+      const membersRes = await admin
         .from('pipeline_members')
         .select('*')
-        .eq('pipeline_id', id),
-    ]);
+        .eq('pipeline_id', id);
+      membersData = membersRes.data || [];
+    } catch { /* table may not exist */ }
 
     return NextResponse.json({
       ...pipeline,
-      stages: stagesRes.data || [],
-      members: membersRes.error ? [] : (membersRes.data || []),
+      stages: stagesData || [],
+      members: membersData,
     });
   } catch (error: any) {
     console.error('Error fetching pipeline:', error);
@@ -174,51 +177,56 @@ export async function PUT(
 
     // Sync membros se member_user_ids foi enviado
     if (validated.member_user_ids !== undefined) {
-      // Deletar membros atuais
-      await admin
-        .from('pipeline_members')
-        .delete()
-        .eq('pipeline_id', id);
-
-      // Inserir novos membros
-      if (validated.member_user_ids.length > 0) {
-        const membersToInsert = validated.member_user_ids.map((uid: string) => ({
-          pipeline_id: id,
-          user_id: uid,
-        }));
-
+      try {
         await admin
           .from('pipeline_members')
-          .insert(membersToInsert);
+          .delete()
+          .eq('pipeline_id', id);
+
+        if (validated.member_user_ids.length > 0) {
+          const membersToInsert = validated.member_user_ids.map((uid: string) => ({
+            pipeline_id: id,
+            user_id: uid,
+          }));
+
+          await admin
+            .from('pipeline_members')
+            .insert(membersToInsert);
+        }
+      } catch (memberErr) {
+        console.warn('pipeline_members sync skipped (table may not exist):', memberErr);
       }
     }
 
-    // Retornar pipeline atualizado com stages e members
+    // Retornar pipeline atualizado com stages
     const { data: pipeline } = await admin
       .from('pipelines')
       .select('*')
       .eq('id', id)
       .single();
 
-    const [stagesRes, membersRes] = await Promise.all([
-      admin
-        .from('pipeline_stages')
-        .select('*')
-        .eq('pipeline_id', id)
-        .order('position', { ascending: true }),
-      admin
+    const { data: stagesData } = await admin
+      .from('pipeline_stages')
+      .select('*')
+      .eq('pipeline_id', id)
+      .order('position', { ascending: true });
+
+    let membersData: any[] = [];
+    try {
+      const membersRes = await admin
         .from('pipeline_members')
         .select('*')
-        .eq('pipeline_id', id),
-    ]);
+        .eq('pipeline_id', id);
+      membersData = membersRes.data || [];
+    } catch { /* table may not exist */ }
 
     return NextResponse.json({
       ...pipeline,
-      stages: stagesRes.data || [],
-      members: membersRes.data || [],
+      stages: stagesData || [],
+      members: membersData,
     });
   } catch (error: any) {
-    console.error('Error updating pipeline:', error);
+    console.error('Error updating pipeline:', error?.message || error, error?.details || '', error?.code || '');
 
     if (error.name === 'ZodError') {
       return NextResponse.json({ error: 'Dados invalidos', details: error.errors }, { status: 400 });
