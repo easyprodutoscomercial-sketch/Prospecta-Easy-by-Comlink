@@ -105,6 +105,7 @@ export default function KanbanPage() {
   const [contactsWithMeeting, setContactsWithMeeting] = useState<Set<string>>(new Set());
   const [lastInteractionMap, setLastInteractionMap] = useState<Record<string, string>>({});
   const [attachmentCountMap, setAttachmentCountMap] = useState<Record<string, number>>({});
+  const [totalContactsFromApi, setTotalContactsFromApi] = useState<number>(0);
   const [pendingRequestContactIds, setPendingRequestContactIds] = useState<Set<string>>(new Set());
 
   // Bulk selection state
@@ -235,11 +236,12 @@ export default function KanbanPage() {
   const fetchContacts = useCallback(async (pipelineId: string) => {
     if (!pipelineId) return;
     try {
-      const res = await fetch(`/api/contacts?limit=500&pipeline_id=${pipelineId}`);
+      const res = await fetch(`/api/contacts?limit=10000&pipeline_id=${pipelineId}`);
       if (!res.ok) throw new Error('Erro ao carregar contatos');
       const data = await res.json();
       const contactsList = data.contacts || [];
       setContacts(contactsList);
+      setTotalContactsFromApi(data.total ?? contactsList.length);
 
       // If bugs pipeline, fetch attachment counts
       const pipeline = pipelines.find(p => p.id === pipelineId);
@@ -743,6 +745,14 @@ export default function KanbanPage() {
   const selectClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-full";
   const inputClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 w-full";
 
+  // Sum of contacts in all columns (must match filtered.length)
+  const totalInColumns = useMemo(() => {
+    return Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
+  }, [grouped]);
+
+  // Detect mismatch between fetched count and API total
+  const hasTruncation = totalContactsFromApi > contacts.length;
+
   // Funnel data from non-terminal stages
   const funnelStages = useMemo(() => stages.filter(s => !s.is_terminal), [stages]);
 
@@ -775,7 +785,14 @@ export default function KanbanPage() {
             </div>
             <div>
               <h1 className="text-base font-bold text-white leading-tight">Pipeline</h1>
-              <p className="text-[10px] text-purple-300/40">{filtered.length} de {contacts.length} contatos</p>
+              <p className="text-[10px] text-purple-300/40">
+                {totalInColumns} de {totalContactsFromApi} contatos
+                {hasTruncation && (
+                  <span className="text-amber-400 ml-1" title={`Exibindo ${contacts.length} de ${totalContactsFromApi}. Alguns contatos podem nao estar visiveis.`}>
+                    (limite atingido)
+                  </span>
+                )}
+              </p>
             </div>
           </div>
 
