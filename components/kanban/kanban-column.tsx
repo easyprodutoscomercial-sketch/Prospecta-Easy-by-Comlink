@@ -102,6 +102,8 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
   const totalValue = contacts.reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
   const iconPath = getIconForStage(stage);
 
+  const hasScheduledMeeting = contacts.some(c => contactsWithMeeting?.has(c.id));
+
   const filtered = useMemo(() => {
     if (!filter.trim()) return contacts;
     return contacts.filter(c => contactMatchesFilter(c, filter.trim(), userMap));
@@ -124,6 +126,13 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
             </svg>
           </div>
           <span className="text-xs font-semibold text-neutral-200 flex-1 truncate">{label}</span>
+          {hasScheduledMeeting && (
+            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 whitespace-nowrap">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </span>
+          )}
           <span
             className="text-xs font-bold rounded-full px-2 py-0.5 min-w-[26px] text-center"
             style={{ backgroundColor: `${color}25`, color }}
