@@ -160,7 +160,7 @@ export async function PUT(
 
       // Upsert stages (update existentes, insert novos)
       for (const stage of validated.stages) {
-        const stageData = {
+        const stageData: Record<string, any> = {
           name: stage.name,
           slug: stage.slug,
           color: stage.color || '#a3a3a3',
@@ -168,6 +168,7 @@ export async function PUT(
           is_terminal: stage.is_terminal || false,
           terminal_type: stage.terminal_type || null,
         };
+        if (stage.icon !== undefined) stageData.icon = stage.icon || null;
 
         if (stage.id && currentIds.has(stage.id)) {
           const { error: stageErr } = await admin

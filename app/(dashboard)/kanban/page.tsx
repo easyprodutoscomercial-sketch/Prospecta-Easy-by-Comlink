@@ -265,6 +265,15 @@ export default function KanbanPage() {
     }
   }, [selectedPipelineId, fetchContacts]);
 
+  // Auto-refresh a cada 30s (silencioso, sem loading spinner)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchData();
+      if (selectedPipelineId) fetchContacts(selectedPipelineId);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [fetchData, fetchContacts, selectedPipelineId]);
+
   // Emoji explosion effect
   function triggerEmojis(type: 'celebrate' | 'sad') {
     playSound(type);

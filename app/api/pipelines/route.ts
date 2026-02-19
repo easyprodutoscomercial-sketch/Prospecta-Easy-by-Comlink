@@ -131,15 +131,19 @@ export async function POST(request: NextRequest) {
     if (pipError) throw pipError;
 
     // Criar stages
-    const stagesToInsert = validated.stages.map((s, i) => ({
-      pipeline_id: pipeline.id,
-      name: s.name,
-      slug: s.slug,
-      color: s.color || '#a3a3a3',
-      position: s.position ?? i,
-      is_terminal: s.is_terminal || false,
-      terminal_type: s.terminal_type || null,
-    }));
+    const stagesToInsert = validated.stages.map((s, i) => {
+      const stageRow: Record<string, any> = {
+        pipeline_id: pipeline.id,
+        name: s.name,
+        slug: s.slug,
+        color: s.color || '#a3a3a3',
+        position: s.position ?? i,
+        is_terminal: s.is_terminal || false,
+        terminal_type: s.terminal_type || null,
+      };
+      if (s.icon) stageRow.icon = s.icon;
+      return stageRow;
+    });
 
     const { data: stages, error: stagesError } = await admin
       .from('pipeline_stages')

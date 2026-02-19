@@ -161,6 +161,7 @@ export interface PipelineStage {
   name: string;
   slug: string;
   color: string;
+  icon?: string | null;
   position: number;
   is_terminal: boolean;
   terminal_type: 'won' | 'lost' | null;

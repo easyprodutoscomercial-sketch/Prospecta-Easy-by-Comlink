@@ -121,6 +121,7 @@ export const pipelineStageSchema = z.object({
   name: z.string().min(1, 'Nome do stage obrigatorio').max(50),
   slug: z.string().min(1).max(50),
   color: z.string().min(4).max(9).default('#a3a3a3'),
+  icon: z.string().max(50).nullable().optional().default(null),
   position: z.number().int().min(0),
   is_terminal: z.boolean().default(false),
   terminal_type: z.enum(['won', 'lost']).nullable().default(null),

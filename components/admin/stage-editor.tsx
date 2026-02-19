@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import { STAGE_ICON_OPTIONS } from '@/components/kanban/kanban-column';
 
 export interface StageEditorItem {
   id?: string;
   name: string;
   slug: string;
   color: string;
+  icon?: string | null;
   position: number;
   is_terminal: boolean;
   terminal_type: 'won' | 'lost' | null;
@@ -28,11 +30,13 @@ function slugify(name: string): string {
 }
 
 export default function StageEditor({ stages, onChange }: StageEditorProps) {
+  const [iconPickerIndex, setIconPickerIndex] = useState<number | null>(null);
+
   const addStage = () => {
     const newPos = stages.length;
     onChange([
       ...stages,
-      { name: '', slug: '', color: '#a3a3a3', position: newPos, is_terminal: false, terminal_type: null },
+      { name: '', slug: '', color: '#a3a3a3', icon: null, position: newPos, is_terminal: false, terminal_type: null },
     ]);
   };
 
@@ -168,6 +172,53 @@ export default function StageEditor({ stages, onChange }: StageEditorProps) {
               onChange={(e) => updateStage(index, 'color', e.target.value)}
               className="w-8 h-8 rounded border border-purple-700/30 cursor-pointer p-0.5 shrink-0"
             />
+
+            {/* Icon picker */}
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setIconPickerIndex(iconPickerIndex === index ? null : index)}
+                className="w-8 h-8 rounded border border-purple-700/30 bg-[#1e0f35] flex items-center justify-center hover:border-purple-500/50 transition-colors"
+                title="Icone da etapa"
+              >
+                <svg className="w-4 h-4" style={{ color: stage.color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={stage.icon && STAGE_ICON_OPTIONS[stage.icon] ? STAGE_ICON_OPTIONS[stage.icon].path : 'M13 10V3L4 14h7v7l9-11h-7z'} />
+                </svg>
+              </button>
+              {iconPickerIndex === index && (
+                <div className="absolute top-10 left-0 z-50 bg-[#1e0f35] border border-purple-700/30 rounded-xl p-2 shadow-2xl shadow-purple-900/50 grid grid-cols-4 gap-1 w-52">
+                  {Object.entries(STAGE_ICON_OPTIONS).map(([key, { label, path }]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => { updateStage(index, 'icon', key); setIconPickerIndex(null); }}
+                      className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-colors ${
+                        stage.icon === key ? 'bg-emerald-500/20 ring-1 ring-emerald-500/40' : 'hover:bg-purple-700/30'
+                      }`}
+                      title={label}
+                    >
+                      <svg className="w-4 h-4 text-purple-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />
+                      </svg>
+                      <span className="text-[8px] text-purple-300/50">{label}</span>
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => { updateStage(index, 'icon', null); setIconPickerIndex(null); }}
+                    className={`flex flex-col items-center gap-0.5 p-1.5 rounded-lg transition-colors ${
+                      !stage.icon ? 'bg-emerald-500/20 ring-1 ring-emerald-500/40' : 'hover:bg-purple-700/30'
+                    }`}
+                    title="Auto (baseado no nome)"
+                  >
+                    <svg className="w-4 h-4 text-purple-300/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span className="text-[8px] text-purple-300/50">Auto</span>
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Name */}
             <input
