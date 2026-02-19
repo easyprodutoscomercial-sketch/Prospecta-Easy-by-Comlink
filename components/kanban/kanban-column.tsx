@@ -14,6 +14,7 @@ interface KanbanColumnProps {
   currentUserId?: string;
   onClaimContact?: (contactId: string) => void;
   onRequestContact?: (contactId: string) => void;
+  pendingRequestContactIds?: Set<string>;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
   onScheduleMeeting?: (contactId: string, contactName: string) => void;
@@ -71,7 +72,7 @@ function contactMatchesFilter(contact: Contact, query: string, userMap: Record<s
   return fields.some(f => f && normalizeSearch(f).includes(q));
 }
 
-export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap }: KanbanColumnProps) {
+export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const [filter, setFilter] = useState('');
   const color = stage.color || '#a3a3a3';
@@ -160,6 +161,7 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
               currentUserId={currentUserId}
               onClaimContact={onClaimContact}
               onRequestContact={onRequestContact}
+              hasPendingRequest={pendingRequestContactIds?.has(contact.id)}
               onJumpForward={onJumpForward}
               onJumpBackward={onJumpBackward}
               onScheduleMeeting={onScheduleMeeting}

@@ -13,6 +13,7 @@ interface KanbanBoardProps {
   currentUserId?: string;
   onClaimContact?: (contactId: string) => void;
   onRequestContact?: (contactId: string) => void;
+  pendingRequestContactIds?: Set<string>;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
   onScheduleMeeting?: (contactId: string, contactName: string) => void;
@@ -26,7 +27,7 @@ interface KanbanBoardProps {
   attachmentCountMap?: Record<string, number>;
 }
 
-export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUserId, onClaimContact, onRequestContact, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap }: KanbanBoardProps) {
+export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap }: KanbanBoardProps) {
   const colCount = stages.length;
   const gridClass = colCount <= 6
     ? `xl:grid xl:grid-cols-${colCount} xl:overflow-x-visible`
@@ -47,6 +48,7 @@ export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUs
             currentUserId={currentUserId}
             onClaimContact={onClaimContact}
             onRequestContact={onRequestContact}
+            pendingRequestContactIds={pendingRequestContactIds}
             onJumpForward={onJumpForward}
             onJumpBackward={onJumpBackward}
             onScheduleMeeting={onScheduleMeeting}

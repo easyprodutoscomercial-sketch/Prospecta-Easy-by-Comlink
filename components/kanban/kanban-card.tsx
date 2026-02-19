@@ -21,6 +21,7 @@ interface KanbanCardProps {
   currentUserId?: string;
   onClaimContact?: (contactId: string) => void;
   onRequestContact?: (contactId: string) => void;
+  hasPendingRequest?: boolean;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
   onScheduleMeeting?: (contactId: string, contactName: string) => void;
@@ -41,7 +42,7 @@ function daysInStage(updatedAt: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onRequestContact, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting, canJumpForward: canFwd, canJumpBackward: canBwd, showScheduleMeeting: showMeeting, lastInteractionAt, bulkMode, bulkSelected, onBulkToggle, pipelineType, attachmentCount }: KanbanCardProps) {
+export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onRequestContact, hasPendingRequest, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting, canJumpForward: canFwd, canJumpBackward: canBwd, showScheduleMeeting: showMeeting, lastInteractionAt, bulkMode, bulkSelected, onBulkToggle, pipelineType, attachmentCount }: KanbanCardProps) {
   const router = useRouter();
   const {
     attributes,
@@ -147,6 +148,31 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
         </div>
       )}
 
+      {/* Substitution requested banner — soccer-style */}
+      {hasPendingRequest && !overlay && (
+        <div
+          onClick={(e) => { e.stopPropagation(); router.push('/requests'); }}
+          className="flex items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 cursor-pointer hover:bg-amber-500/20 transition-colors"
+          title="Ver solicitacoes"
+        >
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+          </span>
+          {/* Substitution board icon — arrow up (green) + arrow down (red) */}
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="none">
+            <path d="M8 4l-4 4 4 4" stroke="#ef4444" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M16 12l4 4-4 4" stroke="#22c55e" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+            <line x1="4" y1="8" x2="14" y2="8" stroke="#ef4444" strokeWidth={2} strokeLinecap="round" />
+            <line x1="10" y1="16" x2="20" y2="16" stroke="#22c55e" strokeWidth={2} strokeLinecap="round" />
+          </svg>
+          <span className="text-[10px] font-bold text-amber-400">Substituicao solicitada</span>
+          <svg className="w-3 h-3 text-amber-400/50 ml-auto shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      )}
+
       {/* Header: name + avatar */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
@@ -174,7 +200,7 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-dashed border-purple-500/25 text-purple-300/30" title="Sem responsavel">?</div>
           ) : (
             <>
-            {!isUnassigned && currentUserId && contact.assigned_to_user_id !== currentUserId && onRequestContact && (
+            {!isUnassigned && currentUserId && contact.assigned_to_user_id !== currentUserId && onRequestContact && !hasPendingRequest && (
               <button
                 onClick={(e) => { e.stopPropagation(); onRequestContact(contact.id); }}
                 className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-dashed border-amber-500/30 text-amber-400/40 hover:border-amber-500/50 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"

@@ -105,6 +105,7 @@ export default function KanbanPage() {
   const [contactsWithMeeting, setContactsWithMeeting] = useState<Set<string>>(new Set());
   const [lastInteractionMap, setLastInteractionMap] = useState<Record<string, string>>({});
   const [attachmentCountMap, setAttachmentCountMap] = useState<Record<string, number>>({});
+  const [pendingRequestContactIds, setPendingRequestContactIds] = useState<Set<string>>(new Set());
 
   // Bulk selection state
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
@@ -199,6 +200,20 @@ export default function KanbanPage() {
             }
           }
           setLastInteractionMap(map);
+        }
+      } catch { /* silent */ }
+
+      // Fetch pending access requests (sent by current user)
+      try {
+        const arRes = await fetch('/api/access-requests?role=requester');
+        if (arRes.ok) {
+          const arData = await arRes.json();
+          const ids = new Set<string>(
+            (arData.requests || [])
+              .filter((r: any) => r.status === 'PENDING')
+              .map((r: any) => r.contact_id)
+          );
+          setPendingRequestContactIds(ids);
         }
       } catch { /* silent */ }
     } catch {
@@ -580,6 +595,12 @@ export default function KanbanPage() {
 
   // Request contact (pegar cliente)
   async function handleRequestContact(contactId: string) {
+    // If already pending, just show info
+    if (pendingRequestContactIds.has(contactId)) {
+      toast.error('Substituicao ja solicitada. Aguarde aprovacao do responsavel.');
+      return;
+    }
+
     try {
       const res = await fetch('/api/access-requests', {
         method: 'POST',
@@ -588,7 +609,9 @@ export default function KanbanPage() {
       });
 
       if (res.status === 409) {
-        toast.error('Ja existe uma solicitacao pendente');
+        // Mark locally so the indicator shows
+        setPendingRequestContactIds(prev => new Set(prev).add(contactId));
+        toast.error('Substituicao ja solicitada. Aguarde aprovacao do responsavel.');
         return;
       }
 
@@ -597,7 +620,9 @@ export default function KanbanPage() {
         throw new Error(data.error || 'Erro ao solicitar');
       }
 
-      toast.success('Solicitacao enviada! Aguarde aprovacao.');
+      // Add to local set
+      setPendingRequestContactIds(prev => new Set(prev).add(contactId));
+      toast.success('Substituicao solicitada! Aguarde aprovacao do responsavel.');
     } catch (err: any) {
       toast.error(err.message || 'Erro ao solicitar contato');
     }
@@ -942,6 +967,7 @@ export default function KanbanPage() {
               currentUserId={currentUserId}
               onClaimContact={handleClaimContact}
               onRequestContact={handleRequestContact}
+              pendingRequestContactIds={pendingRequestContactIds}
               onJumpForward={handleJumpForward}
               onJumpBackward={handleJumpBackward}
               onScheduleMeeting={handleScheduleMeeting}
