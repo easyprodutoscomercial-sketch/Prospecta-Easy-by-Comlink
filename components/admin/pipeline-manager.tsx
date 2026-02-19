@@ -194,7 +194,7 @@ export default function PipelineManager({ showBugsType = false }: PipelineManage
       const url = editingId ? `/api/pipelines/${editingId}` : '/api/pipelines';
       const method = editingId ? 'PUT' : 'POST';
 
-      console.log('[PIPELINE SAVE] Enviando stages:', body.stages.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon })));
+      console.log('[PIPELINE SAVE] Enviando stages:', body.stages.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon, allow_meeting: s.allow_meeting })));
 
       const res = await fetch(url, {
         method,
@@ -204,7 +204,7 @@ export default function PipelineManager({ showBugsType = false }: PipelineManage
 
       const data = await res.json();
 
-      console.log('[PIPELINE SAVE] Resposta stages:', (data.stages || []).map((s: any) => ({ id: s.id, name: s.name, icon: s.icon })));
+      console.log('[PIPELINE SAVE] Resposta stages:', (data.stages || []).map((s: any) => ({ id: s.id, name: s.name, icon: s.icon, allow_meeting: s.allow_meeting })));
 
       if (res.ok) {
         setResult({ type: 'success', message: editingId ? 'Pipeline atualizado com sucesso!' : 'Pipeline criado com sucesso!' });
