@@ -129,6 +129,8 @@ export async function PUT(
 
     // Se stages foram enviados, sincronizar
     if (validated.stages) {
+      console.log('[PIPELINE PUT] Stages recebidos:', validated.stages.map(s => ({ id: s.id, name: s.name, icon: s.icon })));
+
       // Buscar stages atuais
       const { data: currentStages } = await admin
         .from('pipeline_stages')
@@ -169,7 +171,10 @@ export async function PUT(
           terminal_type: stage.terminal_type || null,
           allow_meeting: stage.allow_meeting || false,
         };
-        if (stage.icon !== undefined) stageData.icon = stage.icon || null;
+        // Icon: SEMPRE incluir no stageData (Zod garante string | null, nunca undefined)
+        stageData.icon = stage.icon ?? null;
+
+        console.log(`[PIPELINE PUT] Stage "${stage.name}" (id: ${stage.id || 'NEW'}) → icon: "${stage.icon}", stageData:`, JSON.stringify(stageData));
 
         if (stage.id && currentIds.has(stage.id)) {
           const { error: stageErr } = await admin
@@ -245,6 +250,8 @@ export async function PUT(
       .select('*')
       .eq('pipeline_id', id)
       .order('position', { ascending: true });
+
+    console.log('[PIPELINE PUT] Stages finais do banco:', (stagesData || []).map((s: any) => ({ id: s.id, name: s.name, icon: s.icon })));
 
     let membersData: any[] = [];
     try {

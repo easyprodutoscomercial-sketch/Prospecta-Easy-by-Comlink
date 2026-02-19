@@ -190,6 +190,8 @@ export default function PipelineManager() {
       const url = editingId ? `/api/pipelines/${editingId}` : '/api/pipelines';
       const method = editingId ? 'PUT' : 'POST';
 
+      console.log('[PIPELINE SAVE] Enviando stages:', body.stages.map((s: any) => ({ id: s.id, name: s.name, icon: s.icon })));
+
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -197,6 +199,8 @@ export default function PipelineManager() {
       });
 
       const data = await res.json();
+
+      console.log('[PIPELINE SAVE] Resposta stages:', (data.stages || []).map((s: any) => ({ id: s.id, name: s.name, icon: s.icon })));
 
       if (res.ok) {
         setResult({ type: 'success', message: editingId ? 'Pipeline atualizado com sucesso!' : 'Pipeline criado com sucesso!' });
