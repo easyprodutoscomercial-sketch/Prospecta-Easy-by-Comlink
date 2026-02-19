@@ -4,6 +4,51 @@ import { NextRequest, NextResponse } from 'next/server';
 import { interactionSchema } from '@/lib/utils/validation';
 import { ensureProfile } from '@/lib/ensure-profile';
 
+// GET /api/interactions - Listar interações
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const profile = await ensureProfile(supabase, user);
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
+    }
+
+    const admin = getAdminClient();
+    const url = new URL(request.url);
+    const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 5000);
+    const contactId = url.searchParams.get('contact_id');
+
+    let query = admin
+      .from('interactions')
+      .select('id, contact_id, type, outcome, note, happened_at, created_at, created_by_user_id, created_by_name')
+      .eq('organization_id', profile.organization_id)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (contactId) {
+      query = query.eq('contact_id', contactId);
+    }
+
+    const { data: interactions, error } = await query;
+
+    if (error) throw error;
+
+    return NextResponse.json({ interactions: interactions || [] });
+  } catch (error: any) {
+    console.error('Error fetching interactions:', error);
+    return NextResponse.json(
+      { error: error.message || 'Erro ao buscar interações' },
+      { status: 500 }
+    );
+  }
+}
+
 // POST /api/interactions - Criar interação
 export async function POST(request: NextRequest) {
   try {
