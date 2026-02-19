@@ -10,6 +10,18 @@ import PipelineManager from '@/components/admin/pipeline-manager';
 
 const STATUSES = ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO'] as const;
 
+const MENU_OPTIONS = [
+  { key: 'dashboard', label: 'Dashboard' },
+  { key: 'contacts', label: 'Contatos' },
+  { key: 'kanban', label: 'Pipeline' },
+  { key: 'bugs', label: 'Bugs' },
+  { key: 'calendar', label: 'Calendario' },
+  { key: 'ai', label: 'Assistente IA' },
+  { key: 'import', label: 'Importar' },
+  { key: 'requests', label: 'Solicitacoes' },
+  { key: 'settings', label: 'Configuracoes' },
+] as const;
+
 function AnalyzeButton() {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -103,6 +115,11 @@ export default function AdminPage() {
 
   // Avatar upload
   const [avatarUploadingId, setAvatarUploadingId] = useState<string | null>(null);
+
+  // Menu visibility
+  const [menuEditingId, setMenuEditingId] = useState<string | null>(null);
+  const [menuSelection, setMenuSelection] = useState<string[]>([]);
+  const [savingMenus, setSavingMenus] = useState(false);
 
   // Check if user is admin
   useEffect(() => {
@@ -316,6 +333,48 @@ export default function AdminPage() {
       setUserResult({ type: 'error', message: 'Erro de conexão' });
     } finally {
       setAvatarUploadingId(null);
+    }
+  };
+
+  const startMenuEditing = (user: Profile & { role?: string }) => {
+    setMenuEditingId(user.user_id);
+    const menus = (user as any).visible_menus || [];
+    // If empty, start with all menus selected (backwards compatible)
+    setMenuSelection(menus.length > 0 ? [...menus] : MENU_OPTIONS.map(m => m.key));
+  };
+
+  const toggleMenu = (key: string) => {
+    setMenuSelection(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const handleSaveMenus = async () => {
+    if (!menuEditingId) return;
+    setSavingMenus(true);
+    setUserResult(null);
+
+    // If all menus selected, save empty array (= see everything)
+    const menusToSave = menuSelection.length === MENU_OPTIONS.length ? [] : menuSelection;
+
+    try {
+      const res = await fetch(`/api/users/${menuEditingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visible_menus: menusToSave }),
+      });
+      if (res.ok) {
+        setUserResult({ type: 'success', message: 'Menus visiveis atualizados com sucesso.' });
+        setMenuEditingId(null);
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        setUserResult({ type: 'error', message: data.error });
+      }
+    } catch {
+      setUserResult({ type: 'error', message: 'Erro de conexão' });
+    } finally {
+      setSavingMenus(false);
     }
   };
 
@@ -781,6 +840,12 @@ export default function AdminPage() {
                             <option value="user">Vendedor</option>
                           </select>
                           <button
+                            onClick={() => startMenuEditing(u)}
+                            className="px-2 py-1 text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded transition-colors"
+                          >
+                            Menus
+                          </button>
+                          <button
                             onClick={() => startEditing(u)}
                             className="px-2 py-1 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 rounded transition-colors"
                           >
@@ -794,6 +859,60 @@ export default function AdminPage() {
                             {deletingId === u.user_id ? '...' : 'Excluir'}
                           </button>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Menu visibility editor */}
+                    {menuEditingId === u.user_id && (
+                      <div className="mt-3 pt-3 border-t border-purple-800/20">
+                        <h4 className="text-xs font-medium text-purple-300/80 mb-2">Menus visiveis para {u.name}:</h4>
+                        {u.role === 'admin' ? (
+                          <p className="text-xs text-purple-300/50 italic">Admins sempre veem todos os menus.</p>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-2 gap-1.5 mb-3">
+                              {MENU_OPTIONS.map((menu) => (
+                                <label key={menu.key} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-purple-800/20 cursor-pointer transition-colors">
+                                  <input
+                                    type="checkbox"
+                                    checked={menuSelection.includes(menu.key)}
+                                    onChange={() => toggleMenu(menu.key)}
+                                    className="w-3.5 h-3.5 rounded border-purple-700/50 text-emerald-500 focus:ring-emerald-500 focus:ring-offset-0 bg-[#2a1245]"
+                                  />
+                                  <span className="text-xs text-neutral-200">{menu.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSaveMenus}
+                                disabled={savingMenus}
+                                className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded hover:bg-emerald-500 disabled:opacity-40 transition-colors"
+                              >
+                                {savingMenus ? 'Salvando...' : 'Salvar Menus'}
+                              </button>
+                              <button
+                                onClick={() => setMenuEditingId(null)}
+                                disabled={savingMenus}
+                                className="px-3 py-1.5 bg-purple-800/30 text-purple-200 text-xs font-medium rounded hover:bg-purple-800/50 disabled:opacity-40 transition-colors"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                onClick={() => setMenuSelection(MENU_OPTIONS.map(m => m.key))}
+                                className="px-3 py-1.5 text-purple-300/60 text-xs hover:text-purple-200 transition-colors"
+                              >
+                                Marcar todos
+                              </button>
+                              <button
+                                onClick={() => setMenuSelection([])}
+                                className="px-3 py-1.5 text-purple-300/60 text-xs hover:text-purple-200 transition-colors"
+                              >
+                                Desmarcar todos
+                              </button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>

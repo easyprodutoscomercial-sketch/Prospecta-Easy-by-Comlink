@@ -22,7 +22,7 @@ export async function GET() {
     let users;
     const { data: usersWithAvatar, error: avatarError } = await admin
       .from('profiles')
-      .select('user_id, name, email, role, avatar_url, created_at')
+      .select('user_id, name, email, role, avatar_url, visible_menus, created_at')
       .eq('organization_id', profile.organization_id)
       .order('created_at', { ascending: true });
 

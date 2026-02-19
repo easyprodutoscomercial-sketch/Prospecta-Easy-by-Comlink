@@ -11,11 +11,13 @@ import WorkFrontSelector from '@/components/work-fronts/work-front-selector';
 interface SidebarProps {
   profileName: string | null;
   userRole: string;
+  visibleMenus?: string[];
   signOutAction: () => Promise<void>;
 }
 
 const navItems = [
   {
+    key: 'dashboard',
     href: '/dashboard',
     label: 'Dashboard',
     icon: (
@@ -25,6 +27,7 @@ const navItems = [
     ),
   },
   {
+    key: 'contacts',
     href: '/contacts',
     label: 'Contatos',
     icon: (
@@ -34,6 +37,7 @@ const navItems = [
     ),
   },
   {
+    key: 'kanban',
     href: '/kanban',
     label: 'Pipeline',
     icon: (
@@ -52,6 +56,7 @@ const navItems = [
   //   ),
   // },
   {
+    key: 'bugs',
     href: '/bugs',
     label: 'Bugs',
     icon: (
@@ -61,6 +66,7 @@ const navItems = [
     ),
   },
   {
+    key: 'calendar',
     href: '/calendar',
     label: 'Calendario',
     icon: (
@@ -70,6 +76,7 @@ const navItems = [
     ),
   },
   {
+    key: 'ai',
     href: '/kanban?chat=1',
     label: 'Assistente IA',
     icon: (
@@ -79,6 +86,7 @@ const navItems = [
     ),
   },
   {
+    key: 'import',
     href: '/import',
     label: 'Importar',
     icon: (
@@ -88,6 +96,7 @@ const navItems = [
     ),
   },
   {
+    key: 'requests',
     href: '/requests',
     label: 'Solicitacoes',
     badge: true,
@@ -98,6 +107,7 @@ const navItems = [
     ),
   },
   {
+    key: 'settings',
     href: '/settings',
     label: 'Configuracoes',
     icon: (
@@ -119,7 +129,7 @@ const navItems = [
   },
 ];
 
-export default function Sidebar({ profileName, userRole, signOutAction }: SidebarProps) {
+export default function Sidebar({ profileName, userRole, visibleMenus, signOutAction }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -160,6 +170,10 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
 
   const filteredNavItems = navItems.filter((item) => {
     if ('adminOnly' in item && item.adminOnly && userRole !== 'admin') return false;
+    // If visibleMenus is set and user is not admin, filter by allowed keys
+    if (visibleMenus && visibleMenus.length > 0 && userRole !== 'admin' && !('adminOnly' in item)) {
+      if (!visibleMenus.includes(item.key)) return false;
+    }
     return true;
   });
 

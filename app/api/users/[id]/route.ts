@@ -37,9 +37,9 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, email, password, role } = body;
+    const { name, email, password, role, visible_menus } = body;
 
-    if (!name && !email && !password && role === undefined) {
+    if (!name && !email && !password && role === undefined && visible_menus === undefined) {
       return NextResponse.json({ error: 'Nenhum dado para atualizar' }, { status: 400 });
     }
 
@@ -52,11 +52,17 @@ export async function PATCH(
       return NextResponse.json({ error: 'Role inválido' }, { status: 400 });
     }
 
+    // visible_menus changes require admin
+    if (visible_menus !== undefined && profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas administradores podem alterar menus visíveis' }, { status: 403 });
+    }
+
     // Atualizar profile na tabela profiles
-    const profileUpdate: Record<string, string> = {};
+    const profileUpdate: Record<string, any> = {};
     if (name) profileUpdate.name = name;
     if (email) profileUpdate.email = email;
     if (role !== undefined) profileUpdate.role = role;
+    if (visible_menus !== undefined) profileUpdate.visible_menus = visible_menus;
 
     if (Object.keys(profileUpdate).length > 0) {
       const { error: updateError } = await admin
@@ -89,7 +95,7 @@ export async function PATCH(
     // Retornar profile atualizado
     const { data: updatedProfile } = await admin
       .from('profiles')
-      .select('user_id, name, email, created_at')
+      .select('user_id, name, email, visible_menus, created_at')
       .eq('user_id', id)
       .single();
 

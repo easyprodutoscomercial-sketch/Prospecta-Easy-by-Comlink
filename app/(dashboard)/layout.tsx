@@ -29,7 +29,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-[#1a0a2e]">
-      <Sidebar profileName={profile?.name ?? null} userRole={profile?.role ?? 'user'} signOutAction={handleSignOut} />
+      <Sidebar profileName={profile?.name ?? null} userRole={profile?.role ?? 'user'} visibleMenus={profile?.visible_menus ?? []} signOutAction={handleSignOut} />
 
       <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
         <DashboardBanner />

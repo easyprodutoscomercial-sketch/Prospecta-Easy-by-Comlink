@@ -118,6 +118,7 @@ export interface Profile {
   email: string;
   role: UserRole;
   avatar_url: string | null;
+  visible_menus?: string[];
   created_at: string;
 }
 

@@ -40,6 +40,7 @@ export async function GET() {
       role,
       organization_id: profile.organization_id,
       avatar_url: profile.avatar_url || null,
+      visible_menus: profile.visible_menus || [],
     });
   } catch (error: any) {
     console.error('Error fetching current user:', error);
