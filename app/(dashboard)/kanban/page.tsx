@@ -620,9 +620,11 @@ export default function KanbanPage() {
         throw new Error(data.error || 'Erro ao solicitar');
       }
 
-      // Add to local set
+      // Add to local set and refresh data
       setPendingRequestContactIds(prev => new Set(prev).add(contactId));
       toast.success('Substituicao solicitada! Aguarde aprovacao do responsavel.');
+      fetchData();
+      if (selectedPipelineId) fetchContacts(selectedPipelineId);
     } catch (err: any) {
       toast.error(err.message || 'Erro ao solicitar contato');
     }
