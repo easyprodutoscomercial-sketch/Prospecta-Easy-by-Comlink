@@ -13,9 +13,10 @@ import {
   type DragEndEvent,
   type CollisionDetection,
 } from '@dnd-kit/core';
-import type { Contact, ContactStatus, ContactType, PipelineSettings } from '@/lib/types';
+import type { Contact, ContactStatus, ContactType, PipelineSettings, PipelineWithStages, PipelineStage, PipelineType } from '@/lib/types';
 import { TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS, ESTADOS_BRASIL } from '@/lib/utils/labels';
 import { useToast } from '@/lib/toast-context';
+import { usePipeline } from '@/lib/pipeline-context';
 import { KanbanBoard } from '@/components/kanban/kanban-board';
 import { KanbanSkeleton } from '@/components/kanban/kanban-skeleton';
 import type { UserInfo } from '@/components/kanban/kanban-card';
@@ -23,32 +24,14 @@ import { getUserColor } from '@/lib/utils/user-colors';
 import MotivoModal from '@/components/ui/motivo-modal';
 import MeetingModal from '@/components/meetings/meeting-modal';
 import AiChatPanel from '@/components/ai-chat-panel';
+import { normalizeSearch } from '@/lib/utils/normalize';
 
-
-const ALL_STATUSES: ContactStatus[] = [
-  'NOVO',
-  'EM_PROSPECCAO',
-  'CONTATADO',
-  'REUNIAO_MARCADA',
-  'CONVERTIDO',
-  'PERDIDO',
-];
-
-// Collision detection que prioriza colunas sobre cards
-const columnFirstCollision: CollisionDetection = (args) => {
-  const pointerCollisions = pointerWithin(args);
-  const columnHit = pointerCollisions.find((c) => ALL_STATUSES.includes(c.id as ContactStatus));
-  if (columnHit) return [columnHit];
-  if (pointerCollisions.length > 0) return pointerCollisions;
-  return rectIntersection(args);
-};
 
 // Sons usando Web Audio API
 function playSound(type: 'celebrate' | 'sad') {
   try {
     const ctx = new AudioContext();
     if (type === 'celebrate') {
-      // Som de "ihuuul" — notas ascendentes alegres
       [0, 0.15, 0.3, 0.45].forEach((delay, i) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -62,7 +45,6 @@ function playSound(type: 'celebrate' | 'sad') {
         osc.stop(ctx.currentTime + delay + 0.4);
       });
     } else {
-      // Som de "nãooo" — nota descendente triste
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -93,6 +75,7 @@ const SAD_EMOJIS = ['😢', '😭', '💔', '😞', '😿', '🥺', '😩', '�
 
 export default function KanbanPage() {
   const toast = useToast();
+  const { pipelines, selectedPipelineId, setSelectedPipelineId, currentPipeline } = usePipeline();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -108,8 +91,8 @@ export default function KanbanPage() {
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
   const [showMotivoModal, setShowMotivoModal] = useState(false);
-  const [pendingDrag, setPendingDrag] = useState<{ contactId: string; newStatus: 'CONVERTIDO' | 'PERDIDO'; oldStatus: ContactStatus } | null>(null);
-  const [pendingJump, setPendingJump] = useState<{ contactId: string; newStatus: 'CONVERTIDO' | 'PERDIDO'; oldStatus: ContactStatus } | null>(null);
+  const [pendingDrag, setPendingDrag] = useState<{ contactId: string; newStageId: string; terminalType: 'won' | 'lost' } | null>(null);
+  const [pendingJump, setPendingJump] = useState<{ contactId: string; newStageId: string; terminalType: 'won' | 'lost' } | null>(null);
   const [motivoLoading, setMotivoLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserRole, setCurrentUserRole] = useState<string>('user');
@@ -120,6 +103,13 @@ export default function KanbanPage() {
   const [meetingContact, setMeetingContact] = useState<{ id: string; name: string } | null>(null);
   const [meetingLoading, setMeetingLoading] = useState(false);
   const [contactsWithMeeting, setContactsWithMeeting] = useState<Set<string>>(new Set());
+  const [lastInteractionMap, setLastInteractionMap] = useState<Record<string, string>>({});
+  const [attachmentCountMap, setAttachmentCountMap] = useState<Record<string, number>>({});
+
+  // Bulk selection state
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   // Open chat if ?chat=1 in URL
   useEffect(() => {
@@ -133,19 +123,36 @@ export default function KanbanPage() {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
+  const stages = useMemo(() => {
+    return currentPipeline?.stages || [];
+  }, [currentPipeline]);
+
+  // Stage lookup maps
+  const stageMap = useMemo(() => {
+    const map: Record<string, PipelineStage> = {};
+    for (const s of stages) map[s.id] = s;
+    return map;
+  }, [stages]);
+
+  const stageIds = useMemo(() => new Set(stages.map(s => s.id)), [stages]);
+
+  // Collision detection that prioritizes columns (stage ids) over cards
+  const columnFirstCollision: CollisionDetection = useCallback((args) => {
+    const pointerCollisions = pointerWithin(args);
+    const columnHit = pointerCollisions.find((c) => stageIds.has(c.id as string));
+    if (columnHit) return [columnHit];
+    if (pointerCollisions.length > 0) return pointerCollisions;
+    return rectIntersection(args);
+  }, [stageIds]);
+
   const fetchData = useCallback(async () => {
     try {
-      const [contactsRes, usersRes, meRes, settingsRes, meetingsRes] = await Promise.all([
-        fetch('/api/contacts?limit=500'),
+      const [usersRes, meRes, settingsRes, meetingsRes] = await Promise.all([
         fetch('/api/users'),
         fetch('/api/me'),
         fetch('/api/pipeline-settings'),
         fetch('/api/meetings?status=SCHEDULED'),
       ]);
-
-      if (!contactsRes.ok) throw new Error('Erro ao carregar contatos');
-      const contactsData = await contactsRes.json();
-      setContacts(contactsData.contacts);
 
       if (usersRes.ok) {
         const usersData = await usersRes.json();
@@ -178,8 +185,24 @@ export default function KanbanPage() {
         const ids = new Set<string>((meetingsData.meetings || []).map((m: any) => m.contact_id));
         setContactsWithMeeting(ids);
       }
+
+      // Fetch last interaction per contact
+      try {
+        const intRes = await fetch('/api/interactions?limit=5000');
+        if (intRes.ok) {
+          const intData = await intRes.json();
+          const map: Record<string, string> = {};
+          for (const i of intData.interactions || []) {
+            const existing = map[i.contact_id];
+            if (!existing || i.created_at > existing) {
+              map[i.contact_id] = i.created_at;
+            }
+          }
+          setLastInteractionMap(map);
+        }
+      } catch { /* silent */ }
     } catch {
-      toast.error('Erro ao carregar contatos');
+      toast.error('Erro ao carregar dados');
     } finally {
       setLoading(false);
     }
@@ -188,6 +211,44 @@ export default function KanbanPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Current pipeline type
+  const pipelineType: PipelineType = currentPipeline?.pipeline_type || 'PADRAO';
+
+  // Fetch contacts when pipeline changes
+  const fetchContacts = useCallback(async (pipelineId: string) => {
+    if (!pipelineId) return;
+    try {
+      const res = await fetch(`/api/contacts?limit=500&pipeline_id=${pipelineId}`);
+      if (!res.ok) throw new Error('Erro ao carregar contatos');
+      const data = await res.json();
+      const contactsList = data.contacts || [];
+      setContacts(contactsList);
+
+      // If bugs pipeline, fetch attachment counts
+      const pipeline = pipelines.find(p => p.id === pipelineId);
+      if (pipeline?.pipeline_type === 'BUGS' && contactsList.length > 0) {
+        try {
+          const contactIds = contactsList.map((c: Contact) => c.id);
+          const attRes = await fetch(`/api/contacts/attachment-counts?ids=${contactIds.join(',')}`);
+          if (attRes.ok) {
+            const attData = await attRes.json();
+            setAttachmentCountMap(attData.counts || {});
+          }
+        } catch { /* silent */ }
+      } else {
+        setAttachmentCountMap({});
+      }
+    } catch {
+      toast.error('Erro ao carregar contatos');
+    }
+  }, [toast, pipelines]);
+
+  useEffect(() => {
+    if (selectedPipelineId) {
+      fetchContacts(selectedPipelineId);
+    }
+  }, [selectedPipelineId, fetchContacts]);
 
   // Emoji explosion effect
   function triggerEmojis(type: 'celebrate' | 'sad') {
@@ -210,13 +271,13 @@ export default function KanbanPage() {
     let result = contacts;
 
     if (search) {
-      const q = search.toLowerCase();
+      const q = normalizeSearch(search);
       result = result.filter(
         (c) =>
-          c.name.toLowerCase().includes(q) ||
-          c.company?.toLowerCase().includes(q) ||
+          normalizeSearch(c.name).includes(q) ||
+          (c.company && normalizeSearch(c.company).includes(q)) ||
           c.phone?.includes(q) ||
-          c.email?.toLowerCase().includes(q)
+          (c.email && normalizeSearch(c.email).includes(q))
       );
     }
 
@@ -249,7 +310,7 @@ export default function KanbanPage() {
     if (proximaAcaoFilter) {
       result = result.filter((c) => c.proxima_acao_tipo === proximaAcaoFilter);
     }
-    const ilike = (val: string | null | undefined, q: string) => val ? val.toLowerCase().includes(q.toLowerCase()) : false;
+    const ilike = (val: string | null | undefined, q: string) => val ? normalizeSearch(val).includes(normalizeSearch(q)) : false;
     if (advSearch.cpf) result = result.filter((c) => ilike(c.cpf, advSearch.cpf));
     if (advSearch.cnpj) result = result.filter((c) => ilike(c.cnpj, advSearch.cnpj));
     if (advSearch.whatsapp) result = result.filter((c) => ilike(c.whatsapp, advSearch.whatsapp));
@@ -264,15 +325,25 @@ export default function KanbanPage() {
     return result;
   }, [contacts, search, tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
 
-  // Group by status
+  // Group by stage_id
   const grouped = useMemo(() => {
-    const groups = {} as Record<ContactStatus, Contact[]>;
-    for (const s of ALL_STATUSES) groups[s] = [];
+    const groups: Record<string, Contact[]> = {};
+    for (const s of stages) groups[s.id] = [];
     for (const c of filtered) {
-      if (groups[c.status]) groups[c.status].push(c);
+      if (c.stage_id && groups[c.stage_id]) {
+        groups[c.stage_id].push(c);
+      } else if (c.stage_id) {
+        // Contact has a stage_id but not in current pipeline stages - skip
+      } else {
+        // Contact without stage_id - put in first stage
+        const firstStage = stages[0];
+        if (firstStage) {
+          groups[firstStage.id].push(c);
+        }
+      }
     }
     return groups;
-  }, [filtered]);
+  }, [filtered, stages]);
 
   // Drag handlers
   function handleDragStart(event: DragStartEvent) {
@@ -280,18 +351,22 @@ export default function KanbanPage() {
     setActiveContact(contact || null);
   }
 
-  async function moveContact(contactId: string, newStatus: ContactStatus, motivo?: string) {
+  async function moveContact(contactId: string, newStageId: string, motivo?: string) {
     const contact = contacts.find((c) => c.id === contactId);
-    if (!contact || contact.status === newStatus) return;
+    if (!contact) return;
 
-    const oldStatus = contact.status;
-    const oldIdx = ALL_STATUSES.indexOf(oldStatus);
-    const newIdx = ALL_STATUSES.indexOf(newStatus);
-    const isForward = newIdx > oldIdx;
+    const currentStage = contact.stage_id ? stageMap[contact.stage_id] : null;
+    const newStage = stageMap[newStageId];
+    if (!newStage) return;
+    if (contact.stage_id === newStageId) return;
+
+    const currentPos = currentStage?.position ?? -1;
+    const newPos = newStage.position;
+    const isForward = newPos > currentPos;
 
     // Optimistic update
     setContacts((prev) =>
-      prev.map((c) => (c.id === contactId ? { ...c, status: newStatus, ...(motivo ? { motivo_ganho_perdido: motivo } : {}) } : c))
+      prev.map((c) => (c.id === contactId ? { ...c, stage_id: newStageId, status: newStage.slug as ContactStatus, ...(motivo ? { motivo_ganho_perdido: motivo } : {}) } : c))
     );
 
     // Trigger celebration or sad effect
@@ -302,7 +377,7 @@ export default function KanbanPage() {
     }
 
     try {
-      const body: Record<string, string> = { status: newStatus };
+      const body: Record<string, string> = { stage_id: newStageId };
       if (motivo) body.motivo_ganho_perdido = motivo;
 
       const res = await fetch(`/api/contacts/${contactId}`, {
@@ -315,10 +390,11 @@ export default function KanbanPage() {
         const data = await res.json();
         throw new Error(data.error || 'Erro');
       }
-      toast.success(isForward ? 'Avançou no pipeline!' : 'Status atualizado');
+      toast.success(isForward ? 'Avancou no pipeline!' : 'Status atualizado');
     } catch (err: any) {
+      // Revert
       setContacts((prev) =>
-        prev.map((c) => (c.id === contactId ? { ...c, status: oldStatus } : c))
+        prev.map((c) => (c.id === contactId ? { ...c, stage_id: contact.stage_id, status: contact.status } : c))
       );
       toast.error(err.message || 'Erro ao atualizar status');
     }
@@ -330,39 +406,43 @@ export default function KanbanPage() {
     if (!over) return;
 
     const contactId = active.id as string;
-    let newStatus = over.id as string;
+    let targetStageId = over.id as string;
 
-    const overContact = contacts.find((c) => c.id === newStatus);
-    if (overContact) {
-      newStatus = overContact.status;
+    // If dropped on a card, use that card's stage
+    if (!stageIds.has(targetStageId)) {
+      const overContact = contacts.find((c) => c.id === targetStageId);
+      if (overContact?.stage_id) {
+        targetStageId = overContact.stage_id;
+      } else {
+        return;
+      }
     }
 
-    if (!ALL_STATUSES.includes(newStatus as ContactStatus)) return;
-
     const contact = contacts.find((c) => c.id === contactId);
-    if (!contact || contact.status === newStatus) return;
+    if (!contact || contact.stage_id === targetStageId) return;
 
-    // Ownership: só o responsável (ou admin) pode mover
+    // Ownership: only responsible (or admin) can move
     if (currentUserRole !== 'admin') {
       if (!contact.assigned_to_user_id) {
-        toast.error('Este contato não tem responsável. Aponte para você primeiro.');
+        toast.error('Este contato nao tem responsavel. Aponte para voce primeiro.');
         return;
       }
       if (contact.assigned_to_user_id !== currentUserId) {
-        const ownerName = userMap[contact.assigned_to_user_id]?.name || 'outro usuário';
-        toast.error(`Contato atribuído a ${ownerName}. Aponte para você primeiro.`);
+        const ownerName = userMap[contact.assigned_to_user_id]?.name || 'outro usuario';
+        toast.error(`Contato atribuido a ${ownerName}. Aponte para voce primeiro.`);
         return;
       }
     }
 
-    // Intercept CONVERTIDO/PERDIDO
-    if (newStatus === 'CONVERTIDO' || newStatus === 'PERDIDO') {
-      setPendingDrag({ contactId, newStatus, oldStatus: contact.status });
+    // Intercept terminal stages
+    const targetStage = stageMap[targetStageId];
+    if (targetStage?.is_terminal && targetStage.terminal_type) {
+      setPendingDrag({ contactId, newStageId: targetStageId, terminalType: targetStage.terminal_type as 'won' | 'lost' });
       setShowMotivoModal(true);
       return;
     }
 
-    await moveContact(contactId, newStatus as ContactStatus);
+    await moveContact(contactId, targetStageId);
   }
 
   async function handleMotivoConfirm(motivo: string) {
@@ -370,7 +450,7 @@ export default function KanbanPage() {
     if (!pending) return;
     setMotivoLoading(true);
 
-    await moveContact(pending.contactId, pending.newStatus as ContactStatus, motivo);
+    await moveContact(pending.contactId, pending.newStageId, motivo);
 
     setMotivoLoading(false);
     setShowMotivoModal(false);
@@ -378,34 +458,37 @@ export default function KanbanPage() {
     setPendingJump(null);
   }
 
-  // Verifica se o usuário pode mover este contato
+  // Can move contact?
   function canMoveContact(contact: Contact): boolean {
     if (currentUserRole === 'admin') return true;
     return !!contact.assigned_to_user_id && contact.assigned_to_user_id === currentUserId;
   }
 
-  // Jump forward/backward
+  // Jump forward/backward using stages
   async function handleJumpForward(contactId: string) {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
 
     if (!canMoveContact(contact)) {
-      toast.error('Você não é o responsável deste contato.');
+      toast.error('Voce nao e o responsavel deste contato.');
       return;
     }
 
-    const idx = ALL_STATUSES.indexOf(contact.status);
-    if (idx >= ALL_STATUSES.length - 2) return;
+    const currentStage = contact.stage_id ? stageMap[contact.stage_id] : null;
+    const currentPos = currentStage?.position ?? -1;
 
-    const newStatus = ALL_STATUSES[idx + 1];
+    // Find next non-terminal stage, or next terminal stage
+    const sortedStages = [...stages].sort((a, b) => a.position - b.position);
+    const nextStage = sortedStages.find(s => s.position > currentPos);
+    if (!nextStage) return;
 
-    if (newStatus === 'CONVERTIDO' || newStatus === 'PERDIDO') {
-      setPendingJump({ contactId, newStatus: newStatus as 'CONVERTIDO' | 'PERDIDO', oldStatus: contact.status });
+    if (nextStage.is_terminal && nextStage.terminal_type) {
+      setPendingJump({ contactId, newStageId: nextStage.id, terminalType: nextStage.terminal_type as 'won' | 'lost' });
       setShowMotivoModal(true);
       return;
     }
 
-    await moveContact(contactId, newStatus);
+    await moveContact(contactId, nextStage.id);
   }
 
   async function handleJumpBackward(contactId: string) {
@@ -413,28 +496,35 @@ export default function KanbanPage() {
     if (!contact) return;
 
     if (!canMoveContact(contact)) {
-      toast.error('Você não é o responsável deste contato.');
+      toast.error('Voce nao e o responsavel deste contato.');
       return;
     }
 
-    const idx = ALL_STATUSES.indexOf(contact.status);
-    if (idx <= 0) return;
+    const currentStage = contact.stage_id ? stageMap[contact.stage_id] : null;
+    const currentPos = currentStage?.position ?? stages.length;
 
-    const newStatus = ALL_STATUSES[idx - 1];
-    await moveContact(contactId, newStatus);
+    const sortedStages = [...stages].sort((a, b) => b.position - a.position);
+    const prevStage = sortedStages.find(s => s.position < currentPos);
+    if (!prevStage) return;
+
+    await moveContact(contactId, prevStage.id);
   }
 
   // KPI calculations
   const kpis = useMemo(() => {
-    const active = contacts.filter(c => !['CONVERTIDO', 'PERDIDO'].includes(c.status));
-    const convertidos = contacts.filter(c => c.status === 'CONVERTIDO').length;
-    const perdidos = contacts.filter(c => c.status === 'PERDIDO').length;
+    const terminalStageIds = new Set(stages.filter(s => s.is_terminal).map(s => s.id));
+    const wonStageIds = new Set(stages.filter(s => s.terminal_type === 'won').map(s => s.id));
+    const lostStageIds = new Set(stages.filter(s => s.terminal_type === 'lost').map(s => s.id));
+
+    const active = contacts.filter(c => !c.stage_id || !terminalStageIds.has(c.stage_id));
+    const convertidos = contacts.filter(c => c.stage_id && wonStageIds.has(c.stage_id)).length;
+    const perdidos = contacts.filter(c => c.stage_id && lostStageIds.has(c.stage_id)).length;
     const closedTotal = convertidos + perdidos;
     const conversionRate = closedTotal > 0 ? Math.round((convertidos / closedTotal) * 100) : 0;
     const totalValue = active.reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
     const noOwner = active.filter(c => !c.assigned_to_user_id).length;
     return { activeCount: active.length, totalValue, conversionRate, noOwner, convertidos, perdidos };
-  }, [contacts]);
+  }, [contacts, stages]);
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
@@ -479,12 +569,37 @@ export default function KanbanPage() {
       });
 
       if (!res.ok) throw new Error();
-      toast.success('Contato atribuído a você');
+      toast.success('Contato atribuido a voce');
     } catch {
       setContacts((prev) =>
         prev.map((c) => (c.id === contactId ? { ...c, assigned_to_user_id: null } : c))
       );
       toast.error('Erro ao apontar contato');
+    }
+  }
+
+  // Request contact (pegar cliente)
+  async function handleRequestContact(contactId: string) {
+    try {
+      const res = await fetch('/api/access-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact_id: contactId }),
+      });
+
+      if (res.status === 409) {
+        toast.error('Ja existe uma solicitacao pendente');
+        return;
+      }
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Erro ao solicitar');
+      }
+
+      toast.success('Solicitacao enviada! Aguarde aprovacao.');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao solicitar contato');
     }
   }
 
@@ -523,8 +638,74 @@ export default function KanbanPage() {
     }
   }
 
+  // Motivo modal tipo (CONVERTIDO/PERDIDO for backwards compat)
+  const motivoTipo = useMemo(() => {
+    const pending = pendingDrag || pendingJump;
+    if (!pending) return 'CONVERTIDO' as const;
+    return pending.terminalType === 'lost' ? 'PERDIDO' as const : 'CONVERTIDO' as const;
+  }, [pendingDrag, pendingJump]);
+
+  // Bulk action handlers
+  const handleBulkToggle = (contactId: string) => {
+    setBulkSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(contactId)) next.delete(contactId);
+      else next.add(contactId);
+      return next;
+    });
+  };
+
+  const handleBulkMoveToStage = async (stageId: string) => {
+    if (bulkSelectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const promises = Array.from(bulkSelectedIds).map(id =>
+        fetch(`/api/contacts/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stage_id: stageId }),
+        })
+      );
+      await Promise.all(promises);
+      toast.success(`${bulkSelectedIds.size} contatos movidos`);
+      setBulkSelectedIds(new Set());
+      setBulkMode(false);
+      fetchContacts(selectedPipelineId);
+    } catch {
+      toast.error('Erro ao mover contatos');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkAssign = async (userId: string) => {
+    if (bulkSelectedIds.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const promises = Array.from(bulkSelectedIds).map(id =>
+        fetch(`/api/contacts/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assigned_to_user_id: userId || null }),
+        })
+      );
+      await Promise.all(promises);
+      toast.success(`${bulkSelectedIds.size} contatos atribuidos`);
+      setBulkSelectedIds(new Set());
+      setBulkMode(false);
+      fetchContacts(selectedPipelineId);
+    } catch {
+      toast.error('Erro ao atribuir contatos');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const selectClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-full";
   const inputClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 w-full";
+
+  // Funnel data from non-terminal stages
+  const funnelStages = useMemo(() => stages.filter(s => !s.is_terminal), [stages]);
 
   return (
     <div className="-mx-4 -my-6 sm:-mx-6 sm:-my-8 lg:-mx-10 lg:-my-10 min-h-screen flex flex-col">
@@ -543,7 +724,7 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* === TOP BAR: Header + Search + Filters === */}
+      {/* === TOP BAR: Header + Pipeline Selector + Search + Filters === */}
       <div className="bg-[#120826]/80 backdrop-blur-sm border-b border-purple-500/10 px-4 lg:px-6 py-3">
         <div className="flex items-center gap-3 flex-wrap">
           {/* Title */}
@@ -558,6 +739,13 @@ export default function KanbanPage() {
               <p className="text-[10px] text-purple-300/40">{filtered.length} de {contacts.length} contatos</p>
             </div>
           </div>
+
+          {/* Pipeline name (selected in sidebar) */}
+          {currentPipeline && (
+            <span className="text-xs font-semibold text-emerald-400/70 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5">
+              {currentPipeline.name}
+            </span>
+          )}
 
           {/* Search */}
           <div className="relative">
@@ -598,6 +786,21 @@ export default function KanbanPage() {
               Limpar filtros
             </button>
           )}
+
+          {/* Bulk mode toggle */}
+          <button
+            onClick={() => { setBulkMode(p => !p); setBulkSelectedIds(new Set()); }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              bulkMode
+                ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                : 'bg-[#1e0f35] text-purple-300/60 border border-purple-700/20 hover:text-purple-200'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            {bulkMode ? `Selecionados: ${bulkSelectedIds.size}` : 'Selecao'}
+          </button>
         </div>
 
         {/* Filter Panel (collapsible) */}
@@ -687,37 +890,32 @@ export default function KanbanPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium mb-1.5">Funil</p>
                 <div className="flex flex-col items-center gap-[2px]">
-                  {(() => {
-                    const funnelStatuses = ALL_STATUSES.filter(s => !['CONVERTIDO', 'PERDIDO'].includes(s));
-                    const funnelLabels: Record<string, string> = { NOVO: 'Novo', EM_PROSPECCAO: 'Prospecção', CONTATADO: 'Contatado', REUNIAO_MARCADA: 'Reunião' };
-                    const funnelColors = ['#a3a3a3', '#f59e0b', '#3b82f6', '#22c55e'];
-                    const total = funnelStatuses.length;
-                    return funnelStatuses.map((status, i) => {
-                      const count = grouped[status]?.length || 0;
-                      const widthPct = 100 - (i / total) * 60;
-                      return (
-                        <div
-                          key={status}
-                          className="flex items-center justify-center relative transition-all"
-                          style={{
-                            width: `${widthPct}%`,
-                            height: '14px',
-                            backgroundColor: `${funnelColors[i]}25`,
-                            borderLeft: `2px solid ${funnelColors[i]}50`,
-                            borderRight: `2px solid ${funnelColors[i]}50`,
-                            borderTop: i === 0 ? `2px solid ${funnelColors[i]}50` : 'none',
-                            borderBottom: i === total - 1 ? `2px solid ${funnelColors[i]}50` : 'none',
-                            borderRadius: i === 0 ? '4px 4px 0 0' : i === total - 1 ? '0 0 3px 3px' : '0',
-                          }}
-                          title={`${funnelLabels[status]}: ${count}`}
-                        >
-                          <span className="text-[7px] font-bold" style={{ color: funnelColors[i] }}>
-                            {funnelLabels[status]} ({count})
-                          </span>
-                        </div>
-                      );
-                    });
-                  })()}
+                  {funnelStages.map((stage, i) => {
+                    const count = grouped[stage.id]?.length || 0;
+                    const total = funnelStages.length;
+                    const widthPct = 100 - (i / total) * 60;
+                    return (
+                      <div
+                        key={stage.id}
+                        className="flex items-center justify-center relative transition-all"
+                        style={{
+                          width: `${widthPct}%`,
+                          height: '14px',
+                          backgroundColor: `${stage.color}25`,
+                          borderLeft: `2px solid ${stage.color}50`,
+                          borderRight: `2px solid ${stage.color}50`,
+                          borderTop: i === 0 ? `2px solid ${stage.color}50` : 'none',
+                          borderBottom: i === total - 1 ? `2px solid ${stage.color}50` : 'none',
+                          borderRadius: i === 0 ? '4px 4px 0 0' : i === total - 1 ? '0 0 3px 3px' : '0',
+                        }}
+                        title={`${stage.name}: ${count}`}
+                      >
+                        <span className="text-[7px] font-bold" style={{ color: stage.color }}>
+                          {stage.name} ({count})
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -737,16 +935,24 @@ export default function KanbanPage() {
             onDragEnd={handleDragEnd}
           >
             <KanbanBoard
+              stages={stages}
               grouped={grouped}
               activeContact={activeContact}
               userMap={userMap}
               currentUserId={currentUserId}
               onClaimContact={handleClaimContact}
+              onRequestContact={handleRequestContact}
               onJumpForward={handleJumpForward}
               onJumpBackward={handleJumpBackward}
               onScheduleMeeting={handleScheduleMeeting}
               pipelineSettings={pipelineSettings}
               contactsWithMeeting={contactsWithMeeting}
+              lastInteractionMap={lastInteractionMap}
+              bulkMode={bulkMode}
+              bulkSelectedIds={bulkSelectedIds}
+              onBulkToggle={handleBulkToggle}
+              pipelineType={pipelineType}
+              attachmentCountMap={attachmentCountMap}
             />
           </DndContext>
         )}
@@ -758,7 +964,7 @@ export default function KanbanPage() {
           isOpen={showMotivoModal}
           onClose={() => { setShowMotivoModal(false); setPendingDrag(null); setPendingJump(null); }}
           onConfirm={handleMotivoConfirm}
-          tipo={(pendingDrag || pendingJump)!.newStatus}
+          tipo={motivoTipo}
           loading={motivoLoading}
         />
       )}
@@ -772,6 +978,38 @@ export default function KanbanPage() {
           contactName={meetingContact.name}
           loading={meetingLoading}
         />
+      )}
+
+      {/* Kanban Bulk Action Bar */}
+      {bulkMode && bulkSelectedIds.size > 0 && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 px-5 py-3 flex items-center gap-3 animate-fade-in">
+          <span className="text-xs font-bold text-amber-400">{bulkSelectedIds.size} selecionados</span>
+          <div className="w-px h-5 bg-purple-800/30" />
+          <select
+            onChange={(e) => { if (e.target.value) handleBulkMoveToStage(e.target.value); e.target.value = ''; }}
+            disabled={bulkLoading}
+            className="text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 focus:outline-none disabled:opacity-40"
+          >
+            <option value="">Mover para...</option>
+            {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <select
+            onChange={(e) => { if (e.target.value) handleBulkAssign(e.target.value === '_none' ? '' : e.target.value); e.target.value = ''; }}
+            disabled={bulkLoading}
+            className="text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 focus:outline-none disabled:opacity-40"
+          >
+            <option value="">Atribuir a...</option>
+            <option value="_none">Sem responsavel</option>
+            {Object.entries(userMap).map(([id, u]) => <option key={id} value={id}>{u.name}</option>)}
+          </select>
+          <button
+            onClick={() => { setBulkSelectedIds(new Set()); setBulkMode(false); }}
+            className="text-xs text-red-400/70 hover:text-red-400 font-medium"
+          >
+            Cancelar
+          </button>
+          {bulkLoading && <div className="w-4 h-4 border-2 border-purple-800/30 border-t-emerald-500 rounded-full animate-spin" />}
+        </div>
       )}
 
       {/* AI Chat FAB */}

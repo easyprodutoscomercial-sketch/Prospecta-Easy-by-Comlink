@@ -1,6 +1,7 @@
 'use client';
 
-import { Contact } from '@/lib/types';
+import { useState, useEffect } from 'react';
+import { Contact, PipelineStage } from '@/lib/types';
 import {
   formatStatus,
   getStatusColor,
@@ -55,6 +56,28 @@ export default function ContactSidebar({
   const canModify = !!currentUser;
   const isOtherOwner = false;
 
+  // Load pipeline stages for this contact's pipeline
+  const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
+
+  useEffect(() => {
+    if (contact.pipeline_id) {
+      fetch(`/api/pipelines/${contact.pipeline_id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.stages) {
+            setPipelineStages(data.stages);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [contact.pipeline_id]);
+
+  const handleStageChange = (stageId: string) => {
+    // When user selects a stage from the dropdown, we call onStatusChange
+    // with the stage_id, but the parent will need to handle this as stage_id
+    onStatusChange(stageId);
+  };
+
   return (
     <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5 space-y-5 shadow-xl shadow-purple-900/20">
       {/* Name + Type badges */}
@@ -77,19 +100,34 @@ export default function ContactSidebar({
       {/* Status selector */}
       <div>
         <p className="text-[10px] uppercase tracking-widest text-purple-300/60 font-semibold mb-1.5">Status</p>
-        <select
-          value={contact.status}
-          onChange={(e) => onStatusChange(e.target.value)}
-          disabled={!!isOtherOwner}
-          className={`w-full px-3 py-1.5 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${isOtherOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
-        >
-          <option value="NOVO">Novo</option>
-          <option value="EM_PROSPECCAO">Em Prospecao</option>
-          <option value="CONTATADO">Contatado</option>
-          <option value="REUNIAO_MARCADA">Reuniao Marcada</option>
-          <option value="CONVERTIDO">Convertido</option>
-          <option value="PERDIDO">Perdido</option>
-        </select>
+        {pipelineStages.length > 0 ? (
+          <select
+            value={contact.stage_id || ''}
+            onChange={(e) => handleStageChange(e.target.value)}
+            disabled={!!isOtherOwner}
+            className={`w-full px-3 py-1.5 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${isOtherOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
+            {pipelineStages.map((stage) => (
+              <option key={stage.id} value={stage.id}>
+                {stage.name}{stage.is_terminal ? ` (${stage.terminal_type === 'won' ? 'Ganho' : 'Perdido'})` : ''}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <select
+            value={contact.status}
+            onChange={(e) => onStatusChange(e.target.value)}
+            disabled={!!isOtherOwner}
+            className={`w-full px-3 py-1.5 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${isOtherOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
+            <option value="NOVO">Novo</option>
+            <option value="EM_PROSPECCAO">Em Prospecao</option>
+            <option value="CONTATADO">Contatado</option>
+            <option value="REUNIAO_MARCADA">Reuniao Marcada</option>
+            <option value="CONVERTIDO">Convertido</option>
+            <option value="PERDIDO">Perdido</option>
+          </select>
+        )}
       </div>
 
       {/* Valor Estimado */}

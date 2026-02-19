@@ -3,9 +3,10 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
-import type { Contact } from '@/lib/types';
+import type { Contact, PipelineType } from '@/lib/types';
 import { CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, PROXIMA_ACAO_LABELS } from '@/lib/utils/labels';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
+import { computeLeadScore, getScoreColor } from '@/lib/utils/lead-score';
 
 export interface UserInfo {
   name: string;
@@ -19,10 +20,20 @@ interface KanbanCardProps {
   userMap?: Record<string, UserInfo>;
   currentUserId?: string;
   onClaimContact?: (contactId: string) => void;
+  onRequestContact?: (contactId: string) => void;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
   onScheduleMeeting?: (contactId: string, contactName: string) => void;
   hasMeeting?: boolean;
+  canJumpForward?: boolean;
+  canJumpBackward?: boolean;
+  showScheduleMeeting?: boolean;
+  lastInteractionAt?: string | null;
+  bulkMode?: boolean;
+  bulkSelected?: boolean;
+  onBulkToggle?: (contactId: string) => void;
+  pipelineType?: PipelineType;
+  attachmentCount?: number;
 }
 
 function daysInStage(updatedAt: string): number {
@@ -30,9 +41,7 @@ function daysInStage(updatedAt: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-const STATUS_ORDER = ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO'];
-
-export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting }: KanbanCardProps) {
+export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onRequestContact, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting, canJumpForward: canFwd, canJumpBackward: canBwd, showScheduleMeeting: showMeeting, lastInteractionAt, bulkMode, bulkSelected, onBulkToggle, pipelineType, attachmentCount }: KanbanCardProps) {
   const router = useRouter();
   const {
     attributes,
@@ -62,11 +71,21 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
   const ownerInitials = owner ? getUserInitials(owner.name) : '?';
   const overlayStyle = { borderLeftColor: ownerColorVal.bg };
 
-  const statusIdx = STATUS_ORDER.indexOf(contact.status);
-  const canJumpForward = statusIdx >= 0 && statusIdx < STATUS_ORDER.length - 2;
-  const canJumpBackward = statusIdx > 0;
+  // Use props for jump capability, fallback to legacy status-based logic
+  const canJumpForward = canFwd !== undefined ? canFwd : true;
+  const canJumpBackward = canBwd !== undefined ? canBwd : true;
 
   const isOverdue = contact.proxima_acao_data && new Date(contact.proxima_acao_data) < new Date();
+
+  // Lead score
+  const leadScore = computeLeadScore(contact);
+  const scoreStyle = getScoreColor(leadScore);
+
+  // Cooling indicator: last interaction > 7 days ago
+  const daysSinceLastInteraction = lastInteractionAt
+    ? Math.floor((Date.now() - new Date(lastInteractionAt).getTime()) / (1000 * 60 * 60 * 24))
+    : null;
+  const isCooling = daysSinceLastInteraction !== null && daysSinceLastInteraction > 7 && contact.status !== 'CONVERTIDO' && contact.status !== 'PERDIDO';
 
   return (
     <div
@@ -74,15 +93,39 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
       style={overlay ? overlayStyle : style}
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
-      onClick={() => { if (!isDragging) router.push(`/contacts/${contact.id}`); }}
+      onClick={() => {
+        if (isDragging) return;
+        if (bulkMode && onBulkToggle) { onBulkToggle(contact.id); return; }
+        router.push(`/contacts/${contact.id}`);
+      }}
       className={`bg-[#1e0f35] rounded-xl p-3 border-l-[3px] border cursor-grab select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
         hasMeeting
           ? 'border-cyan-500/40 shadow-md shadow-cyan-500/10 hover:border-cyan-400/60 hover:shadow-cyan-500/20'
           : 'border-purple-800/20 hover:border-purple-600/40 hover:bg-[#241540] hover:shadow-purple-900/20'
       } ${
         overlay ? 'shadow-2xl ring-2 ring-emerald-500/30 rotate-2 scale-105 bg-[#241540]' : ''
+      } ${
+        bulkSelected ? 'ring-2 ring-amber-500/50 bg-amber-500/5' : ''
       }`}
     >
+      {/* Bulk selection checkbox */}
+      {bulkMode && (
+        <div className="flex items-center gap-2 mb-2">
+          <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+            bulkSelected ? 'bg-amber-500 border-amber-500' : 'border-purple-500/30 hover:border-amber-500/50'
+          }`}>
+            {bulkSelected && (
+              <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            )}
+          </div>
+          <span className="text-[10px] text-amber-400/60 font-medium">
+            {bulkSelected ? 'Selecionado' : 'Clique para selecionar'}
+          </span>
+        </div>
+      )}
+
       {/* Meeting highlight banner — click goes to calendar */}
       {hasMeeting && !overlay && (
         <div
@@ -107,7 +150,12 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
       {/* Header: name + avatar */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-neutral-100 truncate">{contact.name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-neutral-100 truncate">{contact.name}</p>
+            <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${scoreStyle.bg} ${scoreStyle.text}`} title={`Score: ${leadScore}/100`}>
+              {leadScore}
+            </span>
+          </div>
           {contact.company && <p className="text-[11px] text-purple-300/50 truncate mt-0.5">{contact.company}</p>}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -125,6 +173,18 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
           {isUnassigned ? (
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-dashed border-purple-500/25 text-purple-300/30" title="Sem responsavel">?</div>
           ) : (
+            <>
+            {!isUnassigned && currentUserId && contact.assigned_to_user_id !== currentUserId && onRequestContact && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onRequestContact(contact.id); }}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-dashed border-amber-500/30 text-amber-400/40 hover:border-amber-500/50 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                title="Pegar cliente"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              </button>
+            )}
             <div className="shrink-0 w-9 h-9 rounded-full overflow-hidden opacity-60" title={owner?.name || ''}>
               {owner?.avatar_url ? (
                 <img src={owner.avatar_url} alt={owner.name} className="w-9 h-9 object-cover rounded-full" />
@@ -135,6 +195,7 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
                 >{ownerInitials}</div>
               )}
             </div>
+            </>
           )}
         </div>
       </div>
@@ -202,15 +263,45 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
             {PROXIMA_ACAO_LABELS[contact.proxima_acao_tipo] || contact.proxima_acao_tipo} {new Date(contact.proxima_acao_data).toLocaleDateString('pt-BR')}
           </span>
         )}
+        {isCooling && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-orange-500/15 text-orange-400" title={`Sem interacao ha ${daysSinceLastInteraction} dias`}>
+            ❄ {daysSinceLastInteraction}d
+          </span>
+        )}
+        {!isCooling && daysSinceLastInteraction !== null && daysSinceLastInteraction > 0 && (
+          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium text-purple-300/30 bg-purple-800/20" title={`Ultimo contato ha ${daysSinceLastInteraction} dias`}>
+            {daysSinceLastInteraction}d
+          </span>
+        )}
         {days > 0 && (
           <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ml-auto ${days > 7 ? 'text-amber-400 bg-amber-500/10' : 'text-purple-300/30 bg-purple-800/20'}`}>
-            {days}d
+            {days}d no stage
           </span>
         )}
       </div>
 
-      {/* Schedule meeting — only in REUNIAO_MARCADA */}
-      {!overlay && contact.status === 'REUNIAO_MARCADA' && onScheduleMeeting && (
+      {/* Attachment indicator for BUGS pipeline */}
+      {pipelineType === 'BUGS' && !overlay && (
+        <div className="mt-2 pt-2 border-t border-purple-800/15">
+          <div
+            onClick={(e) => { e.stopPropagation(); router.push(`/contacts/${contact.id}?tab=anexos`); }}
+            className="flex items-center gap-1.5 text-[10px] cursor-pointer hover:bg-purple-500/10 px-2 py-1.5 rounded-md transition-colors"
+          >
+            <svg className="w-3.5 h-3.5 text-purple-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+            <span className={`font-medium ${(attachmentCount || 0) > 0 ? 'text-emerald-400' : 'text-purple-300/40'}`}>
+              {(attachmentCount || 0) > 0 ? `${attachmentCount} anexo(s)` : 'Sem anexos'}
+            </span>
+            <svg className="w-3 h-3 text-purple-300/30 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule meeting — for stages where showScheduleMeeting or slug is REUNIAO_MARCADA */}
+      {!overlay && (showMeeting || contact.status === 'REUNIAO_MARCADA') && onScheduleMeeting && (
         <div className="mt-2 pt-2 border-t border-purple-800/15">
           <button
             onClick={(e) => { e.stopPropagation(); onScheduleMeeting(contact.id, contact.name); }}

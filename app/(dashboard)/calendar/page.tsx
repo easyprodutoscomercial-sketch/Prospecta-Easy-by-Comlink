@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Meeting } from '@/lib/types';
-import MeetingModal from '@/components/meetings/meeting-modal';
 import { useToast } from '@/lib/toast-context';
+import { usePipeline } from '@/lib/pipeline-context';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 const MONTHS = [
@@ -13,11 +13,7 @@ const MONTHS = [
 
 interface MeetingWithContact extends Meeting {
   contact_name?: string;
-}
-
-interface ContactOption {
-  id: string;
-  name: string;
+  created_by_name?: string;
 }
 
 const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> = {
@@ -28,33 +24,29 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
 
 export default function CalendarPage() {
   const toast = useToast();
+  const { selectedPipelineId } = usePipeline();
   const [meetings, setMeetings] = useState<MeetingWithContact[]>([]);
-  const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-
-  // New meeting modal
-  const [showNewMeeting, setShowNewMeeting] = useState(false);
-  const [selectedContactId, setSelectedContactId] = useState('');
-  const [meetingLoading, setMeetingLoading] = useState(false);
-  const [showContactPicker, setShowContactPicker] = useState(false);
-  const [contactSearch, setContactSearch] = useState('');
 
   // Detail panel
   const [selectedMeeting, setSelectedMeeting] = useState<MeetingWithContact | null>(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [currentUserId, setCurrentUserId] = useState('');
   const [currentUserRole, setCurrentUserRole] = useState('user');
+  const [showTeamView, setShowTeamView] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
   const fetchData = useCallback(async () => {
     try {
-      const [meetingsRes, contactsRes, meRes] = await Promise.all([
+      const pipelineParam = selectedPipelineId ? `&pipeline_id=${selectedPipelineId}` : '';
+      const [meetingsRes, contactsRes, usersRes, meRes] = await Promise.all([
         fetch('/api/meetings'),
-        fetch('/api/contacts?limit=500'),
+        fetch(`/api/contacts?limit=500${pipelineParam}`),
+        fetch('/api/users'),
         fetch('/api/me'),
       ]);
 
@@ -73,32 +65,39 @@ export default function CalendarPage() {
 
       const mData = await meetingsRes.json();
       const meetingsList: Meeting[] = mData.meetings || [];
-      console.log('Reunioes carregadas:', meetingsList.length);
 
+      // Map de contatos
+      const contactMap: Record<string, string> = {};
       if (contactsRes.ok) {
         const cData = await contactsRes.json();
-        const contactList: { id: string; name: string }[] = cData.contacts || [];
-        const contactMap: Record<string, string> = {};
-        for (const c of contactList) {
+        for (const c of cData.contacts || []) {
           contactMap[c.id] = c.name;
         }
-        setContacts(contactList.map((c) => ({ id: c.id, name: c.name })));
-        setMeetings(
-          meetingsList.map((m) => ({
-            ...m,
-            contact_name: contactMap[m.contact_id] || 'Contato',
-          }))
-        );
-      } else {
-        setMeetings(meetingsList);
       }
+
+      // Map de usuarios (responsavel)
+      const userMap: Record<string, string> = {};
+      if (usersRes.ok) {
+        const uData = await usersRes.json();
+        for (const u of uData.users || []) {
+          userMap[u.user_id] = u.name;
+        }
+      }
+
+      setMeetings(
+        meetingsList.map((m) => ({
+          ...m,
+          contact_name: contactMap[m.contact_id] || 'Contato',
+          created_by_name: userMap[m.created_by_user_id] || '',
+        }))
+      );
     } catch (err) {
       console.error('Erro fetch calendario:', err);
       toast.error('Erro ao carregar reunioes');
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, selectedPipelineId]);
 
   useEffect(() => {
     fetchData();
@@ -156,9 +155,14 @@ export default function CalendarPage() {
   }, [year, month]);
 
   // Meetings grouped by date
+  const filteredMeetings = useMemo(() => {
+    if (showTeamView || !currentUserId) return meetings;
+    return meetings.filter(m => m.created_by_user_id === currentUserId);
+  }, [meetings, showTeamView, currentUserId]);
+
   const meetingsByDate = useMemo(() => {
     const map: Record<string, MeetingWithContact[]> = {};
-    for (const m of meetings) {
+    for (const m of filteredMeetings) {
       const dateStr = formatDate(new Date(m.meeting_at));
       if (!map[dateStr]) map[dateStr] = [];
       map[dateStr].push(m);
@@ -168,7 +172,7 @@ export default function CalendarPage() {
       map[key].sort((a, b) => new Date(a.meeting_at).getTime() - new Date(b.meeting_at).getTime());
     }
     return map;
-  }, [meetings]);
+  }, [filteredMeetings]);
 
   // Selected day's meetings
   const selectedDayMeetings = selectedDate ? meetingsByDate[selectedDate] || [] : [];
@@ -194,54 +198,6 @@ export default function CalendarPage() {
     const today = new Date();
     setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1));
     setSelectedDate(formatDate(today));
-  }
-
-  // Contact picker
-  const filteredContacts = useMemo(() => {
-    if (!contactSearch) return contacts.slice(0, 20);
-    const q = contactSearch.toLowerCase();
-    return contacts.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 20);
-  }, [contacts, contactSearch]);
-
-  function handleOpenNewMeeting() {
-    setShowContactPicker(true);
-    setSelectedContactId('');
-    setContactSearch('');
-  }
-
-  function handleSelectContact(contactId: string) {
-    setSelectedContactId(contactId);
-    setShowContactPicker(false);
-    setShowNewMeeting(true);
-  }
-
-  const selectedContactName = contacts.find((c) => c.id === selectedContactId)?.name || '';
-
-  async function handleMeetingConfirm(data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string }) {
-    if (!selectedContactId) return;
-    setMeetingLoading(true);
-
-    try {
-      const res = await fetch('/api/meetings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contact_id: selectedContactId, ...data }),
-      });
-
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Erro ao agendar');
-      }
-
-      toast.success('Reuniao agendada com sucesso!');
-      setShowNewMeeting(false);
-      setSelectedContactId('');
-      fetchData();
-    } catch (err: any) {
-      toast.error(err.message || 'Erro ao agendar reuniao');
-    } finally {
-      setMeetingLoading(false);
-    }
   }
 
   async function handleUpdateStatus(meetingId: string, status: string) {
@@ -300,20 +256,41 @@ export default function CalendarPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-cyan-400">Calendario</h1>
-          <p className="text-sm text-purple-300/60">Gerencie suas reunioes e agendamentos.</p>
+          <p className="text-sm text-purple-300/60">
+            {showTeamView ? 'Reunioes de todo o time' : 'Suas reunioes e agendamentos'}
+          </p>
         </div>
-        <button
-          onClick={handleOpenNewMeeting}
-          className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 text-white text-sm font-medium rounded-lg hover:bg-cyan-500 shadow-lg shadow-cyan-600/20 transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Nova Reuniao
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {/* Team view toggle */}
+          <button
+            onClick={() => setShowTeamView(!showTeamView)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
+              showTeamView
+                ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/25'
+                : 'text-purple-300/60 bg-[#2a1245] border border-purple-700/30 hover:text-purple-200'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            {showTeamView ? 'Time' : 'Meus'}
+          </button>
+
+          {/* iCal export */}
+          <a
+            href="/api/meetings/export"
+            download="reunioes.ics"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-purple-300/60 bg-[#2a1245] border border-purple-700/30 rounded-lg hover:text-purple-200 hover:bg-purple-800/30 transition-all"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Exportar iCal
+          </a>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -408,6 +385,7 @@ export default function CalendarPage() {
                           <div
                             key={m.id}
                             className={`text-[8px] font-medium truncate rounded px-1 py-0.5 ${style.bg} ${style.text}`}
+                            title={m.created_by_name ? `Resp: ${m.created_by_name}` : ''}
                           >
                             {formatTime(m.meeting_at)} {m.contact_name}
                           </div>
@@ -458,6 +436,9 @@ export default function CalendarPage() {
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-white">{selectedMeeting.title}</h3>
                   <p className="text-xs text-purple-300/60">{selectedMeeting.contact_name}</p>
+                  {selectedMeeting.created_by_name && (
+                    <p className="text-[10px] text-cyan-400/60 mt-0.5">Responsavel: {selectedMeeting.created_by_name}</p>
+                  )}
                 </div>
               </div>
 
@@ -574,6 +555,9 @@ export default function CalendarPage() {
                         </div>
                         <p className="text-sm font-medium text-neutral-100 truncate">{m.title}</p>
                         <p className="text-xs text-purple-300/50 truncate">{m.contact_name}</p>
+                        {m.created_by_name && (
+                          <p className="text-[10px] text-cyan-400/50 truncate mt-0.5">Resp: {m.created_by_name}</p>
+                        )}
                         {m.location && (
                           <p className="text-[10px] text-purple-300/30 truncate mt-0.5">{m.location}</p>
                         )}
@@ -603,61 +587,6 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Contact picker modal */}
-      {showContactPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowContactPicker(false)} />
-          <div className="relative bg-[#1e0f35] border border-purple-800/30 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 animate-fade-in">
-            <h3 className="text-lg font-semibold text-cyan-400 mb-1">Selecionar Contato</h3>
-            <p className="text-xs text-purple-300/60 mb-4">Escolha o contato para agendar a reuniao.</p>
-
-            <input
-              type="text"
-              placeholder="Buscar contato..."
-              value={contactSearch}
-              onChange={(e) => setContactSearch(e.target.value)}
-              className="w-full px-3 py-2 text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent mb-3"
-              autoFocus
-            />
-
-            <div className="max-h-64 overflow-y-auto space-y-1">
-              {filteredContacts.length === 0 ? (
-                <p className="text-xs text-purple-300/40 text-center py-4">Nenhum contato encontrado</p>
-              ) : (
-                filteredContacts.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => handleSelectContact(c.id)}
-                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-cyan-500/10 text-sm text-neutral-200 hover:text-cyan-400 transition-colors border border-transparent hover:border-cyan-500/20"
-                  >
-                    {c.name}
-                  </button>
-                ))
-              )}
-            </div>
-
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setShowContactPicker(false)}
-                className="px-4 py-2 text-sm border border-purple-700/30 rounded-lg text-purple-200 hover:bg-purple-800/20 transition-colors"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Meeting modal */}
-      {selectedContactId && (
-        <MeetingModal
-          isOpen={showNewMeeting}
-          onClose={() => { setShowNewMeeting(false); setSelectedContactId(''); }}
-          onConfirm={handleMeetingConfirm}
-          contactName={selectedContactName}
-          loading={meetingLoading}
-        />
-      )}
     </div>
   );
 }

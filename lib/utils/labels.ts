@@ -158,7 +158,7 @@ export const ACTIVITY_TEMPLATES = [
 ] as const;
 
 // Pipeline settings helpers
-import type { PipelineSettings } from '@/lib/types';
+import type { PipelineSettings, PipelineStage } from '@/lib/types';
 
 export function getColumnLabel(status: string, settings?: PipelineSettings | null): string {
   if (settings?.columns?.[status as keyof typeof settings.columns]) {
@@ -172,6 +172,23 @@ export function getColumnColor(status: string, settings?: PipelineSettings | nul
     return settings.columns[status as keyof typeof settings.columns].color;
   }
   return STATUS_CHART_COLORS[status] || '#a3a3a3';
+}
+
+// Dynamic stage helpers
+export function getStageLabel(stage: PipelineStage): string {
+  return stage.name;
+}
+
+export function getStageColor(stage: PipelineStage): string {
+  return stage.color || '#a3a3a3';
+}
+
+export function isTerminalStage(stage: PipelineStage): boolean {
+  return stage.is_terminal;
+}
+
+export function getTerminalType(stage: PipelineStage): 'won' | 'lost' | null {
+  return stage.terminal_type;
 }
 
 export const ESTADOS_BRASIL = [
@@ -219,4 +236,89 @@ export const MESSAGE_INTENT_LABELS: Record<string, string> = {
   cobrar_retorno: 'Cobrar retorno',
   pos_reuniao: 'Pos-reuniao',
   reativacao: 'Reativacao',
+};
+
+// ============================================
+// Bug Reports Labels & Colors
+// ============================================
+
+export const BUG_SEVERITY_LABELS: Record<string, string> = {
+  CRITICO: 'Critico',
+  ALTO: 'Alto',
+  MEDIO: 'Medio',
+  BAIXO: 'Baixo',
+};
+
+export const BUG_SEVERITY_COLORS: Record<string, string> = {
+  CRITICO: 'bg-red-500/20 text-red-400',
+  ALTO: 'bg-orange-500/20 text-orange-400',
+  MEDIO: 'bg-amber-500/20 text-amber-400',
+  BAIXO: 'bg-blue-500/20 text-blue-400',
+};
+
+export const BUG_PRIORITY_LABELS: Record<string, string> = {
+  URGENTE: 'Urgente',
+  ALTA: 'Alta',
+  NORMAL: 'Normal',
+  BAIXA: 'Baixa',
+};
+
+export const BUG_PRIORITY_COLORS: Record<string, string> = {
+  URGENTE: 'bg-red-500/20 text-red-400',
+  ALTA: 'bg-orange-500/20 text-orange-400',
+  NORMAL: 'bg-neutral-500/20 text-neutral-400',
+  BAIXA: 'bg-blue-500/20 text-blue-400',
+};
+
+export const BUG_STATUS_LABELS: Record<string, string> = {
+  ABERTO: 'Aberto',
+  EM_ANALISE: 'Em Analise',
+  CORRIGINDO: 'Corrigindo',
+  TESTE: 'Em Teste',
+  RESOLVIDO: 'Resolvido',
+};
+
+export const BUG_STATUS_COLORS: Record<string, string> = {
+  ABERTO: 'bg-red-500/20 text-red-400',
+  EM_ANALISE: 'bg-amber-500/20 text-amber-400',
+  CORRIGINDO: 'bg-blue-500/20 text-blue-400',
+  TESTE: 'bg-purple-500/20 text-purple-400',
+  RESOLVIDO: 'bg-emerald-500/20 text-emerald-400',
+};
+
+export const BUG_STATUS_CHART_COLORS: Record<string, string> = {
+  ABERTO: '#ef4444',
+  EM_ANALISE: '#f59e0b',
+  CORRIGINDO: '#3b82f6',
+  TESTE: '#8b5cf6',
+  RESOLVIDO: '#10b981',
+};
+
+export const BUG_KANBAN_COLUMNS = [
+  { id: 'ABERTO', label: 'Aberto', color: '#ef4444' },
+  { id: 'EM_ANALISE', label: 'Em Analise', color: '#f59e0b' },
+  { id: 'CORRIGINDO', label: 'Corrigindo', color: '#3b82f6' },
+  { id: 'TESTE', label: 'Em Teste', color: '#8b5cf6' },
+  { id: 'RESOLVIDO', label: 'Resolvido', color: '#10b981' },
+];
+
+// Sprint
+export const SPRINT_STATUS_LABELS: Record<string, string> = {
+  PLANEJADA: 'Planejada',
+  ATIVA: 'Ativa',
+  CONCLUIDA: 'Concluida',
+  CANCELADA: 'Cancelada',
+};
+
+export const SPRINT_STATUS_COLORS: Record<string, string> = {
+  PLANEJADA: 'bg-neutral-500/20 text-neutral-400',
+  ATIVA: 'bg-emerald-500/20 text-emerald-400',
+  CONCLUIDA: 'bg-blue-500/20 text-blue-400',
+  CANCELADA: 'bg-red-500/20 text-red-400',
+};
+
+// Work Front Roles
+export const WF_ROLE_LABELS: Record<string, string> = {
+  lead: 'Lider',
+  member: 'Membro',
 };

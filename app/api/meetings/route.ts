@@ -83,11 +83,43 @@ export async function GET(request: NextRequest) {
     const contactId = request.nextUrl.searchParams.get('contact_id');
     const status = request.nextUrl.searchParams.get('status');
 
+    // Se NAO e admin, buscar IDs de contatos de pipelines onde e membro
+    let allowedContactIds: string[] | null = null;
+    if (profile.role !== 'admin') {
+      const { data: myMemberships } = await admin
+        .from('pipeline_members')
+        .select('pipeline_id')
+        .eq('user_id', user.id);
+
+      const myPipelineIds = (myMemberships || []).map((m: any) => m.pipeline_id);
+
+      if (myPipelineIds.length > 0) {
+        const { data: myContacts } = await admin
+          .from('contacts')
+          .select('id')
+          .eq('organization_id', profile.organization_id)
+          .in('pipeline_id', myPipelineIds);
+
+        allowedContactIds = (myContacts || []).map((c: any) => c.id);
+      } else {
+        allowedContactIds = [];
+      }
+    }
+
     let query = admin
       .from('meetings')
       .select('*')
       .eq('organization_id', profile.organization_id)
       .order('meeting_at', { ascending: true });
+
+    // Filtrar por contatos de pipelines permitidos (non-admin)
+    if (allowedContactIds !== null) {
+      if (allowedContactIds.length > 0) {
+        query = query.in('contact_id', allowedContactIds);
+      } else {
+        return NextResponse.json({ meetings: [] });
+      }
+    }
 
     if (contactId) query = query.eq('contact_id', contactId);
     if (status) query = query.eq('status', status);

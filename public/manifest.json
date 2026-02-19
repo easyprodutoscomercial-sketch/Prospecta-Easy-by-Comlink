@@ -1,7 +1,7 @@
 {
-  "name": "Prospecta Easy by Comlink",
-  "short_name": "Prospecta Easy",
-  "description": "Sistema de prospeccao e gestao de contatos comerciais",
+  "name": "Controlei",
+  "short_name": "Controlei",
+  "description": "Sistema de gestão e controle de contatos comerciais",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#1a0a2e",

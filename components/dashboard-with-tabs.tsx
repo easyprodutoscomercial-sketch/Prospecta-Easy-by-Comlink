@@ -2,12 +2,15 @@
 
 import { useState, useMemo } from 'react';
 import DashboardCharts from './dashboard-charts';
+import DashboardKPIs from './dashboard-kpis';
 import TeamComparisonChart from './team-comparison-chart';
 import InteractionsByTypeChart from './interactions-by-type-chart';
 import ResponseRateCard from './response-rate-card';
 import ConversionRanking from './conversion-ranking';
 import Link from 'next/link';
 import { formatStatus, getStatusColor, STATUS_CHART_COLORS, STATUS_LABELS, INTERACTION_TYPE_LABELS, TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS, ESTADOS_BRASIL } from '@/lib/utils/labels';
+import { usePipeline } from '@/lib/pipeline-context';
+import { normalizeSearch } from '@/lib/utils/normalize';
 
 export interface SegmentData {
   statusCounts: { name: string; value: number; color: string }[];
@@ -167,17 +170,49 @@ export default function DashboardWithTabs({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advSearch, setAdvSearch] = useState({ cpf: '', cnpj: '', telefone: '', whatsapp: '', empresa: '', cidade: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
 
+  const { selectedPipelineId } = usePipeline();
+
   const selectCls = 'px-2 py-1.5 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500';
+
+  // Filter all data by selected pipeline
+  const pipelineContacts = useMemo(() => {
+    if (!selectedPipelineId) return allContacts;
+    return allContacts.filter((c) => c.pipeline_id === selectedPipelineId);
+  }, [allContacts, selectedPipelineId]);
+
+  const pipelineRecentContacts = useMemo(() => {
+    if (!selectedPipelineId) return recentContacts;
+    return recentContacts.filter((c) => c.pipeline_id === selectedPipelineId);
+  }, [recentContacts, selectedPipelineId]);
+
+  const pipelineMonthContacts = useMemo(() => {
+    if (!selectedPipelineId) return monthContacts;
+    return monthContacts.filter((c) => c.pipeline_id === selectedPipelineId);
+  }, [monthContacts, selectedPipelineId]);
+
+  const pipelineContactIds = useMemo(() => {
+    return new Set(pipelineContacts.map((c) => c.id));
+  }, [pipelineContacts]);
+
+  const pipelineInteractions = useMemo(() => {
+    if (!selectedPipelineId) return allInteractions;
+    return allInteractions.filter((i) => pipelineContactIds.has(i.contact_id));
+  }, [allInteractions, selectedPipelineId, pipelineContactIds]);
+
+  const pipelineMonthInteractions = useMemo(() => {
+    if (!selectedPipelineId) return monthInteractions;
+    return monthInteractions.filter((i) => pipelineContactIds.has(i.contact_id));
+  }, [monthInteractions, selectedPipelineId, pipelineContactIds]);
 
   // Build contact ID set and type map
   const contactIdMap = useMemo(() => {
     const map = new Map<string, any>();
-    for (const c of allContacts) map.set(c.id, c);
-    for (const c of monthContacts) {
+    for (const c of pipelineContacts) map.set(c.id, c);
+    for (const c of pipelineMonthContacts) {
       if (!map.has(c.id)) map.set(c.id, c);
     }
     return map;
-  }, [allContacts, monthContacts]);
+  }, [pipelineContacts, pipelineMonthContacts]);
 
   // Apply global filters to contacts
   const applyContactFilters = (contacts: any[]) => {
@@ -188,7 +223,7 @@ export default function DashboardWithTabs({
     if (responsavelFilter !== 'all') result = result.filter((c) => c.assigned_to_user_id === responsavelFilter);
     if (estadoFilter !== 'all') result = result.filter((c) => c.estado === estadoFilter);
     if (proximaAcaoFilter !== 'all') result = result.filter((c) => c.proxima_acao_tipo === proximaAcaoFilter);
-    const ilike = (val: string | null | undefined, q: string) => val ? val.toLowerCase().includes(q.toLowerCase()) : false;
+    const ilike = (val: string | null | undefined, q: string) => val ? normalizeSearch(val).includes(normalizeSearch(q)) : false;
     if (advSearch.cpf) result = result.filter((c) => ilike(c.cpf, advSearch.cpf));
     if (advSearch.cnpj) result = result.filter((c) => ilike(c.cnpj, advSearch.cnpj));
     if (advSearch.telefone) result = result.filter((c) => ilike(c.phone, advSearch.telefone));
@@ -209,12 +244,12 @@ export default function DashboardWithTabs({
 
   // Compute segments with filters applied
   const segments = useMemo(() => {
-    const filteredContacts = applyContactFilters(allContacts);
+    const filteredContacts = applyContactFilters(pipelineContacts);
     const filteredContactIds = new Set(filteredContacts.map((c) => c.id));
-    const filteredInteractions = applyInteractionFilters(allInteractions, filteredContactIds);
-    const filteredRecent = applyContactFilters(recentContacts);
-    const filteredMonthContacts = applyContactFilters(monthContacts);
-    const filteredMonthInteractions = applyInteractionFilters(monthInteractions, filteredContactIds);
+    const filteredInteractions = applyInteractionFilters(pipelineInteractions, filteredContactIds);
+    const filteredRecent = applyContactFilters(pipelineRecentContacts);
+    const filteredMonthContacts = applyContactFilters(pipelineMonthContacts);
+    const filteredMonthInteractions = applyInteractionFilters(pipelineMonthInteractions, filteredContactIds);
 
     // Filter by tipo helpers
     const filterByTipo = (items: any[], tipo: string) =>
@@ -252,7 +287,7 @@ export default function DashboardWithTabs({
     );
 
     return { geral, fornecedor, comprador };
-  }, [allContacts, allInteractions, recentContacts, allProfiles, monthContacts, monthInteractions, monthRanges, temperaturaFilter, origemFilter, classeFilter, responsavelFilter, estadoFilter, proximaAcaoFilter, advSearch, contactIdMap]);
+  }, [pipelineContacts, pipelineInteractions, pipelineRecentContacts, allProfiles, pipelineMonthContacts, pipelineMonthInteractions, monthRanges, temperaturaFilter, origemFilter, classeFilter, responsavelFilter, estadoFilter, proximaAcaoFilter, advSearch, contactIdMap]);
 
   const data = segments[activeTab as keyof typeof segments];
 
@@ -457,6 +492,9 @@ export default function DashboardWithTabs({
           </p>
         </div>
       </div>
+
+      {/* Advanced KPIs + Charts */}
+      <DashboardKPIs allContacts={pipelineContacts} allInteractions={pipelineInteractions} monthRanges={monthRanges} />
 
       {/* Team comparison chart */}
       <div className="mb-8">

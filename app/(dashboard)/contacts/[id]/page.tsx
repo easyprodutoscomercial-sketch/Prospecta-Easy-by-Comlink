@@ -74,11 +74,28 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const isAdmin = currentUser?.role === 'admin';
   const canModify = !!currentUser;
 
-  const handleStatusChange = async (status: string) => {
-    if (status === 'CONVERTIDO' || status === 'PERDIDO') { setPendingStatus(status as any); setShowMotivoModal(true); return; }
-    setContact((p) => p ? { ...p, status } as Contact : p);
-    await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-    toast.success('Status atualizado');
+  const handleStatusChange = async (statusOrStageId: string) => {
+    // Check if it's a UUID (stage_id) or a legacy status string
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(statusOrStageId);
+
+    if (isUuid) {
+      // It's a stage_id - update via stage_id
+      setContact((p) => p ? { ...p, stage_id: statusOrStageId } as Contact : p);
+      const res = await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage_id: statusOrStageId }) });
+      if (res.ok) {
+        const updated = await res.json();
+        setContact((p) => p ? { ...p, ...updated } : p);
+        toast.success('Status atualizado');
+      } else {
+        toast.error('Erro ao atualizar status');
+      }
+    } else {
+      // Legacy status string
+      if (statusOrStageId === 'CONVERTIDO' || statusOrStageId === 'PERDIDO') { setPendingStatus(statusOrStageId as any); setShowMotivoModal(true); return; }
+      setContact((p) => p ? { ...p, status: statusOrStageId } as Contact : p);
+      await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: statusOrStageId }) });
+      toast.success('Status atualizado');
+    }
   };
 
   const handleMotivoConfirm = async (motivo: string) => {

@@ -8,7 +8,9 @@ import Pagination from '@/components/ui/pagination';
 import { SkeletonTable } from '@/components/ui/skeleton';
 import BulkActionBar from '@/components/contacts/bulk-action-bar';
 import ConfirmModal from '@/components/ui/confirm-modal';
+import SavedViews from '@/components/saved-views';
 import { useToast } from '@/lib/toast-context';
+import { usePipeline } from '@/lib/pipeline-context';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
 
 interface UserInfo {
@@ -23,6 +25,7 @@ type SortDir = 'asc' | 'desc';
 
 export default function ContactsPage() {
   const toast = useToast();
+  const { selectedPipelineId } = usePipeline();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -85,8 +88,8 @@ export default function ContactsPage() {
   useEffect(() => { const t = setTimeout(() => setDebouncedCidade(cidadeFilter), 400); return () => clearTimeout(t); }, [cidadeFilter]);
   useEffect(() => { const t = setTimeout(() => setDebouncedTelefone(telefoneFilter), 400); return () => clearTimeout(t); }, [telefoneFilter]);
   useEffect(() => { const t = setTimeout(() => setDebouncedAdv(adv), 400); return () => clearTimeout(t); }, [adv]);
-  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, temperaturaFilter, origemFilter, classeFilter, debouncedCidade, estadoFilter, debouncedTelefone, debouncedAdv]);
-  useEffect(() => { loadContacts(); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, temperaturaFilter, origemFilter, classeFilter, debouncedCidade, estadoFilter, debouncedTelefone, debouncedAdv, page, sortBy, sortDir]);
+  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, temperaturaFilter, origemFilter, classeFilter, debouncedCidade, estadoFilter, debouncedTelefone, debouncedAdv, selectedPipelineId]);
+  useEffect(() => { loadContacts(); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, temperaturaFilter, origemFilter, classeFilter, debouncedCidade, estadoFilter, debouncedTelefone, debouncedAdv, page, sortBy, sortDir, selectedPipelineId]);
 
   const loadContacts = async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -121,6 +124,7 @@ export default function ContactsPage() {
     params.set('limit', String(limit));
     params.set('sortBy', sortBy);
     params.set('sortDir', sortDir);
+    if (selectedPipelineId) params.set('pipeline_id', selectedPipelineId);
     try {
       const res = await fetch(`/api/contacts?${params.toString()}`, { signal: controller.signal });
       const data = await res.json();
@@ -222,6 +226,22 @@ export default function ContactsPage() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
             Importar
           </Link>
+          <SavedViews
+            storageKey="crm_contacts_views"
+            currentFilters={{ search, status: statusFilter, tipo: tipoFilter, assigned: assignedFilter, temperatura: temperaturaFilter, origem: origemFilter, classe: classeFilter, cidade: cidadeFilter, estado: estadoFilter, telefone: telefoneFilter }}
+            onApply={(f) => {
+              setSearch(f.search || '');
+              setStatusFilter(f.status || 'all');
+              setTipoFilter(f.tipo || 'all');
+              setAssignedFilter(f.assigned || 'all');
+              setTemperaturaFilter(f.temperatura || 'all');
+              setOrigemFilter(f.origem || 'all');
+              setClasseFilter(f.classe || 'all');
+              setCidadeFilter(f.cidade || '');
+              setEstadoFilter(f.estado || 'all');
+              setTelefoneFilter(f.telefone || '');
+            }}
+          />
         </div>
       </div>
 
@@ -311,9 +331,19 @@ export default function ContactsPage() {
         <SkeletonTable rows={6} cols={4} />
       ) : contacts.length === 0 ? (
         <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 text-center py-16">
-          <svg className="mx-auto w-12 h-12 text-neutral-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+          <svg className="mx-auto w-12 h-12 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
           <p className="text-sm text-neutral-400 mt-3">Nenhum contato encontrado</p>
-          <p className="text-xs text-neutral-600 mt-1">Tente ajustar os filtros ou criar um novo contato</p>
+          <p className="text-xs text-neutral-600 mt-1 mb-4">Tente ajustar os filtros ou comece a prospectar</p>
+          <div className="flex items-center justify-center gap-3">
+            <Link href="/contacts/new" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Criar Contato
+            </Link>
+            <Link href="/import" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-neutral-300 bg-[#2a1245] border border-purple-700/30 rounded-lg hover:bg-purple-800/30 hover:text-white transition-all">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+              Importar CSV
+            </Link>
+          </div>
         </div>
       ) : (
         <>

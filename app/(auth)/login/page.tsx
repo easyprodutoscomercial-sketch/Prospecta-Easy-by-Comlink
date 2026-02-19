@@ -40,9 +40,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-black px-4">
       <div className="max-w-md w-full space-y-8 bg-neutral-900 p-8 rounded-2xl border border-neutral-800">
         <div className="flex flex-col items-center">
-          <Image src="/logo.png" alt="Prospecta Easy" width={200} height={56} className="brightness-0 invert mb-2" />
+          <Image src="/logo.png" alt="Controlei" width={200} height={56} className="mb-2" />
           <p className="text-sm text-neutral-500">
-            Sistema de prospecção comercial
+            Sistema de gestão e controle comercial
           </p>
         </div>
 

@@ -36,6 +36,21 @@ const CATEGORY_LABELS: Record<string, string> = {
 const RUN_DURATION = 10;
 
 export default function DashboardBanner() {
+  // === User preference: hide banner ===
+  const [bannerHidden, setBannerHidden] = useState(false);
+
+  useEffect(() => {
+    setBannerHidden(localStorage.getItem('banner_hidden') === 'true');
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'banner_hidden') {
+        setBannerHidden(e.newValue === 'true');
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
   // === Announcement / Ticker state ===
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [tickerEnabled, setTickerEnabled] = useState(false);
@@ -111,6 +126,8 @@ export default function DashboardBanner() {
     setCurrentIndex((prev) => (users.length > 0 ? (prev + 1) % users.length : 0));
     setRunKey((k) => k + 1);
   }, [users.length]);
+
+  if (bannerHidden) return null;
 
   const showTicker = tickerEnabled && announcements.length > 0 && !tickerExpired;
 

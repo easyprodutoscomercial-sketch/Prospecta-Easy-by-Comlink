@@ -5,6 +5,8 @@ import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import NotificationBell from '@/components/notifications/notification-bell';
+import PipelineSelectorGlobal from '@/components/pipeline-selector-global';
+import WorkFrontSelector from '@/components/work-fronts/work-front-selector';
 
 interface SidebarProps {
   profileName: string | null;
@@ -37,6 +39,24 @@ const navItems = [
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2m0 10V7m6 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+      </svg>
+    ),
+  },
+  {
+    href: '/work-fronts',
+    label: 'Frentes',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+      </svg>
+    ),
+  },
+  {
+    href: '/bugs',
+    label: 'Bugs',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
   },
@@ -148,9 +168,23 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
       {/* Logo + Bell */}
       <div className="flex items-center justify-between py-5 px-4">
         <Link href="/dashboard" className="flex items-center">
-          <Image src="/logo.png" alt="Prospecta Easy" width={180} height={52} className="brightness-0 invert" priority />
+          <Image src="/logo.png" alt="Controlei" width={180} height={52} priority />
         </Link>
         <NotificationBell />
+      </div>
+
+      {/* Quick Search Hint */}
+      <div className="px-4 pb-2">
+        <button
+          onClick={() => { const e = new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }); document.dispatchEvent(e); }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs text-purple-300/40 bg-purple-800/10 border border-purple-800/15 rounded-lg hover:bg-purple-800/20 hover:text-purple-300/60 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <span className="flex-1 text-left">Busca rapida...</span>
+          <kbd className="text-[10px] px-1.5 py-0.5 bg-purple-800/20 rounded text-purple-300/30 font-mono">Ctrl+K</kbd>
+        </button>
       </div>
 
       {/* Navigation */}
@@ -184,6 +218,12 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
           </Link>
         ))}
       </nav>
+
+      {/* Pipeline Selector (global) */}
+      <PipelineSelectorGlobal />
+
+      {/* Work Front Selector */}
+      <WorkFrontSelector />
 
       {/* User area */}
       <div className="border-t border-purple-500/15 px-5 py-4">
@@ -225,7 +265,7 @@ export default function Sidebar({ profileName, userRole, signOutAction }: Sideba
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <Image src="/logo.png" alt="Prospecta Easy" width={180} height={50} className="ml-3 brightness-0 invert" priority />
+          <Image src="/logo.png" alt="Controlei" width={180} height={50} className="ml-3" priority />
         </div>
         <NotificationBell />
       </div>

@@ -1,51 +1,62 @@
 'use client';
 
 import { DragOverlay } from '@dnd-kit/core';
-import type { Contact, ContactStatus, PipelineSettings } from '@/lib/types';
+import type { Contact, PipelineStage, PipelineSettings, PipelineType } from '@/lib/types';
 import { KanbanColumn } from './kanban-column';
 import { KanbanCard, type UserInfo } from './kanban-card';
-import { getColumnLabel, getColumnColor } from '@/lib/utils/labels';
-
-const STATUSES: ContactStatus[] = [
-  'NOVO',
-  'EM_PROSPECCAO',
-  'CONTATADO',
-  'REUNIAO_MARCADA',
-  'CONVERTIDO',
-  'PERDIDO',
-];
 
 interface KanbanBoardProps {
-  grouped: Record<ContactStatus, Contact[]>;
+  stages: PipelineStage[];
+  grouped: Record<string, Contact[]>;
   activeContact: Contact | null;
   userMap: Record<string, UserInfo>;
   currentUserId?: string;
   onClaimContact?: (contactId: string) => void;
+  onRequestContact?: (contactId: string) => void;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
   onScheduleMeeting?: (contactId: string, contactName: string) => void;
   pipelineSettings?: PipelineSettings | null;
   contactsWithMeeting?: Set<string>;
+  lastInteractionMap?: Record<string, string>;
+  bulkMode?: boolean;
+  bulkSelectedIds?: Set<string>;
+  onBulkToggle?: (contactId: string) => void;
+  pipelineType?: PipelineType;
+  attachmentCountMap?: Record<string, number>;
 }
 
-export function KanbanBoard({ grouped, activeContact, userMap, currentUserId, onClaimContact, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting }: KanbanBoardProps) {
+export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUserId, onClaimContact, onRequestContact, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap }: KanbanBoardProps) {
+  const colCount = stages.length;
+  const gridClass = colCount <= 6
+    ? `xl:grid xl:grid-cols-${colCount} xl:overflow-x-visible`
+    : 'xl:overflow-x-auto';
+
   return (
     <>
-      <div className="flex gap-2.5 overflow-x-auto pb-4 min-h-0 xl:grid xl:grid-cols-6 xl:overflow-x-visible h-full">
-        {STATUSES.map((status) => (
+      <div
+        className={`flex gap-2.5 overflow-x-auto pb-4 min-h-0 h-full`}
+        style={colCount <= 8 ? { display: 'grid', gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` } : undefined}
+      >
+        {stages.map((stage) => (
           <KanbanColumn
-            key={status}
-            status={status}
-            contacts={grouped[status] || []}
+            key={stage.id}
+            stage={stage}
+            contacts={grouped[stage.id] || []}
             userMap={userMap}
-            columnLabel={getColumnLabel(status, pipelineSettings)}
-            columnColor={getColumnColor(status, pipelineSettings)}
             currentUserId={currentUserId}
             onClaimContact={onClaimContact}
+            onRequestContact={onRequestContact}
             onJumpForward={onJumpForward}
             onJumpBackward={onJumpBackward}
             onScheduleMeeting={onScheduleMeeting}
             contactsWithMeeting={contactsWithMeeting}
+            lastInteractionMap={lastInteractionMap}
+            bulkMode={bulkMode}
+            bulkSelectedIds={bulkSelectedIds}
+            onBulkToggle={onBulkToggle}
+            pipelineType={pipelineType}
+            attachmentCountMap={attachmentCountMap}
           />
         ))}
       </div>

@@ -1,6 +1,11 @@
 /**
- * Normalização de dados para deduplicação
+ * Normalização de dados para deduplicação e busca
  */
+
+/** Remove acentos e converte para minúsculo para busca accent-insensitive */
+export function normalizeSearch(str: string): string {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
 
 export function normalizeEmail(email: string | null | undefined): string | null {
   if (!email) return null;

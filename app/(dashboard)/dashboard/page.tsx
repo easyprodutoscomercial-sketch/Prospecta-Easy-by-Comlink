@@ -43,11 +43,11 @@ export default async function DashboardPage() {
     monthContactsResult,
     monthInteractionsResult,
   ] = await Promise.all([
-    admin.from('contacts').select('id, status, created_at, created_by_user_id, tipo, valor_estimado, assigned_to_user_id, temperatura, origem, classe, estado, cidade, proxima_acao_tipo, cpf, cnpj, phone, whatsapp, company, referencia, contato_nome, cargo, produtos_fornecidos').eq('organization_id', orgId),
-    admin.from('contacts').select('*').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(20),
+    admin.from('contacts').select('id, status, created_at, created_by_user_id, tipo, valor_estimado, assigned_to_user_id, temperatura, origem, classe, estado, cidade, proxima_acao_tipo, cpf, cnpj, phone, whatsapp, company, referencia, contato_nome, cargo, produtos_fornecidos, pipeline_id').eq('organization_id', orgId),
+    admin.from('contacts').select('*, pipeline_id').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(20),
     admin.from('interactions').select('contact_id, type, outcome, created_by_user_id, created_at').eq('organization_id', orgId),
     admin.from('profiles').select('user_id, name, avatar_url').eq('organization_id', orgId),
-    admin.from('contacts').select('id, created_by_user_id, tipo, temperatura, origem, classe, assigned_to_user_id, estado, cidade, proxima_acao_tipo, cpf, cnpj, phone, whatsapp, company, referencia, contato_nome, cargo, produtos_fornecidos').eq('organization_id', orgId).gte('created_at', monthStart).lt('created_at', monthEnd),
+    admin.from('contacts').select('id, created_by_user_id, tipo, temperatura, origem, classe, assigned_to_user_id, estado, cidade, proxima_acao_tipo, cpf, cnpj, phone, whatsapp, company, referencia, contato_nome, cargo, produtos_fornecidos, pipeline_id').eq('organization_id', orgId).gte('created_at', monthStart).lt('created_at', monthEnd),
     admin.from('interactions').select('contact_id, created_by_user_id, type, outcome').eq('organization_id', orgId).gte('created_at', monthStart).lt('created_at', monthEnd),
   ]);
 

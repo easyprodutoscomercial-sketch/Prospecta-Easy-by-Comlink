@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Profile } from '@/lib/types';
 import { STATUS_LABELS, STATUS_CHART_COLORS } from '@/lib/utils/labels';
 import NotificationBell from '@/components/notifications/notification-bell';
+import PipelineManager from '@/components/admin/pipeline-manager';
 
 const STATUSES = ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO'] as const;
 
@@ -93,6 +94,7 @@ export default function AdminPage() {
   // Broadcast notifications toggle
   const [broadcastEnabled, setBroadcastEnabled] = useState(false);
   const [broadcastDuration, setBroadcastDuration] = useState(3);
+  const [bannerToggleVisible, setBannerToggleVisible] = useState(true);
   const [savingBroadcast, setSavingBroadcast] = useState(false);
   const [broadcastResult, setBroadcastResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -158,6 +160,7 @@ export default function AdminPage() {
         }
         setBroadcastEnabled(!!data.broadcast_notifications);
         setBroadcastDuration(data.broadcast_duration_minutes || 3);
+        setBannerToggleVisible(data.banner_toggle_visible !== false);
       }
     } catch {
       // Set defaults
@@ -338,20 +341,22 @@ export default function AdminPage() {
     }
   };
 
-  const handleSaveBroadcast = async (newEnabled?: boolean, newDuration?: number) => {
+  const handleSaveBroadcast = async (newEnabled?: boolean, newDuration?: number, newBannerToggleVisible?: boolean) => {
     setSavingBroadcast(true);
     setBroadcastResult(null);
     const enabled = newEnabled ?? broadcastEnabled;
     const duration = newDuration ?? broadcastDuration;
+    const toggleVisible = newBannerToggleVisible ?? bannerToggleVisible;
     try {
       const res = await fetch('/api/pipeline-settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ columns: pipelineColumns, broadcast_notifications: enabled, broadcast_duration_minutes: duration }),
+        body: JSON.stringify({ columns: pipelineColumns, broadcast_notifications: enabled, broadcast_duration_minutes: duration, banner_toggle_visible: toggleVisible }),
       });
       if (res.ok) {
         setBroadcastEnabled(enabled);
         setBroadcastDuration(duration);
+        setBannerToggleVisible(toggleVisible);
         setBroadcastResult({ type: 'success', message: enabled ? `Avisos ativados! Duracao: ${duration} min` : 'Avisos em tela desativados.' });
       } else {
         const data = await res.json();
@@ -421,9 +426,20 @@ export default function AdminPage() {
       <h1 className="text-2xl font-semibold text-emerald-400 mb-2">Administração</h1>
       <p className="text-sm text-purple-300/60 mb-8">Ferramentas de gerenciamento do sistema.</p>
 
-      {/* Pipeline Settings Section */}
+      {/* Multi-Pipeline Manager Section */}
       <div className="mb-10">
-        <h2 className="text-lg font-bold text-emerald-400 mb-4">Configurar Pipeline</h2>
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">Gerenciar Pipelines</h2>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+          <p className="text-xs text-purple-300/60 mb-4">
+            Crie e gerencie multiplos pipelines com etapas customizaveis (nome, cor, ordem, tipo terminal).
+          </p>
+          <PipelineManager />
+        </div>
+      </div>
+
+      {/* Pipeline Settings Section (legacy label/color customization) */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">Configurar Pipeline (Legado)</h2>
 
         {pipelineResult && (
           <div className={`mb-4 p-3 rounded-lg text-sm ${
@@ -552,6 +568,29 @@ export default function AdminPage() {
               </div>
             </div>
           )}
+
+          {/* Banner toggle visibility for users */}
+          <div className="mt-4 pt-4 border-t border-purple-800/20 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-neutral-100 mb-1">Permitir usuarios desativarem o banner</h3>
+              <p className="text-xs text-purple-300/60">
+                Quando ativado, cada usuario pode ocultar o banner nas suas configuracoes.
+              </p>
+            </div>
+            <button
+              onClick={() => handleSaveBroadcast(undefined, undefined, !bannerToggleVisible)}
+              disabled={savingBroadcast}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-[#1e0f35] disabled:opacity-40 ${
+                bannerToggleVisible ? 'bg-emerald-500' : 'bg-purple-800/50'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  bannerToggleVisible ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 

@@ -62,6 +62,8 @@ export const contactUpdateSchema = z.object({
     'CONVERTIDO',
     'PERDIDO',
   ]).optional(),
+  pipeline_id: z.string().uuid().optional().nullable(),
+  stage_id: z.string().uuid().optional().nullable(),
   assigned_to_user_id: z.string().uuid().optional().nullable(),
   // All editable fields
   name: z.string().min(1).max(200).optional(),
@@ -110,4 +112,89 @@ export const pipelineSettingsSchema = z.object({
   ),
   broadcast_notifications: z.boolean().optional(),
   broadcast_duration_minutes: z.number().min(1).max(30).optional(),
+  banner_toggle_visible: z.boolean().optional(),
+});
+
+// Pipeline CRUD schemas
+export const pipelineStageSchema = z.object({
+  id: z.string().uuid().optional(),
+  name: z.string().min(1, 'Nome do stage obrigatorio').max(50),
+  slug: z.string().min(1).max(50),
+  color: z.string().min(4).max(9).default('#a3a3a3'),
+  position: z.number().int().min(0),
+  is_terminal: z.boolean().default(false),
+  terminal_type: z.enum(['won', 'lost']).nullable().default(null),
+});
+
+export const pipelineCreateSchema = z.object({
+  name: z.string().min(1, 'Nome do pipeline obrigatorio').max(100),
+  description: z.string().max(500).optional().nullable(),
+  pipeline_type: z.enum(['PADRAO', 'BUGS']).default('PADRAO'),
+  stages: z.array(pipelineStageSchema).min(1, 'Pelo menos 1 stage obrigatorio'),
+  member_user_ids: z.array(z.string().uuid()).optional(),
+});
+
+export const pipelineUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional().nullable(),
+  pipeline_type: z.enum(['PADRAO', 'BUGS']).optional(),
+  stages: z.array(pipelineStageSchema).min(1, 'Pelo menos 1 stage obrigatorio').optional(),
+  member_user_ids: z.array(z.string().uuid()).optional(),
+});
+
+// ============================================
+// Work Fronts
+// ============================================
+
+export const workFrontSchema = z.object({
+  name: z.string().min(1, 'Nome e obrigatorio').max(100),
+  description: z.string().max(500).optional().nullable(),
+  color: z.string().min(4).max(9).default('#8B5CF6'),
+  icon: z.string().max(50).default('folder'),
+  is_active: z.boolean().default(true),
+});
+
+export const workFrontTagSchema = z.object({
+  name: z.string().min(1, 'Nome e obrigatorio').max(50),
+  color: z.string().min(4).max(9).default('#6366F1'),
+});
+
+export const workFrontSprintSchema = z.object({
+  name: z.string().min(1, 'Nome e obrigatorio').max(100),
+  goal: z.string().max(500).optional().nullable(),
+  starts_at: z.string().min(1, 'Data inicio e obrigatoria'),
+  ends_at: z.string().min(1, 'Data fim e obrigatoria'),
+  status: z.enum(['PLANEJADA', 'ATIVA', 'CONCLUIDA', 'CANCELADA']).default('PLANEJADA'),
+});
+
+// ============================================
+// Bug Reports
+// ============================================
+
+export const bugReportSchema = z.object({
+  title: z.string().min(1, 'Titulo e obrigatorio').max(200),
+  description: z.string().max(5000).optional().nullable(),
+  severity: z.enum(['CRITICO', 'ALTO', 'MEDIO', 'BAIXO']).default('MEDIO'),
+  priority: z.enum(['URGENTE', 'ALTA', 'NORMAL', 'BAIXA']).default('NORMAL'),
+  work_front_id: z.string().uuid().optional().nullable(),
+  sprint_id: z.string().uuid().optional().nullable(),
+  assigned_to: z.string().uuid().optional().nullable(),
+  tag_ids: z.array(z.string().uuid()).optional().default([]),
+});
+
+export const bugReportUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(5000).optional().nullable(),
+  severity: z.enum(['CRITICO', 'ALTO', 'MEDIO', 'BAIXO']).optional(),
+  priority: z.enum(['URGENTE', 'ALTA', 'NORMAL', 'BAIXA']).optional(),
+  status: z.enum(['ABERTO', 'EM_ANALISE', 'CORRIGINDO', 'TESTE', 'RESOLVIDO']).optional(),
+  work_front_id: z.string().uuid().optional().nullable(),
+  sprint_id: z.string().uuid().optional().nullable(),
+  assigned_to: z.string().uuid().optional().nullable(),
+  resolution_notes: z.string().max(5000).optional().nullable(),
+  tag_ids: z.array(z.string().uuid()).optional(),
+});
+
+export const bugCommentSchema = z.object({
+  content: z.string().min(1, 'Comentario e obrigatorio').max(5000),
 });

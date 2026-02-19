@@ -3,24 +3,30 @@
 import { useState, useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import type { Contact, ContactStatus } from '@/lib/types';
+import type { Contact, PipelineStage, PipelineType } from '@/lib/types';
 import { KanbanCard, type UserInfo } from './kanban-card';
+import { normalizeSearch } from '@/lib/utils/normalize';
 
 interface KanbanColumnProps {
-  status: ContactStatus;
+  stage: PipelineStage;
   contacts: Contact[];
   userMap: Record<string, UserInfo>;
-  columnLabel?: string;
-  columnColor?: string;
   currentUserId?: string;
   onClaimContact?: (contactId: string) => void;
+  onRequestContact?: (contactId: string) => void;
   onJumpForward?: (contactId: string) => void;
   onJumpBackward?: (contactId: string) => void;
   onScheduleMeeting?: (contactId: string, contactName: string) => void;
   contactsWithMeeting?: Set<string>;
+  lastInteractionMap?: Record<string, string>;
+  bulkMode?: boolean;
+  bulkSelectedIds?: Set<string>;
+  onBulkToggle?: (contactId: string) => void;
+  pipelineType?: PipelineType;
+  attachmentCountMap?: Record<string, number>;
 }
 
-const STATUS_ICONS: Record<string, string> = {
+const SLUG_ICONS: Record<string, string> = {
   NOVO: 'M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z',
   EM_PROSPECCAO: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z',
   CONTATADO: 'M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z',
@@ -29,8 +35,18 @@ const STATUS_ICONS: Record<string, string> = {
   PERDIDO: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
 };
 
+function getIconForStage(stage: PipelineStage): string {
+  // Try slug match first for known slugs
+  if (SLUG_ICONS[stage.slug]) return SLUG_ICONS[stage.slug];
+  // Terminal stages
+  if (stage.is_terminal && stage.terminal_type === 'won') return SLUG_ICONS.CONVERTIDO;
+  if (stage.is_terminal && stage.terminal_type === 'lost') return SLUG_ICONS.PERDIDO;
+  // Default
+  return 'M13 10V3L4 14h7v7l9-11h-7z';
+}
+
 function contactMatchesFilter(contact: Contact, query: string, userMap: Record<string, UserInfo>): boolean {
-  const q = query.toLowerCase();
+  const q = normalizeSearch(query);
   const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id];
   const fields = [
     contact.name,
@@ -52,16 +68,16 @@ function contactMatchesFilter(contact: Contact, query: string, userMap: Record<s
     contact.proxima_acao_tipo,
     owner?.name,
   ];
-  return fields.some(f => f && f.toLowerCase().includes(q));
+  return fields.some(f => f && normalizeSearch(f).includes(q));
 }
 
-export function KanbanColumn({ status, contacts, userMap, columnLabel, columnColor, currentUserId, onClaimContact, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting }: KanbanColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: status });
+export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap }: KanbanColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const [filter, setFilter] = useState('');
-  const color = columnColor || '#a3a3a3';
-  const label = columnLabel || status;
+  const color = stage.color || '#a3a3a3';
+  const label = stage.name;
   const totalValue = contacts.reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
-  const iconPath = STATUS_ICONS[status] || STATUS_ICONS.NOVO;
+  const iconPath = getIconForStage(stage);
 
   const filtered = useMemo(() => {
     if (!filter.trim()) return contacts;
@@ -143,10 +159,17 @@ export function KanbanColumn({ status, contacts, userMap, columnLabel, columnCol
               userMap={userMap}
               currentUserId={currentUserId}
               onClaimContact={onClaimContact}
+              onRequestContact={onRequestContact}
               onJumpForward={onJumpForward}
               onJumpBackward={onJumpBackward}
               onScheduleMeeting={onScheduleMeeting}
               hasMeeting={contactsWithMeeting?.has(contact.id)}
+              lastInteractionAt={lastInteractionMap?.[contact.id] || null}
+              bulkMode={bulkMode}
+              bulkSelected={bulkSelectedIds?.has(contact.id)}
+              onBulkToggle={onBulkToggle}
+              pipelineType={pipelineType}
+              attachmentCount={attachmentCountMap?.[contact.id] || 0}
             />
           ))}
         </SortableContext>

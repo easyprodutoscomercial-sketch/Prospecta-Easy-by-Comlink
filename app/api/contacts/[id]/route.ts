@@ -125,6 +125,7 @@ export async function PATCH(
       'contato_nome', 'cargo', 'endereco', 'cidade', 'estado', 'cep',
       'website', 'instagram', 'whatsapp',
       'assigned_to_user_id',
+      'pipeline_id', 'stage_id',
     ]);
 
     // Testar quais colunas extras existem no banco
@@ -133,6 +134,19 @@ export async function PATCH(
     for (const col of extraCols) {
       const { error: colErr } = await admin.from('contacts').select(col).limit(0);
       if (!colErr) dbFields.add(col);
+    }
+
+    // Se stage_id foi enviado, sincronizar o campo status com o slug do stage
+    if (validated.stage_id) {
+      const { data: stage } = await admin
+        .from('pipeline_stages')
+        .select('slug')
+        .eq('id', validated.stage_id)
+        .single();
+
+      if (stage) {
+        (validated as any).status = stage.slug;
+      }
     }
 
     // Re-normalize identity fields when they change

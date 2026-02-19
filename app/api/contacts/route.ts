@@ -35,10 +35,29 @@ export async function GET(request: NextRequest) {
     const allowedSortFields = ['name', 'company', 'status', 'created_at'];
     const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'created_at';
 
+    // Se NAO e admin, buscar pipelines onde o usuario e membro
+    let allowedPipelineIds: string[] | null = null;
+    if (profile.role !== 'admin') {
+      const { data: myMemberships } = await admin
+        .from('pipeline_members')
+        .select('pipeline_id')
+        .eq('user_id', user.id);
+
+      allowedPipelineIds = (myMemberships || []).map((m: any) => m.pipeline_id);
+    }
+
     let query = admin
       .from('contacts')
       .select('*', { count: 'exact' })
       .eq('organization_id', profile.organization_id);
+
+    // Filtrar por pipelines permitidas (non-admin)
+    if (allowedPipelineIds !== null && allowedPipelineIds.length > 0) {
+      query = query.in('pipeline_id', allowedPipelineIds);
+    } else if (allowedPipelineIds !== null && allowedPipelineIds.length === 0) {
+      // Sem membership em nenhum pipeline — nao retorna contatos
+      return NextResponse.json({ contacts: [], total: 0, page, limit, totalPages: 0 });
+    }
 
     // Filtro de busca
     if (search) {
@@ -53,6 +72,18 @@ export async function GET(request: NextRequest) {
     // Filtro de tipo
     if (tipo && tipo !== 'all') {
       query = query.contains('tipo', [tipo]);
+    }
+
+    // Filtro de pipeline
+    const pipeline_id = searchParams.get('pipeline_id');
+    if (pipeline_id) {
+      query = query.eq('pipeline_id', pipeline_id);
+    }
+
+    // Filtro de stage
+    const stage_id = searchParams.get('stage_id');
+    if (stage_id) {
+      query = query.eq('stage_id', stage_id);
     }
 
     // Filtro de atribuição
@@ -302,6 +333,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Determinar pipeline_id e stage_id
+    let contactPipelineId = body.pipeline_id || null;
+    let contactStageId = body.stage_id || null;
+
+    // Se nao informou pipeline, usar o default da org
+    if (!contactPipelineId) {
+      const { data: defaultPipeline } = await admin
+        .from('pipelines')
+        .select('id')
+        .eq('organization_id', profile.organization_id)
+        .eq('is_default', true)
+        .limit(1)
+        .single();
+
+      if (defaultPipeline) {
+        contactPipelineId = defaultPipeline.id;
+      }
+    }
+
+    // Se tem pipeline mas nao tem stage, usar o primeiro stage
+    if (contactPipelineId && !contactStageId) {
+      const { data: firstStage } = await admin
+        .from('pipeline_stages')
+        .select('id')
+        .eq('pipeline_id', contactPipelineId)
+        .order('position', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (firstStage) {
+        contactStageId = firstStage.id;
+      }
+    }
+
     // Criar contato (sem responsável — só via "Apontar")
     const { data: newContact, error } = await admin
       .from('contacts')
@@ -309,6 +374,8 @@ export async function POST(request: NextRequest) {
         organization_id: profile.organization_id,
         ...normalized,
         created_by_user_id: user.id,
+        ...(contactPipelineId ? { pipeline_id: contactPipelineId } : {}),
+        ...(contactStageId ? { stage_id: contactStageId } : {}),
       })
       .select()
       .single();
