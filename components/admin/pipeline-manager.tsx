@@ -40,6 +40,7 @@ interface OrgUser {
 }
 
 export default function PipelineManager() {
+  const { refetch: refetchGlobalPipelines } = usePipeline();
   const [pipelines, setPipelines] = useState<PipelineWithStages[]>([]);
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -200,6 +201,7 @@ export default function PipelineManager() {
       if (res.ok) {
         setResult({ type: 'success', message: editingId ? 'Pipeline atualizado com sucesso!' : 'Pipeline criado com sucesso!' });
         fetchPipelines();
+        refetchGlobalPipelines(); // Atualiza contexto global (Kanban, sidebar, etc)
         setTimeout(resetForm, 1500);
       } else {
         setResult({ type: 'error', message: data.error || 'Erro ao salvar' });
@@ -224,6 +226,7 @@ export default function PipelineManager() {
       if (res.ok) {
         setResult({ type: 'success', message: `Pipeline "${name}" excluido.` });
         fetchPipelines();
+        refetchGlobalPipelines(); // Atualiza contexto global
       } else {
         setResult({ type: 'error', message: data.error || 'Erro ao excluir' });
       }

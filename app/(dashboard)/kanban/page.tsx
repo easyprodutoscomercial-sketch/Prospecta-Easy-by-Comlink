@@ -225,7 +225,8 @@ export default function KanbanPage() {
 
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    refetchPipelines(); // Garantir stages/icones atualizados ao abrir o kanban
+  }, [fetchData, refetchPipelines]);
 
   // Current pipeline type
   const pipelineType: PipelineType = currentPipeline?.pipeline_type || 'PADRAO';

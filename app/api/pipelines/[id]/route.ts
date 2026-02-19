@@ -177,25 +177,34 @@ export async function PUT(
             .update(stageData)
             .eq('id', stage.id);
           if (stageErr) {
-            console.warn(`Stage update error (${stage.name}):`, stageErr.message, '— retrying without optional cols');
-            const { allow_meeting: _am, icon: _ic, ...safeData } = stageData;
-            const { error: retryErr } = await admin
-              .from('pipeline_stages')
-              .update(safeData)
-              .eq('id', stage.id);
-            if (retryErr) console.warn(`Stage update retry error (${stage.name}):`, retryErr.message);
+            // Retry 1: sem allow_meeting (manter icon)
+            console.warn(`Stage update error (${stage.name}):`, stageErr.message, '— retry sem allow_meeting');
+            const { allow_meeting: _am, ...withIcon } = stageData;
+            const { error: retry1 } = await admin.from('pipeline_stages').update(withIcon).eq('id', stage.id);
+            if (retry1) {
+              // Retry 2: sem allow_meeting e sem icon
+              console.warn(`Stage update retry1 error (${stage.name}):`, retry1.message, '— retry sem icon');
+              const { icon: _ic, ...safeData } = withIcon;
+              const { error: retry2 } = await admin.from('pipeline_stages').update(safeData).eq('id', stage.id);
+              if (retry2) console.warn(`Stage update retry2 error (${stage.name}):`, retry2.message);
+            }
           }
         } else {
           const { error: stageErr } = await admin
             .from('pipeline_stages')
             .insert({ pipeline_id: id, ...stageData });
           if (stageErr) {
-            console.warn(`Stage insert error (${stage.name}):`, stageErr.message, '— retrying without optional cols');
-            const { allow_meeting: _am, icon: _ic, ...safeData } = stageData;
-            const { error: retryErr } = await admin
-              .from('pipeline_stages')
-              .insert({ pipeline_id: id, ...safeData });
-            if (retryErr) console.warn(`Stage insert retry error (${stage.name}):`, retryErr.message);
+            // Retry 1: sem allow_meeting (manter icon)
+            console.warn(`Stage insert error (${stage.name}):`, stageErr.message, '— retry sem allow_meeting');
+            const { allow_meeting: _am, ...withIcon } = stageData;
+            const { error: retry1 } = await admin.from('pipeline_stages').insert({ pipeline_id: id, ...withIcon });
+            if (retry1) {
+              // Retry 2: sem allow_meeting e sem icon
+              console.warn(`Stage insert retry1 error (${stage.name}):`, retry1.message, '— retry sem icon');
+              const { icon: _ic, ...safeData } = withIcon;
+              const { error: retry2 } = await admin.from('pipeline_stages').insert({ pipeline_id: id, ...safeData });
+              if (retry2) console.warn(`Stage insert retry2 error (${stage.name}):`, retry2.message);
+            }
           }
         }
       }
