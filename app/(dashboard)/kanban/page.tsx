@@ -75,7 +75,7 @@ const SAD_EMOJIS = ['😢', '😭', '💔', '😞', '😿', '🥺', '😩', '�
 
 export default function KanbanPage() {
   const toast = useToast();
-  const { pipelines, selectedPipelineId, setSelectedPipelineId, currentPipeline } = usePipeline();
+  const { pipelines, selectedPipelineId, setSelectedPipelineId, currentPipeline, refetch: refetchPipelines } = usePipeline();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -269,10 +269,11 @@ export default function KanbanPage() {
   useEffect(() => {
     const interval = setInterval(() => {
       fetchData();
+      refetchPipelines(); // Atualiza stages/colunas do pipeline tambem
       if (selectedPipelineId) fetchContacts(selectedPipelineId);
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchData, fetchContacts, selectedPipelineId]);
+  }, [fetchData, fetchContacts, selectedPipelineId, refetchPipelines]);
 
   // Emoji explosion effect
   function triggerEmojis(type: 'celebrate' | 'sad') {
@@ -353,18 +354,19 @@ export default function KanbanPage() {
   const grouped = useMemo(() => {
     const groups: Record<string, Contact[]> = {};
     for (const s of stages) groups[s.id] = [];
+    const firstStage = stages[0];
     for (const c of filtered) {
       if (c.stage_id && groups[c.stage_id]) {
         groups[c.stage_id].push(c);
-      } else if (c.stage_id) {
-        // Contact has a stage_id but not in current pipeline stages - skip
-      } else {
-        // Contact without stage_id - put in first stage
-        const firstStage = stages[0];
-        if (firstStage) {
-          groups[firstStage.id].push(c);
-        }
+      } else if (firstStage) {
+        // Contato sem stage_id OU com stage_id que nao existe nos stages atuais
+        // — coloca no primeiro stage para NUNCA sumir da tela
+        groups[firstStage.id].push(c);
       }
+    }
+    // Ordenacao estavel dentro de cada coluna: por nome (alfabetico)
+    for (const key of Object.keys(groups)) {
+      groups[key].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
     }
     return groups;
   }, [filtered, stages]);
