@@ -161,55 +161,64 @@ export async function PUT(
       }
 
       // Upsert stages (update existentes, insert novos)
+      // Estrategia: salvar campos basicos primeiro (sempre existem), depois campos opcionais separadamente
       for (const stage of validated.stages) {
-        const stageData: Record<string, any> = {
+        const baseData: Record<string, any> = {
           name: stage.name,
           slug: stage.slug,
           color: stage.color || '#a3a3a3',
           position: stage.position,
           is_terminal: stage.is_terminal || false,
           terminal_type: stage.terminal_type || null,
-          allow_meeting: stage.allow_meeting || false,
         };
-        // Icon: SEMPRE incluir no stageData (Zod garante string | null, nunca undefined)
-        stageData.icon = stage.icon ?? null;
 
-        console.log(`[PIPELINE PUT] Stage "${stage.name}" (id: ${stage.id || 'NEW'}) → icon: "${stage.icon}", stageData:`, JSON.stringify(stageData));
+        const optionalFields: { field: string; value: any }[] = [
+          { field: 'icon', value: stage.icon ?? null },
+          { field: 'allow_meeting', value: stage.allow_meeting || false },
+        ];
+
+        console.log(`[PIPELINE PUT] Stage "${stage.name}" (id: ${stage.id || 'NEW'}) icon="${stage.icon}" allow_meeting=${stage.allow_meeting}`);
+
+        let stageRowId = stage.id;
 
         if (stage.id && currentIds.has(stage.id)) {
-          const { error: stageErr } = await admin
+          // UPDATE existente — campos basicos
+          const { error: baseErr } = await admin
             .from('pipeline_stages')
-            .update(stageData)
+            .update(baseData)
             .eq('id', stage.id);
-          if (stageErr) {
-            // Retry 1: sem allow_meeting (manter icon)
-            console.warn(`Stage update error (${stage.name}):`, stageErr.message, '— retry sem allow_meeting');
-            const { allow_meeting: _am, ...withIcon } = stageData;
-            const { error: retry1 } = await admin.from('pipeline_stages').update(withIcon).eq('id', stage.id);
-            if (retry1) {
-              // Retry 2: sem allow_meeting e sem icon
-              console.warn(`Stage update retry1 error (${stage.name}):`, retry1.message, '— retry sem icon');
-              const { icon: _ic, ...safeData } = withIcon;
-              const { error: retry2 } = await admin.from('pipeline_stages').update(safeData).eq('id', stage.id);
-              if (retry2) console.warn(`Stage update retry2 error (${stage.name}):`, retry2.message);
-            }
+          if (baseErr) {
+            console.error(`[PIPELINE PUT] Stage update FALHOU (${stage.name}):`, baseErr.message);
+            continue;
           }
         } else {
-          const { error: stageErr } = await admin
+          // INSERT novo — campos basicos
+          const { data: inserted, error: baseErr } = await admin
             .from('pipeline_stages')
-            .insert({ pipeline_id: id, ...stageData });
-          if (stageErr) {
-            // Retry 1: sem allow_meeting (manter icon)
-            console.warn(`Stage insert error (${stage.name}):`, stageErr.message, '— retry sem allow_meeting');
-            const { allow_meeting: _am, ...withIcon } = stageData;
-            const { error: retry1 } = await admin.from('pipeline_stages').insert({ pipeline_id: id, ...withIcon });
-            if (retry1) {
-              // Retry 2: sem allow_meeting e sem icon
-              console.warn(`Stage insert retry1 error (${stage.name}):`, retry1.message, '— retry sem icon');
-              const { icon: _ic, ...safeData } = withIcon;
-              const { error: retry2 } = await admin.from('pipeline_stages').insert({ pipeline_id: id, ...safeData });
-              if (retry2) console.warn(`Stage insert retry2 error (${stage.name}):`, retry2.message);
+            .insert({ pipeline_id: id, ...baseData })
+            .select('id')
+            .single();
+          if (baseErr || !inserted) {
+            console.error(`[PIPELINE PUT] Stage insert FALHOU (${stage.name}):`, baseErr?.message);
+            continue;
+          }
+          stageRowId = inserted.id;
+        }
+
+        // Agora tentar cada campo opcional INDIVIDUALMENTE
+        for (const { field, value } of optionalFields) {
+          try {
+            const { error } = await admin
+              .from('pipeline_stages')
+              .update({ [field]: value })
+              .eq('id', stageRowId);
+            if (error) {
+              console.warn(`[PIPELINE PUT] Campo "${field}" nao salvou (${stage.name}): ${error.message}`);
+            } else {
+              console.log(`[PIPELINE PUT] Campo "${field}" = ${JSON.stringify(value)} salvo OK (${stage.name})`);
             }
+          } catch (err: any) {
+            console.warn(`[PIPELINE PUT] Campo "${field}" erro (${stage.name}):`, err.message);
           }
         }
       }

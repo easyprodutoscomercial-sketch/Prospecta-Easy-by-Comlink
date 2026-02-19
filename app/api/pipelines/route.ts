@@ -130,40 +130,47 @@ export async function POST(request: NextRequest) {
 
     if (pipError) throw pipError;
 
-    // Criar stages
-    const stagesToInsert = validated.stages.map((s, i) => {
-      const stageRow: Record<string, any> = {
-        pipeline_id: pipeline.id,
-        name: s.name,
-        slug: s.slug,
-        color: s.color || '#a3a3a3',
-        position: s.position ?? i,
-        is_terminal: s.is_terminal || false,
-        terminal_type: s.terminal_type || null,
-        allow_meeting: s.allow_meeting || false,
-      };
-      if (s.icon) stageRow.icon = s.icon;
-      return stageRow;
-    });
+    // Criar stages — campos basicos primeiro, depois opcionais individualmente
+    const baseStagesToInsert = validated.stages.map((s, i) => ({
+      pipeline_id: pipeline.id,
+      name: s.name,
+      slug: s.slug,
+      color: s.color || '#a3a3a3',
+      position: s.position ?? i,
+      is_terminal: s.is_terminal || false,
+      terminal_type: s.terminal_type || null,
+    }));
 
-    let stages: any[] = [];
     const { data: stagesData, error: stagesError } = await admin
       .from('pipeline_stages')
-      .insert(stagesToInsert)
+      .insert(baseStagesToInsert)
       .select();
 
-    if (stagesError) {
-      // Retry without optional columns (allow_meeting, icon) if they don't exist yet
-      console.warn('Stages insert failed, retrying without optional cols:', stagesError.message);
-      const safeStagesToInsert = stagesToInsert.map(({ allow_meeting, icon, ...rest }) => rest);
-      const { data: retryData, error: retryErr } = await admin
-        .from('pipeline_stages')
-        .insert(safeStagesToInsert)
-        .select();
-      if (retryErr) throw retryErr;
-      stages = retryData || [];
-    } else {
-      stages = stagesData || [];
+    if (stagesError) throw stagesError;
+    const stages = stagesData || [];
+
+    // Agora tentar salvar campos opcionais (icon, allow_meeting) individualmente por stage
+    for (let i = 0; i < stages.length; i++) {
+      const stageRow = stages[i];
+      const original = validated.stages[i];
+      if (!stageRow || !original) continue;
+
+      const optionalUpdates: Record<string, any> = {};
+      if (original.icon) optionalUpdates.icon = original.icon;
+      if (original.allow_meeting) optionalUpdates.allow_meeting = true;
+
+      if (Object.keys(optionalUpdates).length > 0) {
+        // Tentar todos juntos primeiro
+        const { error } = await admin.from('pipeline_stages').update(optionalUpdates).eq('id', stageRow.id);
+        if (error) {
+          // Se falhou, tentar cada campo individualmente
+          for (const [field, value] of Object.entries(optionalUpdates)) {
+            const { error: fieldErr } = await admin.from('pipeline_stages').update({ [field]: value }).eq('id', stageRow.id);
+            if (fieldErr) console.warn(`[PIPELINE POST] Campo "${field}" nao salvou (${original.name}): ${fieldErr.message}`);
+            else console.log(`[PIPELINE POST] Campo "${field}" = ${JSON.stringify(value)} salvo OK (${original.name})`);
+          }
+        }
+      }
     }
 
     // Inserir membros do pipeline
