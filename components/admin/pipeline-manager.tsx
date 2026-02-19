@@ -39,7 +39,11 @@ interface OrgUser {
   avatar_url?: string | null;
 }
 
-export default function PipelineManager() {
+interface PipelineManagerProps {
+  showBugsType?: boolean;
+}
+
+export default function PipelineManager({ showBugsType = false }: PipelineManagerProps) {
   const { refetch: refetchGlobalPipelines } = usePipeline();
   const [pipelines, setPipelines] = useState<PipelineWithStages[]>([]);
   const [loading, setLoading] = useState(true);
@@ -437,7 +441,8 @@ export default function PipelineManager() {
             </p>
           </div>
 
-          {/* Pipeline type selector */}
+          {/* Pipeline type selector - only show if bugs type is available or editing a bugs pipeline */}
+          {(showBugsType || formType === 'BUGS') && (
           <div>
             <label className="block text-xs font-medium text-purple-300/80 mb-1">Tipo do Pipeline *</label>
             <div className="flex gap-2">
@@ -481,6 +486,7 @@ export default function PipelineManager() {
               </button>
             </div>
           </div>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-purple-300/80 mb-1">Etapas (colunas do Kanban) *</label>

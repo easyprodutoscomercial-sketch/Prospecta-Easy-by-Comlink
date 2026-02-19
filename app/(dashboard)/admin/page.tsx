@@ -492,7 +492,10 @@ export default function AdminPage() {
           <p className="text-xs text-purple-300/60 mb-4">
             Crie e gerencie multiplos pipelines com etapas customizaveis (nome, cor, ordem, tipo terminal).
           </p>
-          <PipelineManager />
+          <PipelineManager showBugsType={users.some(u => {
+            const menus = (u as any).visible_menus as string[] | undefined;
+            return menus && menus.length > 0 && menus.includes('bugs');
+          })} />
         </div>
       </div>
 
