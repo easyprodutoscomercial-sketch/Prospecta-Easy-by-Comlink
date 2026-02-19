@@ -62,8 +62,6 @@ export async function PATCH(
     if (name) profileUpdate.name = name;
     if (email) profileUpdate.email = email;
     if (role !== undefined) profileUpdate.role = role;
-    if (visible_menus !== undefined) profileUpdate.visible_menus = visible_menus;
-
     if (Object.keys(profileUpdate).length > 0) {
       const { error: updateError } = await admin
         .from('profiles')
@@ -72,6 +70,17 @@ export async function PATCH(
 
       if (updateError) {
         return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+    }
+
+    // visible_menus update (column may not exist yet)
+    if (visible_menus !== undefined) {
+      const { error: menuErr } = await admin
+        .from('profiles')
+        .update({ visible_menus })
+        .eq('user_id', id);
+      if (menuErr) {
+        console.warn('visible_menus update skipped (column may not exist):', menuErr.message);
       }
     }
 
@@ -95,7 +104,7 @@ export async function PATCH(
     // Retornar profile atualizado
     const { data: updatedProfile } = await admin
       .from('profiles')
-      .select('user_id, name, email, visible_menus, created_at')
+      .select('user_id, name, email, role, avatar_url, created_at')
       .eq('user_id', id)
       .single();
 
