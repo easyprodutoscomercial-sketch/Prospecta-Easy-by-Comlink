@@ -98,7 +98,7 @@ export async function PUT(
     const body = await request.json();
     const validated = pipelineUpdateSchema.parse(body);
 
-    // Atualizar pipeline
+    // Atualizar pipeline — detectar colunas disponiveis
     const updateData: Record<string, any> = {};
     if (validated.name !== undefined) updateData.name = validated.name;
     if (validated.description !== undefined) updateData.description = validated.description;
@@ -109,7 +109,22 @@ export async function PUT(
         .from('pipelines')
         .update(updateData)
         .eq('id', id);
-      if (updateError) throw updateError;
+
+      // Se falhar (ex: coluna pipeline_type nao existe), tentar sem campos problematicos
+      if (updateError) {
+        console.warn('Pipeline update failed, retrying without optional fields:', updateError.message);
+        const safeData: Record<string, any> = {};
+        if (validated.name !== undefined) safeData.name = validated.name;
+        if (validated.description !== undefined) safeData.description = validated.description;
+
+        if (Object.keys(safeData).length > 0) {
+          const { error: retryError } = await admin
+            .from('pipelines')
+            .update(safeData)
+            .eq('id', id);
+          if (retryError) throw retryError;
+        }
+      }
     }
 
     // Se stages foram enviados, sincronizar
@@ -145,32 +160,26 @@ export async function PUT(
 
       // Upsert stages (update existentes, insert novos)
       for (const stage of validated.stages) {
+        const stageData = {
+          name: stage.name,
+          slug: stage.slug,
+          color: stage.color || '#a3a3a3',
+          position: stage.position,
+          is_terminal: stage.is_terminal || false,
+          terminal_type: stage.terminal_type || null,
+        };
+
         if (stage.id && currentIds.has(stage.id)) {
-          // Update
-          await admin
+          const { error: stageErr } = await admin
             .from('pipeline_stages')
-            .update({
-              name: stage.name,
-              slug: stage.slug,
-              color: stage.color || '#a3a3a3',
-              position: stage.position,
-              is_terminal: stage.is_terminal || false,
-              terminal_type: stage.terminal_type || null,
-            })
+            .update(stageData)
             .eq('id', stage.id);
+          if (stageErr) console.warn(`Stage update error (${stage.name}):`, stageErr.message);
         } else {
-          // Insert
-          await admin
+          const { error: stageErr } = await admin
             .from('pipeline_stages')
-            .insert({
-              pipeline_id: id,
-              name: stage.name,
-              slug: stage.slug,
-              color: stage.color || '#a3a3a3',
-              position: stage.position,
-              is_terminal: stage.is_terminal || false,
-              terminal_type: stage.terminal_type || null,
-            });
+            .insert({ pipeline_id: id, ...stageData });
+          if (stageErr) console.warn(`Stage insert error (${stage.name}):`, stageErr.message);
         }
       }
     }
