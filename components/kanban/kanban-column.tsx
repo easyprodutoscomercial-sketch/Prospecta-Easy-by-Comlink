@@ -191,7 +191,7 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
               onJumpBackward={onJumpBackward}
               onScheduleMeeting={onScheduleMeeting}
               hasMeeting={contactsWithMeeting?.has(contact.id)}
-              showScheduleMeeting={stage.allow_meeting === true}
+              showScheduleMeeting={stage.allow_meeting === true || stage.slug === 'REUNIAO_MARCADA'}
               lastInteractionAt={lastInteractionMap?.[contact.id] || null}
               bulkMode={bulkMode}
               bulkSelected={bulkSelectedIds?.has(contact.id)}
