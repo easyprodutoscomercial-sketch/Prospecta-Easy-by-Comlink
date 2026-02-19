@@ -124,7 +124,10 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
             </svg>
           </div>
           <span className="text-xs font-semibold text-neutral-200 flex-1 truncate">{label}</span>
-          <span className="text-[10px] font-bold text-purple-300/50 bg-purple-800/20 rounded-md px-1.5 py-0.5 min-w-[22px] text-center">
+          <span
+            className="text-xs font-bold rounded-full px-2 py-0.5 min-w-[26px] text-center"
+            style={{ backgroundColor: `${color}25`, color }}
+          >
             {filter.trim() ? `${filtered.length}/${contacts.length}` : contacts.length}
           </span>
         </div>
