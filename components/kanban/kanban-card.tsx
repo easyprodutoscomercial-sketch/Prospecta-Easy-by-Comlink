@@ -326,8 +326,8 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
         </div>
       )}
 
-      {/* Schedule meeting — for stages where showScheduleMeeting or slug is REUNIAO_MARCADA */}
-      {!overlay && (showMeeting || contact.status === 'REUNIAO_MARCADA') && onScheduleMeeting && (
+      {/* Schedule meeting — only when admin configured allow_meeting on the stage */}
+      {!overlay && showMeeting && onScheduleMeeting && (
         <div className="mt-2 pt-2 border-t border-purple-800/15">
           <button
             onClick={(e) => { e.stopPropagation(); onScheduleMeeting(contact.id, contact.name); }}

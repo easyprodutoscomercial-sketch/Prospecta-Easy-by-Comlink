@@ -167,6 +167,7 @@ export async function PUT(
           position: stage.position,
           is_terminal: stage.is_terminal || false,
           terminal_type: stage.terminal_type || null,
+          allow_meeting: stage.allow_meeting || false,
         };
         if (stage.icon !== undefined) stageData.icon = stage.icon || null;
 
@@ -175,12 +176,27 @@ export async function PUT(
             .from('pipeline_stages')
             .update(stageData)
             .eq('id', stage.id);
-          if (stageErr) console.warn(`Stage update error (${stage.name}):`, stageErr.message);
+          if (stageErr) {
+            console.warn(`Stage update error (${stage.name}):`, stageErr.message, '— retrying without optional cols');
+            const { allow_meeting: _am, icon: _ic, ...safeData } = stageData;
+            const { error: retryErr } = await admin
+              .from('pipeline_stages')
+              .update(safeData)
+              .eq('id', stage.id);
+            if (retryErr) console.warn(`Stage update retry error (${stage.name}):`, retryErr.message);
+          }
         } else {
           const { error: stageErr } = await admin
             .from('pipeline_stages')
             .insert({ pipeline_id: id, ...stageData });
-          if (stageErr) console.warn(`Stage insert error (${stage.name}):`, stageErr.message);
+          if (stageErr) {
+            console.warn(`Stage insert error (${stage.name}):`, stageErr.message, '— retrying without optional cols');
+            const { allow_meeting: _am, icon: _ic, ...safeData } = stageData;
+            const { error: retryErr } = await admin
+              .from('pipeline_stages')
+              .insert({ pipeline_id: id, ...safeData });
+            if (retryErr) console.warn(`Stage insert retry error (${stage.name}):`, retryErr.message);
+          }
         }
       }
     }

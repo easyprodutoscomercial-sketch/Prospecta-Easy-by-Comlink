@@ -165,6 +165,7 @@ export interface PipelineStage {
   position: number;
   is_terminal: boolean;
   terminal_type: 'won' | 'lost' | null;
+  allow_meeting?: boolean;
   created_at: string;
 }
 

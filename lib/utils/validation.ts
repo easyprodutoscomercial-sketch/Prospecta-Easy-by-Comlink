@@ -125,6 +125,7 @@ export const pipelineStageSchema = z.object({
   position: z.number().int().min(0),
   is_terminal: z.boolean().default(false),
   terminal_type: z.enum(['won', 'lost']).nullable().default(null),
+  allow_meeting: z.boolean().default(false),
 });
 
 export const pipelineCreateSchema = z.object({

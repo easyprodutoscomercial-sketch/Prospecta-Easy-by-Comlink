@@ -12,6 +12,7 @@ export interface StageEditorItem {
   position: number;
   is_terminal: boolean;
   terminal_type: 'won' | 'lost' | null;
+  allow_meeting?: boolean;
 }
 
 interface StageEditorProps {
@@ -36,7 +37,7 @@ export default function StageEditor({ stages, onChange }: StageEditorProps) {
     const newPos = stages.length;
     onChange([
       ...stages,
-      { name: '', slug: '', color: '#a3a3a3', icon: null, position: newPos, is_terminal: false, terminal_type: null },
+      { name: '', slug: '', color: '#a3a3a3', icon: null, position: newPos, is_terminal: false, terminal_type: null, allow_meeting: false },
     ]);
   };
 
@@ -104,6 +105,12 @@ export default function StageEditor({ stages, onChange }: StageEditorProps) {
           <div className="flex items-center gap-2">
             <span className="w-5 h-5 rounded bg-purple-700/30 flex items-center justify-center text-[8px] text-purple-300/60 font-bold">Aa</span>
             <span className="text-purple-300/50"><strong className="text-purple-300/80">Campo de texto</strong> = nome da coluna (ex: &quot;Novo&quot;, &quot;Contatado&quot;, &quot;Negociando&quot;)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded bg-purple-700/30 flex items-center justify-center">
+              <svg className="w-3 h-3 text-cyan-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            </span>
+            <span className="text-purple-300/50"><strong className="text-purple-300/80">Checkbox &quot;Reuniao&quot;</strong> = mostra botao &quot;Agendar Reuniao&quot; nos cards dessa coluna</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-5 h-5 rounded bg-purple-700/30 flex items-center justify-center">
@@ -229,8 +236,21 @@ export default function StageEditor({ stages, onChange }: StageEditorProps) {
               className="flex-1 px-2.5 py-1.5 text-sm bg-[#1e0f35] border border-purple-700/30 text-neutral-100 placeholder:text-purple-300/40 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500/50 min-w-0"
             />
 
-            {/* Terminal toggle */}
+            {/* Terminal toggle + Meeting toggle */}
             <div className="flex items-center gap-2 shrink-0">
+              <label className="flex items-center gap-1.5 cursor-pointer" title="Permitir agendar reuniao nesta etapa">
+                <input
+                  type="checkbox"
+                  checked={stage.allow_meeting || false}
+                  onChange={(e) => updateStage(index, 'allow_meeting', e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-purple-700/30 bg-[#1e0f35] text-cyan-500 focus:ring-cyan-500/50"
+                />
+                <svg className="w-3 h-3 text-cyan-400/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                <span className="text-[10px] text-purple-300/50">Reuniao</span>
+              </label>
+
               <label className="flex items-center gap-1.5 cursor-pointer">
                 <input
                   type="checkbox"

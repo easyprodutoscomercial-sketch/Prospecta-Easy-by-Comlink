@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { PipelineWithStages, PipelineType, Profile } from '@/lib/types';
+import { usePipeline } from '@/lib/pipeline-context';
 import StageEditor, { type StageEditorItem } from './stage-editor';
 
 const DEFAULT_STAGES: StageEditorItem[] = [
@@ -121,6 +122,7 @@ export default function PipelineManager() {
         position: s.position,
         is_terminal: s.is_terminal,
         terminal_type: s.terminal_type,
+        allow_meeting: s.allow_meeting || false,
       }))
     );
     // Preencher membros atuais
@@ -179,6 +181,7 @@ export default function PipelineManager() {
           position: i,
           is_terminal: s.is_terminal,
           terminal_type: s.is_terminal ? s.terminal_type : null,
+          allow_meeting: s.allow_meeting || false,
         })),
         member_user_ids: formMemberIds,
       };

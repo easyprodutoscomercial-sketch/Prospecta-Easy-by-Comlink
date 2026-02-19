@@ -140,17 +140,31 @@ export async function POST(request: NextRequest) {
         position: s.position ?? i,
         is_terminal: s.is_terminal || false,
         terminal_type: s.terminal_type || null,
+        allow_meeting: s.allow_meeting || false,
       };
       if (s.icon) stageRow.icon = s.icon;
       return stageRow;
     });
 
-    const { data: stages, error: stagesError } = await admin
+    let stages: any[] = [];
+    const { data: stagesData, error: stagesError } = await admin
       .from('pipeline_stages')
       .insert(stagesToInsert)
       .select();
 
-    if (stagesError) throw stagesError;
+    if (stagesError) {
+      // Retry without optional columns (allow_meeting, icon) if they don't exist yet
+      console.warn('Stages insert failed, retrying without optional cols:', stagesError.message);
+      const safeStagesToInsert = stagesToInsert.map(({ allow_meeting, icon, ...rest }) => rest);
+      const { data: retryData, error: retryErr } = await admin
+        .from('pipeline_stages')
+        .insert(safeStagesToInsert)
+        .select();
+      if (retryErr) throw retryErr;
+      stages = retryData || [];
+    } else {
+      stages = stagesData || [];
+    }
 
     // Inserir membros do pipeline
     const memberUserIds = validated.member_user_ids && validated.member_user_ids.length > 0
