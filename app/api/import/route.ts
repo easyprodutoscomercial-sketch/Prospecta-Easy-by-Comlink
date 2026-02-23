@@ -66,10 +66,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Fetch default pipeline and its first stage so imported contacts appear in kanban
+    let defaultPipelineId: string | null = null;
+    let firstStageId: string | null = null;
+
+    const { data: defaultPipeline } = await admin
+      .from('pipelines')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (defaultPipeline) {
+      defaultPipelineId = defaultPipeline.id;
+      const { data: firstStage } = await admin
+        .from('pipeline_stages')
+        .select('id')
+        .eq('pipeline_id', defaultPipeline.id)
+        .order('position', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (firstStage) {
+        firstStageId = firstStage.id;
+      }
+    }
+
     // Pre-fetch existing contacts for batch duplicate check (more efficient)
     const { data: existingContacts } = await admin
       .from('contacts')
-      .select('id, name, email, phone, cpf, cnpj, company, notes, email_normalized, phone_normalized, cpf_digits, cnpj_digits, tipo, referencia, classe, produtos_fornecidos, contato_nome, cargo, endereco, cidade, estado, cep, website, instagram, whatsapp')
+      .select('id, name, email, phone, cpf, cnpj, company, notes, email_normalized, phone_normalized, cpf_digits, cnpj_digits, tipo, referencia, classe, produtos_fornecidos, contato_nome, cargo, endereco, cidade, estado, cep, website, instagram, whatsapp, pipeline_id, stage_id')
       .eq('organization_id', profile.organization_id);
 
     // Build lookup maps from existing contacts (using both raw and normalized fields)
@@ -305,6 +332,12 @@ export async function POST(request: NextRequest) {
             if (updateData.cpf) updateData.cpf_digits = normalized.cpf_digits;
             if (updateData.cnpj) updateData.cnpj_digits = normalized.cnpj_digits;
 
+            // Assign pipeline/stage if contact doesn't have one yet
+            if (!existingContact.pipeline_id && defaultPipelineId) {
+              updateData.pipeline_id = defaultPipelineId;
+              if (firstStageId) updateData.stage_id = firstStageId;
+            }
+
             if (Object.keys(updateData).length > 0) {
               // Perform update
               const { error: updateError } = await admin
@@ -360,13 +393,21 @@ export async function POST(request: NextRequest) {
                 ? `${existingNotes}\n---\n${notesEntry}`
                 : notesEntry;
 
+              const notesUpdateData: Record<string, any> = { notes: newNotes };
+              if (!existingContact.pipeline_id && defaultPipelineId) {
+                notesUpdateData.pipeline_id = defaultPipelineId;
+                if (firstStageId) notesUpdateData.stage_id = firstStageId;
+              }
+
               const { error: notesError } = await admin
                 .from('contacts')
-                .update({ notes: newNotes })
+                .update(notesUpdateData)
                 .eq('id', existingContact.id);
 
               if (!notesError) {
                 existingContact.notes = newNotes;
+                if (notesUpdateData.pipeline_id) existingContact.pipeline_id = notesUpdateData.pipeline_id;
+                if (notesUpdateData.stage_id) existingContact.stage_id = notesUpdateData.stage_id;
               }
 
               result.updated_count++;
@@ -387,13 +428,21 @@ export async function POST(request: NextRequest) {
                 ? `${existingNotes}\n---\n${notesEntry}`
                 : notesEntry;
 
+              const skipUpdateData: Record<string, any> = { notes: newNotes };
+              if (!existingContact.pipeline_id && defaultPipelineId) {
+                skipUpdateData.pipeline_id = defaultPipelineId;
+                if (firstStageId) skipUpdateData.stage_id = firstStageId;
+              }
+
               const { error: notesError } = await admin
                 .from('contacts')
-                .update({ notes: newNotes })
+                .update(skipUpdateData)
                 .eq('id', existingContact.id);
 
               if (!notesError) {
                 existingContact.notes = newNotes;
+                if (skipUpdateData.pipeline_id) existingContact.pipeline_id = skipUpdateData.pipeline_id;
+                if (skipUpdateData.stage_id) existingContact.stage_id = skipUpdateData.stage_id;
               }
             }
 
@@ -414,6 +463,8 @@ export async function POST(request: NextRequest) {
               organization_id: profile.organization_id,
               ...normalized,
               created_by_user_id: user.id,
+              ...(defaultPipelineId ? { pipeline_id: defaultPipelineId } : {}),
+              ...(firstStageId ? { stage_id: firstStageId } : {}),
             })
             .select()
             .single();
