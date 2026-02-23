@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useMemo, useCallback, startTransition } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useRouter } from 'next/navigation';
@@ -42,7 +43,7 @@ function daysInStage(updatedAt: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onRequestContact, hasPendingRequest, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting, canJumpForward: canFwd, canJumpBackward: canBwd, showScheduleMeeting: showMeeting, lastInteractionAt, bulkMode, bulkSelected, onBulkToggle, pipelineType, attachmentCount }: KanbanCardProps) {
+export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onRequestContact, hasPendingRequest, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting, canJumpForward: canFwd, canJumpBackward: canBwd, showScheduleMeeting: showMeeting, lastInteractionAt, bulkMode, bulkSelected, onBulkToggle, pipelineType, attachmentCount }: KanbanCardProps) {
   const router = useRouter();
   const {
     attributes,
@@ -78,9 +79,9 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
 
   const isOverdue = contact.proxima_acao_data && new Date(contact.proxima_acao_data) < new Date();
 
-  // Lead score
-  const leadScore = computeLeadScore(contact);
-  const scoreStyle = getScoreColor(leadScore);
+  // Lead score — memoized to avoid recomputing on every render
+  const leadScore = useMemo(() => computeLeadScore(contact), [contact.temperatura, contact.valor_estimado, contact.status, contact.updated_at, contact.proxima_acao_data, contact.proxima_acao_tipo, contact.phone, contact.email, contact.whatsapp, contact.company, contact.assigned_to_user_id]);
+  const scoreStyle = useMemo(() => getScoreColor(leadScore), [leadScore]);
 
   // Cooling indicator: last interaction > 7 days ago
   const daysSinceLastInteraction = lastInteractionAt
@@ -88,18 +89,23 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
     : null;
   const isCooling = daysSinceLastInteraction !== null && daysSinceLastInteraction > 7 && contact.status !== 'CONVERTIDO' && contact.status !== 'PERDIDO';
 
+  // Navigate using startTransition to avoid blocking the main thread
+  const handleClick = useCallback(() => {
+    if (isDragging) return;
+    if (bulkMode && onBulkToggle) { onBulkToggle(contact.id); return; }
+    startTransition(() => {
+      router.push(`/contacts/${contact.id}`);
+    });
+  }, [isDragging, bulkMode, onBulkToggle, contact.id, router]);
+
   return (
     <div
       ref={overlay ? undefined : setNodeRef}
       style={overlay ? overlayStyle : style}
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
-      onClick={() => {
-        if (isDragging) return;
-        if (bulkMode && onBulkToggle) { onBulkToggle(contact.id); return; }
-        router.push(`/contacts/${contact.id}`);
-      }}
-      className={`bg-[#1e0f35] rounded-xl p-3 border-l-[3px] border cursor-grab select-none transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+      onClick={handleClick}
+      className={`bg-[#1e0f35] rounded-xl p-3 border-l-[3px] border cursor-grab select-none transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
         hasMeeting
           ? 'border-cyan-500/40 shadow-md shadow-cyan-500/10 hover:border-cyan-400/60 hover:shadow-cyan-500/20'
           : 'border-purple-800/20 hover:border-purple-600/40 hover:bg-[#241540] hover:shadow-purple-900/20'
@@ -373,4 +379,4 @@ export function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimCo
       )}
     </div>
   );
-}
+});
