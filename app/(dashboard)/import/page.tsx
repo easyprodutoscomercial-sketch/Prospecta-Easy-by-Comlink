@@ -76,6 +76,7 @@ export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [mode, setMode] = useState<'skip' | 'update'>('update');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -96,7 +97,7 @@ export default function ImportPage() {
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows }),
+        body: JSON.stringify({ rows, mode }),
       });
 
       const data = await res.json();
@@ -142,6 +143,39 @@ export default function ImportPage() {
         </div>
       </div>
 
+      {/* Import mode selector */}
+      <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 mb-6">
+        <h2 className="text-sm font-medium text-neutral-100 mb-3">Modo de importação</h2>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setMode('update')}
+            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-colors text-left ${
+              mode === 'update'
+                ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-400'
+                : 'bg-[#2a1245] border-purple-800/30 text-purple-300/60 hover:border-purple-600/50'
+            }`}
+          >
+            <div className="font-medium">Atualizar duplicados</div>
+            <div className="text-xs mt-1 opacity-70">
+              Se o contato já existe, preenche os campos que estão vazios com os dados da planilha.
+            </div>
+          </button>
+          <button
+            onClick={() => setMode('skip')}
+            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-colors text-left ${
+              mode === 'skip'
+                ? 'bg-amber-500/15 border-amber-500/50 text-amber-400'
+                : 'bg-[#2a1245] border-purple-800/30 text-purple-300/60 hover:border-purple-600/50'
+            }`}
+          >
+            <div className="font-medium">Pular duplicados</div>
+            <div className="text-xs mt-1 opacity-70">
+              Se o contato já existe, ignora a linha e reporta como duplicado.
+            </div>
+          </button>
+        </div>
+      </div>
+
       {/* Upload area */}
       <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 mb-6">
         <label className="block text-sm font-medium text-neutral-100 mb-3">Selecionar arquivo Excel (.xlsx)</label>
@@ -178,7 +212,7 @@ export default function ImportPage() {
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
           <h2 className="text-sm font-medium text-emerald-400 mb-4">Resultado da Importação</h2>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
             <div className="bg-[#2a1245] p-3 rounded-lg">
               <p className="text-xs text-purple-300/60">Total</p>
               <p className="text-xl font-semibold text-neutral-100">{result.total_rows}</p>
@@ -187,6 +221,12 @@ export default function ImportPage() {
               <p className="text-xs text-purple-300/60">Criados</p>
               <p className="text-xl font-semibold text-emerald-400">{result.created_count}</p>
             </div>
+            {(result.updated_count > 0 || mode === 'update') && (
+              <div className="bg-blue-500/15 p-3 rounded-lg">
+                <p className="text-xs text-purple-300/60">Atualizados</p>
+                <p className="text-xl font-semibold text-blue-400">{result.updated_count || 0}</p>
+              </div>
+            )}
             <div className="bg-amber-500/15 p-3 rounded-lg">
               <p className="text-xs text-purple-300/60">Duplicados</p>
               <p className="text-xl font-semibold text-amber-400">{result.duplicate_count}</p>
@@ -218,10 +258,12 @@ export default function ImportPage() {
                         <td className="px-4 py-2">
                           <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                             item.status === 'created' ? 'bg-emerald-500/15 text-emerald-400' :
+                            item.status === 'updated' ? 'bg-blue-500/15 text-blue-400' :
                             item.status === 'duplicate' ? 'bg-amber-500/15 text-amber-400' :
                             'bg-red-500/15 text-red-400'
                           }`}>
                             {item.status === 'created' ? 'Criado' :
+                             item.status === 'updated' ? 'Atualizado' :
                              item.status === 'duplicate' ? 'Duplicado' : 'Inválido'}
                           </span>
                         </td>
@@ -232,7 +274,12 @@ export default function ImportPage() {
                             </Link>
                           )}
                           {item.error_message && (
-                            <span className={`text-xs ${item.status === 'duplicate' ? 'text-amber-400' : 'text-red-400'}`}>{item.error_message}</span>
+                            <span className={`text-xs ml-2 ${
+                              item.status === 'updated' ? 'text-blue-400' :
+                              item.status === 'duplicate' ? 'text-amber-400' : 'text-red-400'
+                            }`}>
+                              {item.error_message}
+                            </span>
                           )}
                         </td>
                       </tr>

@@ -185,11 +185,12 @@ export interface PipelineWithStages extends Pipeline {
 export interface ImportResult {
   total_rows: number;
   created_count: number;
+  updated_count: number;
   duplicate_count: number;
   invalid_count: number;
   items: {
     row_number: number;
-    status: 'created' | 'duplicate' | 'invalid';
+    status: 'created' | 'updated' | 'duplicate' | 'invalid';
     contact_id?: string;
     error_message?: string;
     data: any;

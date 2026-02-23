@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS import_runs (
   created_by_user_id UUID NOT NULL REFERENCES profiles(user_id),
   total_rows INT NOT NULL,
   created_count INT NOT NULL DEFAULT 0,
+  updated_count INT NOT NULL DEFAULT 0,
   duplicate_count INT NOT NULL DEFAULT 0,
   invalid_count INT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -94,7 +95,7 @@ CREATE TABLE IF NOT EXISTS import_run_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   import_run_id UUID NOT NULL REFERENCES import_runs(id) ON DELETE CASCADE,
   row_number INT NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('created', 'duplicate', 'invalid')),
+  status TEXT NOT NULL CHECK (status IN ('created', 'updated', 'duplicate', 'invalid')),
   contact_id UUID REFERENCES contacts(id),
   error_message TEXT,
   data JSONB NOT NULL

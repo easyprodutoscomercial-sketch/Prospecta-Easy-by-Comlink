@@ -7,6 +7,14 @@ import { ensureProfile } from '@/lib/ensure-profile';
 
 const MAX_ROWS = 2000;
 
+// Fields that can be merged from import into existing contact (only if existing is empty/null)
+const MERGEABLE_FIELDS = [
+  'phone', 'email', 'cpf', 'cnpj', 'company', 'notes',
+  'tipo', 'referencia', 'classe', 'produtos_fornecidos',
+  'contato_nome', 'cargo', 'endereco', 'cidade', 'estado', 'cep',
+  'website', 'instagram', 'whatsapp',
+] as const;
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -24,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     const admin = getAdminClient();
     const body = await request.json();
-    const { rows } = body;
+    const { rows, mode = 'skip' } = body; // mode: 'skip' | 'update'
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'Nenhuma linha para importar' }, { status: 400 });
@@ -40,10 +48,17 @@ export async function POST(request: NextRequest) {
     // Pre-fetch existing contacts for batch duplicate check (more efficient)
     const { data: existingContacts } = await admin
       .from('contacts')
-      .select('id, email, phone, cpf, cnpj, email_normalized, phone_normalized, cpf_digits, cnpj_digits')
+      .select('id, name, email, phone, cpf, cnpj, company, notes, email_normalized, phone_normalized, cpf_digits, cnpj_digits, tipo, referencia, classe, produtos_fornecidos, contato_nome, cargo, endereco, cidade, estado, cep, website, instagram, whatsapp')
       .eq('organization_id', profile.organization_id);
 
-    // Build lookup sets from existing contacts (using both raw and normalized fields)
+    // Build lookup maps from existing contacts (using both raw and normalized fields)
+    // Maps store normalized value -> contact object for quick lookup
+    const emailToContact = new Map<string, any>();
+    const phoneToContact = new Map<string, any>();
+    const cpfToContact = new Map<string, any>();
+    const cnpjToContact = new Map<string, any>();
+
+    // Also keep sets for quick existence checks
     const existingEmails = new Set<string>();
     const existingPhones = new Set<string>();
     const existingCpfs = new Set<string>();
@@ -54,10 +69,10 @@ export async function POST(request: NextRequest) {
       const phone = c.phone_normalized || normalizePhone(c.phone);
       const cpf = c.cpf_digits || normalizeCPF(c.cpf);
       const cnpj = c.cnpj_digits || normalizeCNPJ(c.cnpj);
-      if (email) existingEmails.add(email);
-      if (phone) existingPhones.add(phone);
-      if (cpf) existingCpfs.add(cpf);
-      if (cnpj) existingCnpjs.add(cnpj);
+      if (email) { existingEmails.add(email); emailToContact.set(email, c); }
+      if (phone) { existingPhones.add(phone); phoneToContact.set(phone, c); }
+      if (cpf) { existingCpfs.add(cpf); cpfToContact.set(cpf, c); }
+      if (cnpj) { existingCnpjs.add(cnpj); cnpjToContact.set(cnpj, c); }
     }
 
     // Track within-batch duplicates
@@ -82,6 +97,7 @@ export async function POST(request: NextRequest) {
     const result: ImportResult = {
       total_rows: rows.length,
       created_count: 0,
+      updated_count: 0,
       duplicate_count: 0,
       invalid_count: 0,
       items: [],
@@ -142,14 +158,18 @@ export async function POST(request: NextRequest) {
         // Check duplicates against EXISTING contacts + within-batch
         let isDuplicate = false;
         let duplicateReason = '';
+        let existingContact: any = null;
+        let isBatchDuplicate = false;
 
         // 1) CPF (highest priority)
         if (normalized.cpf_digits) {
           if (existingCpfs.has(normalized.cpf_digits)) {
             isDuplicate = true;
             duplicateReason = `CPF ${row.cpf} já existe`;
+            existingContact = cpfToContact.get(normalized.cpf_digits);
           } else if (batchCpfs.has(normalized.cpf_digits)) {
             isDuplicate = true;
+            isBatchDuplicate = true;
             duplicateReason = `CPF ${row.cpf} duplicado na planilha`;
           }
         }
@@ -159,8 +179,10 @@ export async function POST(request: NextRequest) {
           if (existingCnpjs.has(normalized.cnpj_digits)) {
             isDuplicate = true;
             duplicateReason = `CNPJ ${row.cnpj} já existe`;
+            existingContact = cnpjToContact.get(normalized.cnpj_digits);
           } else if (batchCnpjs.has(normalized.cnpj_digits)) {
             isDuplicate = true;
+            isBatchDuplicate = true;
             duplicateReason = `CNPJ ${row.cnpj} duplicado na planilha`;
           }
         }
@@ -170,8 +192,10 @@ export async function POST(request: NextRequest) {
           if (existingPhones.has(normalized.phone_normalized)) {
             isDuplicate = true;
             duplicateReason = `Telefone ${row.phone} já existe`;
+            existingContact = phoneToContact.get(normalized.phone_normalized);
           } else if (batchPhones.has(normalized.phone_normalized)) {
             isDuplicate = true;
+            isBatchDuplicate = true;
             duplicateReason = `Telefone ${row.phone} duplicado na planilha`;
           }
         }
@@ -181,20 +205,136 @@ export async function POST(request: NextRequest) {
           if (existingEmails.has(normalized.email_normalized)) {
             isDuplicate = true;
             duplicateReason = `Email ${row.email} já existe`;
+            existingContact = emailToContact.get(normalized.email_normalized);
           } else if (batchEmails.has(normalized.email_normalized)) {
             isDuplicate = true;
+            isBatchDuplicate = true;
             duplicateReason = `Email ${row.email} duplicado na planilha`;
           }
         }
 
         if (isDuplicate) {
-          result.duplicate_count++;
-          result.items.push({
-            row_number: rowNumber,
-            status: 'duplicate',
-            error_message: duplicateReason,
-            data: row,
-          });
+          // Mode "update": merge new data into existing contact (only fill empty fields)
+          if (mode === 'update' && existingContact && !isBatchDuplicate) {
+            const updateData: Record<string, any> = {};
+            let fieldsUpdated: string[] = [];
+
+            for (const field of MERGEABLE_FIELDS) {
+              const newValue = normalized[field as keyof typeof normalized];
+              const existingValue = existingContact[field];
+
+              // Special handling for arrays (tipo)
+              if (field === 'tipo') {
+                const existingTipo = existingValue as string[] || [];
+                const newTipo = newValue as string[] || [];
+                if (newTipo.length > 0) {
+                  // Merge: add new types that don't exist yet
+                  const merged = [...new Set([...existingTipo, ...newTipo])];
+                  if (merged.length > existingTipo.length) {
+                    updateData.tipo = merged;
+                    fieldsUpdated.push('tipo');
+                  }
+                }
+                continue;
+              }
+
+              // For notes: append instead of replace
+              if (field === 'notes') {
+                if (newValue && typeof newValue === 'string' && newValue.trim()) {
+                  if (existingValue && typeof existingValue === 'string' && existingValue.trim()) {
+                    // Append new notes
+                    updateData.notes = `${existingValue}\n---\n${newValue}`;
+                    fieldsUpdated.push('notes');
+                  } else {
+                    updateData.notes = newValue;
+                    fieldsUpdated.push('notes');
+                  }
+                }
+                continue;
+              }
+
+              // Only fill if existing is empty/null and new value exists
+              if ((!existingValue || (typeof existingValue === 'string' && existingValue.trim() === '')) && newValue) {
+                updateData[field] = newValue;
+                fieldsUpdated.push(field);
+              }
+            }
+
+            // Also update normalized fields if identity fields were added
+            if (updateData.email) updateData.email_normalized = normalized.email_normalized;
+            if (updateData.phone) updateData.phone_normalized = normalized.phone_normalized;
+            if (updateData.cpf) updateData.cpf_digits = normalized.cpf_digits;
+            if (updateData.cnpj) updateData.cnpj_digits = normalized.cnpj_digits;
+
+            if (Object.keys(updateData).length > 0) {
+              // Perform update
+              const { error: updateError } = await admin
+                .from('contacts')
+                .update(updateData)
+                .eq('id', existingContact.id);
+
+              if (updateError) {
+                result.invalid_count++;
+                result.items.push({
+                  row_number: rowNumber,
+                  status: 'invalid',
+                  error_message: `Erro ao atualizar: ${updateError.message}`,
+                  data: row,
+                });
+                continue;
+              }
+
+              // Update the in-memory contact data so subsequent rows see updated values
+              Object.assign(existingContact, updateData);
+
+              // Update lookup maps if new identity fields were added
+              if (updateData.email_normalized) {
+                existingEmails.add(updateData.email_normalized);
+                emailToContact.set(updateData.email_normalized, existingContact);
+              }
+              if (updateData.phone_normalized) {
+                existingPhones.add(updateData.phone_normalized);
+                phoneToContact.set(updateData.phone_normalized, existingContact);
+              }
+              if (updateData.cpf_digits) {
+                existingCpfs.add(updateData.cpf_digits);
+                cpfToContact.set(updateData.cpf_digits, existingContact);
+              }
+              if (updateData.cnpj_digits) {
+                existingCnpjs.add(updateData.cnpj_digits);
+                cnpjToContact.set(updateData.cnpj_digits, existingContact);
+              }
+
+              result.updated_count++;
+              result.items.push({
+                row_number: rowNumber,
+                status: 'updated',
+                contact_id: existingContact.id,
+                error_message: `Atualizado: ${fieldsUpdated.join(', ')}`,
+                data: row,
+              });
+            } else {
+              // Nothing to update - all fields already filled
+              result.duplicate_count++;
+              result.items.push({
+                row_number: rowNumber,
+                status: 'duplicate',
+                contact_id: existingContact.id,
+                error_message: `${duplicateReason} (nenhum campo novo para atualizar)`,
+                data: row,
+              });
+            }
+          } else {
+            // Mode "skip" or batch duplicate: just report as duplicate
+            result.duplicate_count++;
+            result.items.push({
+              row_number: rowNumber,
+              status: 'duplicate',
+              contact_id: existingContact?.id || undefined,
+              error_message: duplicateReason,
+              data: row,
+            });
+          }
         } else {
           // Criar contato
           const { data: newContact, error } = await admin
@@ -213,18 +353,22 @@ export async function POST(request: NextRequest) {
           if (normalized.email_normalized) {
             batchEmails.add(normalized.email_normalized);
             existingEmails.add(normalized.email_normalized);
+            emailToContact.set(normalized.email_normalized, newContact);
           }
           if (normalized.phone_normalized) {
             batchPhones.add(normalized.phone_normalized);
             existingPhones.add(normalized.phone_normalized);
+            phoneToContact.set(normalized.phone_normalized, newContact);
           }
           if (normalized.cpf_digits) {
             batchCpfs.add(normalized.cpf_digits);
             existingCpfs.add(normalized.cpf_digits);
+            cpfToContact.set(normalized.cpf_digits, newContact);
           }
           if (normalized.cnpj_digits) {
             batchCnpjs.add(normalized.cnpj_digits);
             existingCnpjs.add(normalized.cnpj_digits);
+            cnpjToContact.set(normalized.cnpj_digits, newContact);
           }
 
           result.created_count++;
@@ -252,6 +396,7 @@ export async function POST(request: NextRequest) {
       .from('import_runs')
       .update({
         created_count: result.created_count,
+        updated_count: result.updated_count,
         duplicate_count: result.duplicate_count,
         invalid_count: result.invalid_count,
       })
