@@ -85,6 +85,7 @@ function contactMatchesFilter(contact: Contact, query: string, userMap: Record<s
     contact.produtos_fornecidos,
     contact.cpf,
     contact.cnpj,
+    contact.notes,
     contact.valor_estimado != null ? contact.valor_estimado.toString() : null,
     ...(contact.tipo || []),
     contact.temperatura,

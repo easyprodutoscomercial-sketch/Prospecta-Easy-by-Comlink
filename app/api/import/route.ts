@@ -7,6 +7,27 @@ import { ensureProfile } from '@/lib/ensure-profile';
 
 const MAX_ROWS = 2000;
 
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Nome', phone: 'Telefone', email: 'Email', cpf: 'CPF', cnpj: 'CNPJ',
+  company: 'Empresa', notes: 'Observações', tipo: 'Tipo', referencia: 'Referência',
+  classe: 'Classe', produtos_fornecidos: 'Produtos Fornecidos', contato_nome: 'Contato',
+  cargo: 'Cargo', endereco: 'Endereço', cidade: 'Cidade', estado: 'Estado', cep: 'CEP',
+  website: 'Website', instagram: 'Instagram', whatsapp: 'WhatsApp',
+};
+
+function formatRowAsNotes(row: Record<string, any>, rowNumber: number): string {
+  const date = new Date().toLocaleDateString('pt-BR');
+  const lines = [`[Importação ${date} - Linha ${rowNumber}]`];
+  for (const [key, value] of Object.entries(row)) {
+    if (value && String(value).trim()) {
+      const label = FIELD_LABELS[key] || key;
+      const val = Array.isArray(value) ? value.join(', ') : String(value).trim();
+      lines.push(`${label}: ${val}`);
+    }
+  }
+  return lines.join('\n');
+}
+
 // Fields that can be merged from import into existing contact (only if existing is empty/null)
 const MERGEABLE_FIELDS = [
   'phone', 'email', 'cpf', 'cnpj', 'company', 'notes',
@@ -332,24 +353,56 @@ export async function POST(request: NextRequest) {
                 data: row,
               });
             } else {
-              // Nothing to update - all fields already filled
-              result.duplicate_count++;
+              // Nothing to update via fields - but still append row data to notes
+              const notesEntry = formatRowAsNotes(row, rowNumber);
+              const existingNotes = existingContact.notes || '';
+              const newNotes = existingNotes
+                ? `${existingNotes}\n---\n${notesEntry}`
+                : notesEntry;
+
+              const { error: notesError } = await admin
+                .from('contacts')
+                .update({ notes: newNotes })
+                .eq('id', existingContact.id);
+
+              if (!notesError) {
+                existingContact.notes = newNotes;
+              }
+
+              result.updated_count++;
               result.items.push({
                 row_number: rowNumber,
-                status: 'duplicate',
+                status: 'updated',
                 contact_id: existingContact.id,
-                error_message: `${duplicateReason} (nenhum campo novo para atualizar)`,
+                error_message: `${duplicateReason} — dados salvos em observações`,
                 data: row,
               });
             }
           } else {
-            // Mode "skip" or batch duplicate: just report as duplicate
+            // Mode "skip": append row data to notes of existing contact
+            if (existingContact && !isBatchDuplicate) {
+              const notesEntry = formatRowAsNotes(row, rowNumber);
+              const existingNotes = existingContact.notes || '';
+              const newNotes = existingNotes
+                ? `${existingNotes}\n---\n${notesEntry}`
+                : notesEntry;
+
+              const { error: notesError } = await admin
+                .from('contacts')
+                .update({ notes: newNotes })
+                .eq('id', existingContact.id);
+
+              if (!notesError) {
+                existingContact.notes = newNotes;
+              }
+            }
+
             result.duplicate_count++;
             result.items.push({
               row_number: rowNumber,
               status: 'duplicate',
               contact_id: existingContact?.id || undefined,
-              error_message: duplicateReason,
+              error_message: `${duplicateReason}${existingContact && !isBatchDuplicate ? ' — dados salvos em observações' : ''}`,
               data: row,
             });
           }

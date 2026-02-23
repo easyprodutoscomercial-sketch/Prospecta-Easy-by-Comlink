@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
 
     // Filtro de busca
     if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,company.ilike.%${search}%`);
+      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,company.ilike.%${search}%,notes.ilike.%${search}%`);
     }
 
     // Filtro de status
