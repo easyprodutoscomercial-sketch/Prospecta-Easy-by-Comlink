@@ -76,7 +76,7 @@ export default function ImportPage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
-  const [mode, setMode] = useState<'skip' | 'update'>('update');
+  const [mode, setMode] = useState<'skip' | 'update' | 'overwrite'>('update');
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -161,6 +161,19 @@ export default function ImportPage() {
             </div>
           </button>
           <button
+            onClick={() => setMode('overwrite')}
+            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-colors text-left ${
+              mode === 'overwrite'
+                ? 'bg-blue-500/15 border-blue-500/50 text-blue-400'
+                : 'bg-[#2a1245] border-purple-800/30 text-purple-300/60 hover:border-purple-600/50'
+            }`}
+          >
+            <div className="font-medium">Forçar atualização</div>
+            <div className="text-xs mt-1 opacity-70">
+              Se o contato já existe, sobrescreve todos os campos com os dados da planilha.
+            </div>
+          </button>
+          <button
             onClick={() => setMode('skip')}
             className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-colors text-left ${
               mode === 'skip'
@@ -221,7 +234,7 @@ export default function ImportPage() {
               <p className="text-xs text-purple-300/60">Criados</p>
               <p className="text-xl font-semibold text-emerald-400">{result.created_count}</p>
             </div>
-            {(result.updated_count > 0 || mode === 'update') && (
+            {(result.updated_count > 0 || mode === 'update' || mode === 'overwrite') && (
               <div className="bg-blue-500/15 p-3 rounded-lg">
                 <p className="text-xs text-purple-300/60">Atualizados</p>
                 <p className="text-xl font-semibold text-blue-400">{result.updated_count || 0}</p>

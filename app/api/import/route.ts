@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     const admin = getAdminClient();
     const body = await request.json();
-    const { rows, mode = 'skip' } = body; // mode: 'skip' | 'update'
+    const { rows, mode = 'skip' } = body; // mode: 'skip' | 'update' | 'overwrite'
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'Nenhuma linha para importar' }, { status: 400 });
@@ -215,9 +215,11 @@ export async function POST(request: NextRequest) {
 
         if (isDuplicate) {
           // Mode "update": merge new data into existing contact (only fill empty fields)
-          if (mode === 'update' && existingContact && !isBatchDuplicate) {
+          // Mode "overwrite": force update all fields from spreadsheet
+          if ((mode === 'update' || mode === 'overwrite') && existingContact && !isBatchDuplicate) {
             const updateData: Record<string, any> = {};
             let fieldsUpdated: string[] = [];
+            const isOverwrite = mode === 'overwrite';
 
             for (const field of MERGEABLE_FIELDS) {
               const newValue = normalized[field as keyof typeof normalized];
@@ -228,20 +230,28 @@ export async function POST(request: NextRequest) {
                 const existingTipo = existingValue as string[] || [];
                 const newTipo = newValue as string[] || [];
                 if (newTipo.length > 0) {
-                  // Merge: add new types that don't exist yet
-                  const merged = [...new Set([...existingTipo, ...newTipo])];
-                  if (merged.length > existingTipo.length) {
-                    updateData.tipo = merged;
+                  if (isOverwrite) {
+                    updateData.tipo = newTipo;
                     fieldsUpdated.push('tipo');
+                  } else {
+                    // Merge: add new types that don't exist yet
+                    const merged = [...new Set([...existingTipo, ...newTipo])];
+                    if (merged.length > existingTipo.length) {
+                      updateData.tipo = merged;
+                      fieldsUpdated.push('tipo');
+                    }
                   }
                 }
                 continue;
               }
 
-              // For notes: append instead of replace
+              // For notes: append instead of replace (in update mode), replace in overwrite
               if (field === 'notes') {
                 if (newValue && typeof newValue === 'string' && newValue.trim()) {
-                  if (existingValue && typeof existingValue === 'string' && existingValue.trim()) {
+                  if (isOverwrite) {
+                    updateData.notes = newValue;
+                    fieldsUpdated.push('notes');
+                  } else if (existingValue && typeof existingValue === 'string' && existingValue.trim()) {
                     // Append new notes
                     updateData.notes = `${existingValue}\n---\n${newValue}`;
                     fieldsUpdated.push('notes');
@@ -253,10 +263,18 @@ export async function POST(request: NextRequest) {
                 continue;
               }
 
-              // Only fill if existing is empty/null and new value exists
-              if ((!existingValue || (typeof existingValue === 'string' && existingValue.trim() === '')) && newValue) {
-                updateData[field] = newValue;
-                fieldsUpdated.push(field);
+              if (isOverwrite) {
+                // Overwrite: replace field if new value exists
+                if (newValue) {
+                  updateData[field] = newValue;
+                  fieldsUpdated.push(field);
+                }
+              } else {
+                // Update: only fill if existing is empty/null and new value exists
+                if ((!existingValue || (typeof existingValue === 'string' && existingValue.trim() === '')) && newValue) {
+                  updateData[field] = newValue;
+                  fieldsUpdated.push(field);
+                }
               }
             }
 
