@@ -208,9 +208,13 @@ export default function PipelineManager({ showBugsType = false }: PipelineManage
 
       if (res.ok) {
         setResult({ type: 'success', message: editingId ? 'Pipeline atualizado com sucesso!' : 'Pipeline criado com sucesso!' });
-        fetchPipelines();
-        refetchGlobalPipelines(); // Atualiza contexto global (Kanban, sidebar, etc)
-        setTimeout(resetForm, 1500);
+        // Immediately update local pipeline list from response so name shows instantly
+        if (editingId && data) {
+          setPipelines(prev => prev.map(p => p.id === editingId ? { ...p, ...data } : p));
+        }
+        // Also refetch to ensure full consistency
+        await Promise.all([fetchPipelines(), refetchGlobalPipelines()]);
+        setTimeout(resetForm, 1000);
       } else {
         setResult({ type: 'error', message: data.error || 'Erro ao salvar' });
       }

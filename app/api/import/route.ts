@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     const admin = getAdminClient();
     const body = await request.json();
-    const { rows, mode = 'skip' } = body; // mode: 'skip' | 'update' | 'overwrite'
+    const { rows, mode = 'skip', pipeline_id } = body; // mode: 'skip' | 'update' | 'overwrite'
 
     if (!Array.isArray(rows) || rows.length === 0) {
       return NextResponse.json({ error: 'Nenhuma linha para importar' }, { status: 400 });
@@ -66,30 +66,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Fetch default pipeline and its first stage so imported contacts appear in kanban
+    // Fetch target pipeline and its first stage so imported contacts appear in kanban
     let defaultPipelineId: string | null = null;
     let firstStageId: string | null = null;
 
-    const { data: defaultPipeline } = await admin
-      .from('pipelines')
-      .select('id')
-      .eq('organization_id', profile.organization_id)
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .single();
-
-    if (defaultPipeline) {
-      defaultPipelineId = defaultPipeline.id;
-      const { data: firstStage } = await admin
-        .from('pipeline_stages')
+    if (pipeline_id) {
+      // Validate that the provided pipeline belongs to this organization
+      const { data: targetPipeline } = await admin
+        .from('pipelines')
         .select('id')
-        .eq('pipeline_id', defaultPipeline.id)
-        .order('position', { ascending: true })
+        .eq('id', pipeline_id)
+        .eq('organization_id', profile.organization_id)
+        .single();
+
+      if (targetPipeline) {
+        defaultPipelineId = targetPipeline.id;
+        const { data: firstStage } = await admin
+          .from('pipeline_stages')
+          .select('id')
+          .eq('pipeline_id', targetPipeline.id)
+          .order('position', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (firstStage) {
+          firstStageId = firstStage.id;
+        }
+      }
+    }
+
+    // Fallback to org default pipeline if no pipeline_id provided or validation failed
+    if (!defaultPipelineId) {
+      const { data: defaultPipeline } = await admin
+        .from('pipelines')
+        .select('id')
+        .eq('organization_id', profile.organization_id)
+        .order('created_at', { ascending: true })
         .limit(1)
         .single();
 
-      if (firstStage) {
-        firstStageId = firstStage.id;
+      if (defaultPipeline) {
+        defaultPipelineId = defaultPipeline.id;
+        const { data: firstStage } = await admin
+          .from('pipeline_stages')
+          .select('id')
+          .eq('pipeline_id', defaultPipeline.id)
+          .order('position', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (firstStage) {
+          firstStageId = firstStage.id;
+        }
       }
     }
 

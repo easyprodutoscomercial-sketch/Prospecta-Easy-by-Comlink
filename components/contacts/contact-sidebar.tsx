@@ -12,6 +12,7 @@ import {
   CLASSE_LABELS,
   ORIGEM_LABELS,
 } from '@/lib/utils/labels';
+import ContactPipelineTracker from './contact-pipeline-tracker';
 
 interface ContactSidebarProps {
   contact: Contact;
@@ -19,6 +20,7 @@ interface ContactSidebarProps {
   ownerAvatarUrl: string | null;
   currentUser: { user_id: string; role: string; name: string } | null;
   onStatusChange: (status: string) => void;
+  onTerminalStageClick?: (stageId: string, terminalType: 'won' | 'lost') => void;
   onEdit: () => void;
   onDelete: () => void;
   onClaim: () => void;
@@ -43,6 +45,7 @@ export default function ContactSidebar({
   ownerAvatarUrl,
   currentUser,
   onStatusChange,
+  onTerminalStageClick,
   onEdit,
   onDelete,
   onClaim,
@@ -56,8 +59,9 @@ export default function ContactSidebar({
   const canModify = !!currentUser;
   const isOtherOwner = false;
 
-  // Load pipeline stages for this contact's pipeline
+  // Load pipeline stages + name for this contact's pipeline
   const [pipelineStages, setPipelineStages] = useState<PipelineStage[]>([]);
+  const [pipelineName, setPipelineName] = useState<string>('');
 
   useEffect(() => {
     if (contact.pipeline_id) {
@@ -67,15 +71,20 @@ export default function ContactSidebar({
           if (data?.stages) {
             setPipelineStages(data.stages);
           }
+          if (data?.name) {
+            setPipelineName(data.name);
+          }
         })
         .catch(() => {});
     }
   }, [contact.pipeline_id]);
 
-  const handleStageChange = (stageId: string) => {
-    // When user selects a stage from the dropdown, we call onStatusChange
-    // with the stage_id, but the parent will need to handle this as stage_id
-    onStatusChange(stageId);
+  const handleStageClick = (stage: PipelineStage) => {
+    if (stage.is_terminal && stage.terminal_type && onTerminalStageClick) {
+      onTerminalStageClick(stage.id, stage.terminal_type);
+    } else {
+      onStatusChange(stage.id);
+    }
   };
 
   return (
@@ -97,22 +106,17 @@ export default function ContactSidebar({
         </span>
       </div>
 
-      {/* Status selector */}
+      {/* Pipeline tracker / Status selector */}
       <div>
-        <p className="text-[10px] uppercase tracking-widest text-purple-300/60 font-semibold mb-1.5">Status</p>
+        <p className="text-[10px] uppercase tracking-widest text-purple-300/60 font-semibold mb-1.5">Pipeline</p>
         {pipelineStages.length > 0 ? (
-          <select
-            value={contact.stage_id || ''}
-            onChange={(e) => handleStageChange(e.target.value)}
+          <ContactPipelineTracker
+            pipelineName={pipelineName}
+            stages={pipelineStages}
+            currentStageId={contact.stage_id}
+            onStageClick={handleStageClick}
             disabled={!!isOtherOwner}
-            className={`w-full px-3 py-1.5 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 ${isOtherOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
-          >
-            {pipelineStages.map((stage) => (
-              <option key={stage.id} value={stage.id}>
-                {stage.name}{stage.is_terminal ? ` (${stage.terminal_type === 'won' ? 'Ganho' : 'Perdido'})` : ''}
-              </option>
-            ))}
-          </select>
+          />
         ) : (
           <select
             value={contact.status}

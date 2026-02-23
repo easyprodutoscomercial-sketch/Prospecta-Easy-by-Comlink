@@ -46,6 +46,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   const [showMotivoModal, setShowMotivoModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<'CONVERTIDO' | 'PERDIDO' | null>(null);
+  const [pendingTerminalStageId, setPendingTerminalStageId] = useState<string | null>(null);
   const [motivoLoading, setMotivoLoading] = useState(false);
 
   useEffect(() => { loadContact(); loadCurrentUser(); }, [id]);
@@ -98,14 +99,26 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     }
   };
 
+  const handleTerminalStageClick = (stageId: string, terminalType: 'won' | 'lost') => {
+    setPendingTerminalStageId(stageId);
+    setPendingStatus(terminalType === 'won' ? 'CONVERTIDO' : 'PERDIDO');
+    setShowMotivoModal(true);
+  };
+
   const handleMotivoConfirm = async (motivo: string) => {
     if (!pendingStatus) return;
     setMotivoLoading(true);
     try {
-      const r = await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: pendingStatus, motivo_ganho_perdido: motivo }) });
+      const body: Record<string, any> = { motivo_ganho_perdido: motivo };
+      if (pendingTerminalStageId) {
+        body.stage_id = pendingTerminalStageId;
+      } else {
+        body.status = pendingStatus;
+      }
+      const r = await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (r.ok) { setContact(await r.json()); toast.success('Status atualizado'); } else toast.error('Erro ao atualizar status');
     } catch { toast.error('Erro ao atualizar status'); }
-    setMotivoLoading(false); setShowMotivoModal(false); setPendingStatus(null);
+    setMotivoLoading(false); setShowMotivoModal(false); setPendingStatus(null); setPendingTerminalStageId(null);
   };
 
   const handleDelete = async () => {
@@ -197,6 +210,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             ownerAvatarUrl={ownerAvatarUrl}
             currentUser={currentUser}
             onStatusChange={handleStatusChange}
+            onTerminalStageClick={handleTerminalStageClick}
             onEdit={() => setIsEditing(true)}
             onDelete={() => setShowDeleteModal(true)}
             onClaim={handleClaimContact}
@@ -262,7 +276,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       {/* Modals */}
       <ConfirmModal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} onConfirm={handleDelete}
         title="Deletar contato" message={`Deletar "${contact.name}"? Irreversivel.`} variant="danger" confirmLabel="Deletar" loading={deleteLoading} />
-      {pendingStatus && <MotivoModal isOpen={showMotivoModal} onClose={() => { setShowMotivoModal(false); setPendingStatus(null); }} onConfirm={handleMotivoConfirm} tipo={pendingStatus} loading={motivoLoading} />}
+      {pendingStatus && <MotivoModal isOpen={showMotivoModal} onClose={() => { setShowMotivoModal(false); setPendingStatus(null); setPendingTerminalStageId(null); }} onConfirm={handleMotivoConfirm} tipo={pendingStatus} loading={motivoLoading} />}
     </div>
   );
 }

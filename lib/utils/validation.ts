@@ -32,7 +32,9 @@ export const contactSchema = z.object({
   proxima_acao_data: z.string().optional().nullable(),
   motivo_ganho_perdido: z.string().optional().nullable(),
   valor_estimado: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
+  sem_documento: z.boolean().optional().default(false),
 }).refine((data) => {
+  if (data.sem_documento) return true;
   const cpfDigits = data.cpf?.replace(/\D/g, '') || '';
   const cnpjDigits = data.cnpj?.replace(/\D/g, '') || '';
   return (cpfDigits.length === 11) || (cnpjDigits.length === 14);
@@ -71,6 +73,7 @@ export const contactUpdateSchema = z.object({
   email: z.string().email().optional().nullable().or(z.literal('')),
   cpf: z.string().optional().nullable(),
   cnpj: z.string().optional().nullable(),
+  sem_documento: z.boolean().optional(),
   company: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
   tipo: z.array(z.enum(['FORNECEDOR', 'COMPRADOR'])).optional(),

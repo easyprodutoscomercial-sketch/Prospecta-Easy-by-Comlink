@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
+import { usePipeline } from '@/lib/pipeline-context';
 
 const TEMPLATE_COLUMNS = [
   'name', 'phone', 'email', 'cpf', 'cnpj', 'company', 'notes',
@@ -73,10 +74,21 @@ function parseExcelFile(file: File): Promise<Record<string, any>[]> {
 }
 
 export default function ImportPage() {
+  const { pipelines, selectedPipelineId } = usePipeline();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [mode, setMode] = useState<'skip' | 'update' | 'overwrite'>('update');
+  const [importPipelineId, setImportPipelineId] = useState<string>(selectedPipelineId);
+
+  // Sync with context when it loads
+  useEffect(() => {
+    if (!importPipelineId && selectedPipelineId) {
+      setImportPipelineId(selectedPipelineId);
+    }
+  }, [selectedPipelineId]);
+
+  const selectedPipeline = pipelines.find(p => p.id === importPipelineId);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -97,7 +109,7 @@ export default function ImportPage() {
       const res = await fetch('/api/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows, mode }),
+        body: JSON.stringify({ rows, mode, pipeline_id: importPipelineId || undefined }),
       });
 
       const data = await res.json();
@@ -142,6 +154,44 @@ export default function ImportPage() {
           </button>
         </div>
       </div>
+
+      {/* Pipeline selector */}
+      {pipelines.length > 0 && (
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 mb-6">
+          <h2 className="text-sm font-medium text-neutral-100 mb-3">Pipeline de destino</h2>
+          <p className="text-xs text-purple-300/60 mb-3">
+            Os contatos importados serao adicionados ao pipeline selecionado.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {pipelines.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setImportPipelineId(p.id)}
+                className={`px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                  importPipelineId === p.id
+                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-400'
+                    : 'bg-[#2a1245] border-purple-800/30 text-purple-300/60 hover:border-purple-600/50'
+                }`}
+              >
+                {p.name}
+                {p.is_default && (
+                  <span className="ml-1.5 text-[9px] font-bold uppercase opacity-60">(Padrao)</span>
+                )}
+              </button>
+            ))}
+          </div>
+          {selectedPipeline && (
+            <div className="mt-3 flex items-center gap-2">
+              <span className="px-2.5 py-1 text-[11px] font-bold rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                {selectedPipeline.name}
+              </span>
+              <span className="text-[10px] text-purple-300/40">
+                {selectedPipeline.stages.length} etapas
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Import mode selector */}
       <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 mb-6">
@@ -213,7 +263,7 @@ export default function ImportPage() {
 
         <button
           onClick={handleImport}
-          disabled={!file || loading}
+          disabled={!file || loading || (pipelines.length > 0 && !importPipelineId)}
           className="mt-4 w-full px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {loading ? 'Importando...' : 'Importar Contatos'}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Contact } from '@/lib/types';
+import { Contact, PipelineWithStages } from '@/lib/types';
 import { ESTADOS_BRASIL, TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS } from '@/lib/utils/labels';
 
 interface ContactFormData {
@@ -11,6 +11,7 @@ interface ContactFormData {
   email: string;
   cpf: string;
   cnpj: string;
+  sem_documento: boolean;
   company: string;
   notes: string;
   tipo: string[];
@@ -31,6 +32,7 @@ interface ContactFormData {
   instagram: string;
   whatsapp: string;
   valor_estimado: string;
+  pipeline_id: string;
 }
 
 interface ContactFormProps {
@@ -41,15 +43,18 @@ interface ContactFormProps {
   loading?: boolean;
   error?: string;
   duplicate?: { id: string; name: string } | null;
+  pipelines?: PipelineWithStages[];
+  defaultPipelineId?: string;
 }
 
-function toFormData(contact?: Partial<Contact>): ContactFormData {
+function toFormData(contact?: Partial<Contact>, defaultPipelineId?: string): ContactFormData {
   return {
     name: contact?.name || '',
     phone: contact?.phone || '',
     email: contact?.email || '',
     cpf: contact?.cpf || '',
     cnpj: contact?.cnpj || '',
+    sem_documento: !contact?.cpf && !contact?.cnpj && !!contact?.id,
     company: contact?.company || '',
     notes: contact?.notes || '',
     tipo: contact?.tipo || [],
@@ -70,6 +75,7 @@ function toFormData(contact?: Partial<Contact>): ContactFormData {
     instagram: contact?.instagram || '',
     whatsapp: contact?.whatsapp || '',
     valor_estimado: contact?.valor_estimado != null ? String(contact.valor_estimado) : '',
+    pipeline_id: contact?.pipeline_id || defaultPipelineId || '',
   };
 }
 
@@ -112,8 +118,10 @@ export default function ContactForm({
   loading = false,
   error,
   duplicate,
+  pipelines,
+  defaultPipelineId,
 }: ContactFormProps) {
-  const [formData, setFormData] = useState<ContactFormData>(toFormData(initialData));
+  const [formData, setFormData] = useState<ContactFormData>(toFormData(initialData, defaultPipelineId));
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const handleTipoChange = (value: string) => {
@@ -133,8 +141,8 @@ export default function ContactForm({
     }
     const cpfDigits = formData.cpf?.replace(/\D/g, '') || '';
     const cnpjDigits = formData.cnpj?.replace(/\D/g, '') || '';
-    if (cpfDigits.length !== 11 && cnpjDigits.length !== 14) {
-      errs.cpf = 'Preencha pelo menos CPF ou CNPJ';
+    if (!formData.sem_documento && cpfDigits.length !== 11 && cnpjDigits.length !== 14) {
+      errs.cpf = 'Preencha pelo menos CPF ou CNPJ, ou marque "Não possui"';
     }
     if (Object.keys(errs).length > 0) {
       console.warn('[FORM] Erros de validacao:', errs);
@@ -183,6 +191,33 @@ export default function ContactForm({
         </div>
       )}
 
+      {/* Pipeline selector (create mode with multiple pipelines) */}
+      {mode === 'create' && pipelines && pipelines.length > 1 && (
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+          <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Pipeline</h2>
+          <p className="text-xs text-purple-300/60 mb-3">Em qual pipeline este contato sera adicionado?</p>
+          <div className="flex gap-2 flex-wrap">
+            {pipelines.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => update('pipeline_id', p.id)}
+                className={`px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
+                  formData.pipeline_id === p.id
+                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-400'
+                    : 'bg-[#2a1245] border-purple-800/30 text-purple-300/60 hover:border-purple-600/50'
+                }`}
+              >
+                {p.name}
+                {p.is_default && (
+                  <span className="ml-1.5 text-[9px] font-bold uppercase opacity-60">(Padrao)</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Dados Básicos */}
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
         <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Dados Básicos</h2>
@@ -222,27 +257,48 @@ export default function ContactForm({
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>CPF * <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></label>
+              <label className={labelClass}>CPF {!formData.sem_documento && <>{' *'} <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></>}</label>
               <input
                 type="text"
                 value={formData.cpf}
                 onChange={(e) => update('cpf', formatCPF(e.target.value))}
                 className={inputClass('cpf')}
                 placeholder="000.000.000-00"
+                disabled={formData.sem_documento}
               />
               {validationErrors.cpf && <p className="text-xs text-red-500 mt-1">{validationErrors.cpf}</p>}
             </div>
             <div>
-              <label className={labelClass}>CNPJ * <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></label>
+              <label className={labelClass}>CNPJ {!formData.sem_documento && <>{' *'} <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></>}</label>
               <input
                 type="text"
                 value={formData.cnpj}
                 onChange={(e) => update('cnpj', formatCNPJ(e.target.value))}
                 className={inputClass('cpf')}
                 placeholder="00.000.000/0000-00"
+                disabled={formData.sem_documento}
               />
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm text-purple-200/70 cursor-pointer mt-1">
+            <input
+              type="checkbox"
+              checked={formData.sem_documento}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setFormData((prev) => ({
+                  ...prev,
+                  sem_documento: checked,
+                  ...(checked ? { cpf: '', cnpj: '' } : {}),
+                }));
+                if (checked && validationErrors.cpf) {
+                  setValidationErrors((prev) => { const next = { ...prev }; delete next.cpf; return next; });
+                }
+              }}
+              className="rounded border-purple-700/30 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500"
+            />
+            Não possui CPF/CNPJ
+          </label>
           <div>
             <label className={labelClass}>Empresa</label>
             <input

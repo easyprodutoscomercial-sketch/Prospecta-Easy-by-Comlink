@@ -5,10 +5,12 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import ContactForm from '@/components/contacts/contact-form';
 import { useToast } from '@/lib/toast-context';
+import { usePipeline } from '@/lib/pipeline-context';
 
 export default function NewContactPage() {
   const router = useRouter();
   const toast = useToast();
+  const { pipelines, selectedPipelineId } = usePipeline();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [duplicate, setDuplicate] = useState<{ id: string; name: string } | null>(null);
@@ -69,6 +71,8 @@ export default function NewContactPage() {
         loading={loading}
         error={error}
         duplicate={duplicate}
+        pipelines={pipelines}
+        defaultPipelineId={selectedPipelineId}
       />
     </div>
   );
