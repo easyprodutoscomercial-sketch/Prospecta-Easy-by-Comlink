@@ -30,7 +30,10 @@ export default function FocusPage() {
   const currentContact = queue[currentIndex] || null;
 
   const fetchQueue = useCallback(async () => {
-    if (!selectedPipelineId) return;
+    if (!selectedPipelineId) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const res = await fetch(`/api/focus/queue?pipeline_id=${selectedPipelineId}`);
@@ -38,14 +41,12 @@ export default function FocusPage() {
         const data = await res.json();
         setQueue(data.contacts || []);
         setCurrentIndex(0);
-      } else {
-        toast.error('Erro ao carregar fila de contatos');
       }
     } catch {
-      toast.error('Erro ao carregar fila');
+      // silent
     }
     setLoading(false);
-  }, [selectedPipelineId, toast]);
+  }, [selectedPipelineId]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -75,8 +76,11 @@ export default function FocusPage() {
 
   useEffect(() => {
     fetchQueue();
+  }, [fetchQueue]);
+
+  useEffect(() => {
     fetchUsers();
-  }, [fetchQueue, fetchUsers]);
+  }, [fetchUsers]);
 
   useEffect(() => {
     if (currentContact) {

@@ -58,8 +58,7 @@ export async function GET(request: NextRequest) {
       return query
         .eq('organization_id', profile.organization_id)
         .in('stage_id', nonTerminalStageIds)
-        .not('phone', 'is', null)
-        .neq('phone', '');
+        .not('phone', 'is', null);
     };
 
     // Prioridade 1 — Ação "LIGAR" pendente (vencida ou no momento)
