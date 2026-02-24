@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import ContactForm from '@/components/contacts/contact-form';
 import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
@@ -57,9 +56,10 @@ export default function NewContactPage() {
   return (
     <div className="max-w-3xl mx-auto">
       <div className="mb-6">
-        <Link href="/contacts" className="text-sm text-neutral-500 hover:text-neutral-900">
+        <button onClick={() => window.history.length > 1 ? window.history.back() : window.location.href = '/contacts'}
+          className="text-sm text-neutral-500 hover:text-neutral-900">
           &larr; Voltar para contatos
-        </Link>
+        </button>
       </div>
 
       <h1 className="text-2xl font-semibold text-neutral-900 mb-6">Novo Contato</h1>
@@ -67,7 +67,7 @@ export default function NewContactPage() {
       <ContactForm
         mode="create"
         onSubmit={handleSubmit}
-        onCancel={() => router.push('/contacts')}
+        onCancel={() => window.history.length > 1 ? window.history.back() : router.push('/contacts')}
         loading={loading}
         error={error}
         duplicate={duplicate}

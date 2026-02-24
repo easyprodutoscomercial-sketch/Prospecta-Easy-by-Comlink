@@ -56,6 +56,16 @@ const navItems = [
   //   ),
   // },
   {
+    key: 'focus',
+    href: '/focus',
+    label: 'Modo Foco',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+  {
     key: 'bugs',
     href: '/bugs',
     label: 'Bugs',
@@ -184,7 +194,9 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
         <Link href="/dashboard" className="flex items-center">
           <Image src="/logo.png" alt="Controlei" width={180} height={52} priority />
         </Link>
-        <NotificationBell />
+        <div data-tour="notifications">
+          <NotificationBell />
+        </div>
       </div>
 
       {/* Quick Search Hint */}
@@ -234,7 +246,9 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
       </nav>
 
       {/* Pipeline Selector (global) */}
-      <PipelineSelectorGlobal />
+      <div data-tour="pipeline-selector">
+        <PipelineSelectorGlobal />
+      </div>
 
       {/* Work Front Selector — hidden */}
       {/* <WorkFrontSelector /> */}

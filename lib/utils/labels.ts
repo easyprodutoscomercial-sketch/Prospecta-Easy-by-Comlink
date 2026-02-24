@@ -147,6 +147,23 @@ export const MOTIVO_PERDIDO_LABELS: Record<string, string> = {
   OUTRO: 'Outro',
 };
 
+// Meeting Status
+export const MEETING_STATUS_LABELS: Record<string, string> = {
+  SCHEDULED: 'Agendada',
+  COMPLETED: 'Concluida',
+  CANCELLED: 'Cancelada',
+};
+
+export const MEETING_STATUS_COLORS: Record<string, string> = {
+  SCHEDULED: 'bg-cyan-500/20 text-cyan-400',
+  COMPLETED: 'bg-emerald-500/20 text-emerald-400',
+  CANCELLED: 'bg-red-500/20 text-red-400',
+};
+
+export function formatMeetingStatus(status: string): string {
+  return MEETING_STATUS_LABELS[status] || status;
+}
+
 // Activity Templates (quick interaction templates)
 export const ACTIVITY_TEMPLATES = [
   { label: 'Liguei — não atendeu', type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: 'Liguei — não atendeu' },

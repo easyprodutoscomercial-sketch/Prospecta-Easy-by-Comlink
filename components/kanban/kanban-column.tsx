@@ -25,6 +25,9 @@ interface KanbanColumnProps {
   onBulkToggle?: (contactId: string) => void;
   pipelineType?: PipelineType;
   attachmentCountMap?: Record<string, number>;
+  dimmedContactIds?: Set<string>;
+  hiddenContactIds?: Set<string>;
+  stuckContactIds?: Set<string>;
 }
 
 const SLUG_ICONS: Record<string, string> = {
@@ -95,7 +98,7 @@ function contactMatchesFilter(contact: Contact, query: string, userMap: Record<s
   return fields.some(f => f && normalizeSearch(f).includes(q));
 }
 
-export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap }: KanbanColumnProps) {
+export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const [filter, setFilter] = useState('');
   const color = stage.color || '#a3a3a3';
@@ -106,9 +109,15 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
   const hasScheduledMeeting = contacts.some(c => contactsWithMeeting?.has(c.id));
 
   const filtered = useMemo(() => {
-    if (!filter.trim()) return contacts;
-    return contacts.filter(c => contactMatchesFilter(c, filter.trim(), userMap));
-  }, [contacts, filter, userMap]);
+    let result = contacts;
+    if (hiddenContactIds && hiddenContactIds.size > 0) {
+      result = result.filter(c => !hiddenContactIds.has(c.id));
+    }
+    if (filter.trim()) {
+      result = result.filter(c => contactMatchesFilter(c, filter.trim(), userMap));
+    }
+    return result;
+  }, [contacts, filter, userMap, hiddenContactIds]);
 
   return (
     <div
@@ -208,6 +217,8 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
               onBulkToggle={onBulkToggle}
               pipelineType={pipelineType}
               attachmentCount={attachmentCountMap?.[contact.id] || 0}
+              isDimmed={dimmedContactIds?.has(contact.id)}
+              isStuck={stuckContactIds?.has(contact.id)}
             />
           ))}
         </SortableContext>

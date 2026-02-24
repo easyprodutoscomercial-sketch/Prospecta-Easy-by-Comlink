@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useToast } from '@/lib/toast-context';
+import MergeModal from '@/components/admin/merge-modal';
 
 interface DuplicateContact {
   id: string;
@@ -35,6 +36,7 @@ export default function DuplicatesPage() {
   const [currentRole, setCurrentRole] = useState<string>('');
   const [checkingRole, setCheckingRole] = useState(true);
   const [backfilling, setBackfilling] = useState(false);
+  const [mergeGroup, setMergeGroup] = useState<DuplicateGroup | null>(null);
 
   useEffect(() => {
     checkAccess();
@@ -209,7 +211,15 @@ export default function DuplicatesPage() {
               </span>
               <span className="text-sm font-medium text-neutral-200">{group.label}</span>
             </div>
-            <span className="text-xs text-purple-300/40">{group.contacts.length} contatos</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setMergeGroup(group)}
+                className="px-2.5 py-1 text-[11px] font-medium text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/10 transition-colors"
+              >
+                Mesclar
+              </button>
+              <span className="text-xs text-purple-300/40">{group.contacts.length} contatos</span>
+            </div>
           </div>
 
           {/* Contacts in group */}
@@ -269,6 +279,19 @@ export default function DuplicatesPage() {
           </div>
         </div>
       ))}
+
+      {/* Merge Modal */}
+      {mergeGroup && mergeGroup.contacts.length >= 2 && (
+        <MergeModal
+          contactA={mergeGroup.contacts[0]}
+          contactB={mergeGroup.contacts[1]}
+          onClose={() => setMergeGroup(null)}
+          onMerged={() => {
+            setMergeGroup(null);
+            loadDuplicates();
+          }}
+        />
+      )}
     </div>
   );
 }

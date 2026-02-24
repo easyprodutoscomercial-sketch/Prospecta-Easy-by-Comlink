@@ -25,9 +25,12 @@ interface KanbanBoardProps {
   onBulkToggle?: (contactId: string) => void;
   pipelineType?: PipelineType;
   attachmentCountMap?: Record<string, number>;
+  dimmedContactIds?: Set<string>;
+  hiddenContactIds?: Set<string>;
+  stuckContactIds?: Set<string>;
 }
 
-export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap }: KanbanBoardProps) {
+export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds }: KanbanBoardProps) {
   const colCount = stages.length;
   const gridClass = colCount <= 6
     ? `xl:grid xl:grid-cols-${colCount} xl:overflow-x-visible`
@@ -59,6 +62,9 @@ export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUs
             onBulkToggle={onBulkToggle}
             pipelineType={pipelineType}
             attachmentCountMap={attachmentCountMap}
+            dimmedContactIds={dimmedContactIds}
+            hiddenContactIds={hiddenContactIds}
+            stuckContactIds={stuckContactIds}
           />
         ))}
       </div>

@@ -20,6 +20,7 @@ import { usePipeline } from '@/lib/pipeline-context';
 import { KanbanBoard } from '@/components/kanban/kanban-board';
 import { KanbanSkeleton } from '@/components/kanban/kanban-skeleton';
 import type { UserInfo } from '@/components/kanban/kanban-card';
+import { KanbanFilterBar } from '@/components/kanban/kanban-filter-bar';
 import { getUserColor } from '@/lib/utils/user-colors';
 import MotivoModal from '@/components/ui/motivo-modal';
 import MeetingModal from '@/components/meetings/meeting-modal';
@@ -107,6 +108,17 @@ export default function KanbanPage() {
   const [attachmentCountMap, setAttachmentCountMap] = useState<Record<string, number>>({});
   const [totalContactsFromApi, setTotalContactsFromApi] = useState<number>(0);
   const [pendingRequestContactIds, setPendingRequestContactIds] = useState<Set<string>>(new Set());
+
+  // Kanban chip filter state
+  const [dimmedContactIds, setDimmedContactIds] = useState<Set<string>>(new Set());
+  const [hiddenContactIds, setHiddenContactIds] = useState<Set<string>>(new Set());
+  const [stuckContactIds, setStuckContactIds] = useState<Set<string>>(new Set());
+
+  const handleChipFiltersChange = useCallback((dimmed: Set<string>, hidden: Set<string>, stuck: Set<string>) => {
+    setDimmedContactIds(dimmed);
+    setHiddenContactIds(hidden);
+    setStuckContactIds(stuck);
+  }, []);
 
   // Bulk selection state
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
@@ -979,8 +991,19 @@ export default function KanbanPage() {
         </div>
       )}
 
+      {/* === CHIP FILTER BAR === */}
+      {!loading && filtered.length > 0 && (
+        <div className="px-4 lg:px-6 py-2 border-b border-purple-500/10 bg-[#120826]/40 overflow-x-auto">
+          <KanbanFilterBar
+            contacts={filtered}
+            userMap={userMap}
+            onFiltersChange={handleChipFiltersChange}
+          />
+        </div>
+      )}
+
       {/* === BOARD === */}
-      <div className="flex-1 overflow-hidden px-4 lg:px-6 py-4">
+      <div className="flex-1 overflow-hidden px-4 lg:px-6 py-4" data-tour="kanban-board">
         {loading ? (
           <KanbanSkeleton />
         ) : (
@@ -1010,6 +1033,9 @@ export default function KanbanPage() {
               onBulkToggle={handleBulkToggle}
               pipelineType={pipelineType}
               attachmentCountMap={attachmentCountMap}
+              dimmedContactIds={dimmedContactIds}
+              hiddenContactIds={hiddenContactIds}
+              stuckContactIds={stuckContactIds}
             />
           </DndContext>
         )}

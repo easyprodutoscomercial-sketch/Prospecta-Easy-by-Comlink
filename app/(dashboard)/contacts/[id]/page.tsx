@@ -1,18 +1,15 @@
 'use client';
 
 import { use, useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Contact, Interaction, ContactAttachment } from '@/lib/types';
+import { Contact, Interaction, Meeting, ContactAttachment } from '@/lib/types';
 import ContactForm from '@/components/contacts/contact-form';
 import ConfirmModal from '@/components/ui/confirm-modal';
 import MotivoModal from '@/components/ui/motivo-modal';
 import Tabs from '@/components/ui/tabs';
 import ContactSidebar from '@/components/contacts/contact-sidebar';
 import ContactDetails from '@/components/contacts/contact-details';
-import ContactInteractions from '@/components/contacts/contact-interactions';
-import ContactAttachments from '@/components/contacts/contact-attachments';
-import ContactHistory from '@/components/contacts/contact-history';
+import ContactTimeline from '@/components/contacts/contact-timeline';
 import AICopilotPanel from '@/components/ai/ai-copilot-panel';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import { useToast } from '@/lib/toast-context';
@@ -27,12 +24,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const toast = useToast();
   const [contact, setContact] = useState<Contact | null>(null);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [attachments, setAttachments] = useState<AttachmentWithUrl[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
-  const [activeTab, setActiveTab] = useState('historico');
+  const [activeTab, setActiveTab] = useState('timeline');
 
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [ownerName, setOwnerName] = useState<string>('');
@@ -54,11 +52,18 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const loadCurrentUser = async () => { try { const r = await fetch('/api/me'); if (r.ok) setCurrentUser(await r.json()); } catch {} };
 
   const loadContact = async () => {
-    const res = await fetch(`/api/contacts/${id}`);
+    const [res, meetingsRes] = await Promise.all([
+      fetch(`/api/contacts/${id}`),
+      fetch(`/api/meetings?contact_id=${id}`),
+    ]);
     const data = await res.json();
     setContact(data.contact);
     setInteractions(data.interactions || []);
     setAttachments(data.attachments || []);
+    if (meetingsRes.ok) {
+      const meetingsData = await meetingsRes.json();
+      setMeetings(meetingsData.meetings || meetingsData || []);
+    }
     setLoading(false);
     if (data.contact?.assigned_to_user_id) {
       try {
@@ -159,10 +164,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   };
 
   const baseTabs = [
-    { key: 'historico', label: 'Historico', count: interactions.length + attachments.length },
-    { key: 'atividades', label: 'Atividades', count: interactions.length },
+    { key: 'timeline', label: 'Timeline', count: interactions.length + meetings.length + attachments.length },
     { key: 'detalhes', label: 'Detalhes' },
-    { key: 'arquivos', label: 'Arquivos', count: attachments.length },
   ];
   const tabs = isAdmin
     ? [...baseTabs, { key: 'ai-copilot', label: 'AI Copilot' }]
@@ -195,10 +198,11 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div className="space-y-4">
       {/* Back */}
-      <Link href="/contacts" className="inline-flex items-center gap-1 text-sm text-emerald-400/70 hover:text-emerald-400 transition-colors">
+      <button onClick={() => window.history.length > 1 ? window.history.back() : window.location.href = '/contacts'}
+        className="inline-flex items-center gap-1 text-sm text-emerald-400/70 hover:text-emerald-400 transition-colors">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
         Voltar para contatos
-      </Link>
+      </button>
 
       {/* 2-column layout */}
       <div className="flex flex-col lg:flex-row gap-6">
@@ -238,27 +242,20 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
             {/* Tab content */}
             <div className="p-4 sm:p-5">
-              {activeTab === 'historico' && (
-                <ContactHistory interactions={interactions} attachments={attachments} />
-              )}
-              {activeTab === 'atividades' && (
-                <ContactInteractions
+              {activeTab === 'timeline' && (
+                <ContactTimeline
                   contactId={id}
                   interactions={interactions}
                   setInteractions={setInteractions}
+                  meetings={meetings}
+                  setMeetings={setMeetings}
+                  attachments={attachments}
+                  setAttachments={setAttachments}
                   canModify={!!canModify}
                 />
               )}
               {activeTab === 'detalhes' && (
                 <ContactDetails contact={contact} />
-              )}
-              {activeTab === 'arquivos' && (
-                <ContactAttachments
-                  contactId={id}
-                  attachments={attachments}
-                  setAttachments={setAttachments}
-                  canModify={!!canModify}
-                />
               )}
               {activeTab === 'ai-copilot' && (
                 <AICopilotPanel

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { Contact } from '@/lib/types';
 import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS, ESTADOS_BRASIL, PROXIMA_ACAO_LABELS } from '@/lib/utils/labels';
@@ -12,7 +12,11 @@ import SavedViews from '@/components/saved-views';
 import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
-import ContactMiniPipeline from '@/components/contacts/contact-mini-pipeline';
+import { useUrlFilters } from '@/lib/hooks/use-url-filters';
+import { useContactPreferences } from '@/lib/hooks/use-contact-preferences';
+import ContactCard from '@/components/contacts/contact-card';
+import ContactsToolbar from '@/components/contacts/contacts-toolbar';
+import ContactsMapView from '@/components/contacts/contacts-map-view';
 
 interface UserInfo {
   user_id: string;
@@ -24,44 +28,69 @@ interface UserInfo {
 type SortField = 'name' | 'company' | 'status' | 'created_at';
 type SortDir = 'asc' | 'desc';
 
+const CONTACT_FILTER_DEFS = {
+  search: { type: 'text' as const, default: '' },
+  status: { type: 'select' as const, default: 'all' },
+  tipo: { type: 'select' as const, default: 'all' },
+  assigned: { type: 'select' as const, default: 'all' },
+  temperatura: { type: 'select' as const, default: 'all' },
+  origem: { type: 'select' as const, default: 'all' },
+  classe: { type: 'select' as const, default: 'all' },
+  cidade: { type: 'text' as const, default: '' },
+  estado: { type: 'select' as const, default: 'all' },
+  telefone: { type: 'text' as const, default: '' },
+  cpf: { type: 'text' as const, default: '' },
+  cnpj: { type: 'text' as const, default: '' },
+  whatsapp: { type: 'text' as const, default: '' },
+  empresa: { type: 'text' as const, default: '' },
+  referencia: { type: 'text' as const, default: '' },
+  contato_nome: { type: 'text' as const, default: '' },
+  cargo: { type: 'text' as const, default: '' },
+  endereco: { type: 'text' as const, default: '' },
+  cep: { type: 'text' as const, default: '' },
+  website: { type: 'text' as const, default: '' },
+  instagram: { type: 'text' as const, default: '' },
+  produtos_fornecidos: { type: 'text' as const, default: '' },
+  proxima_acao_tipo: { type: 'select' as const, default: 'all' },
+  page: { type: 'select' as const, default: '1' },
+  sortBy: { type: 'select' as const, default: 'created_at' },
+  sortDir: { type: 'select' as const, default: 'desc' },
+};
+
 export default function ContactsPage() {
+  return (
+    <Suspense fallback={<SkeletonTable rows={6} cols={4} />}>
+      <ContactsPageContent />
+    </Suspense>
+  );
+}
+
+function ContactsPageContent() {
   const toast = useToast();
   const { selectedPipelineId, currentPipeline } = usePipeline();
+  const { values: filters, inputValues, setFilter, setFilters, resetAll } = useUrlFilters(CONTACT_FILTER_DEFS);
+  const prefs = useContactPreferences();
+
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [mapContacts, setMapContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [tipoFilter, setTipoFilter] = useState('all');
-  const [assignedFilter, setAssignedFilter] = useState('all');
-  const [temperaturaFilter, setTemperaturaFilter] = useState('all');
-  const [origemFilter, setOrigemFilter] = useState('all');
-  const [classeFilter, setClasseFilter] = useState('all');
-  const [cidadeFilter, setCidadeFilter] = useState('');
-  const [debouncedCidade, setDebouncedCidade] = useState('');
-  const [estadoFilter, setEstadoFilter] = useState('all');
-  const [telefoneFilter, setTelefoneFilter] = useState('');
-  const [debouncedTelefone, setDebouncedTelefone] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [adv, setAdv] = useState({ cpf: '', cnpj: '', whatsapp: '', empresa: '', referencia: '', contato_nome: '', cargo: '', endereco: '', cep: '', website: '', instagram: '', produtos_fornecidos: '', proxima_acao_tipo: 'all' });
-  const [debouncedAdv, setDebouncedAdv] = useState(adv);
   const abortRef = useRef<AbortController | null>(null);
+  const mapAbortRef = useRef<AbortController | null>(null);
 
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [currentUserRole, setCurrentUserRole] = useState<string>('user');
 
-  const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 20;
 
-  const [sortBy, setSortBy] = useState<SortField>('created_at');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
-
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+
+  const isMapView = prefs.activeView === 'map';
 
   useEffect(() => {
     async function fetchUsersAndMe() {
@@ -85,47 +114,52 @@ export default function ContactsPage() {
     fetchUsersAndMe();
   }, []);
 
-  useEffect(() => { const t = setTimeout(() => setDebouncedSearch(search), 400); return () => clearTimeout(t); }, [search]);
-  useEffect(() => { const t = setTimeout(() => setDebouncedCidade(cidadeFilter), 400); return () => clearTimeout(t); }, [cidadeFilter]);
-  useEffect(() => { const t = setTimeout(() => setDebouncedTelefone(telefoneFilter), 400); return () => clearTimeout(t); }, [telefoneFilter]);
-  useEffect(() => { const t = setTimeout(() => setDebouncedAdv(adv), 400); return () => clearTimeout(t); }, [adv]);
-  useEffect(() => { setPage(1); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, temperaturaFilter, origemFilter, classeFilter, debouncedCidade, estadoFilter, debouncedTelefone, debouncedAdv, selectedPipelineId]);
-  useEffect(() => { loadContacts(); }, [debouncedSearch, statusFilter, tipoFilter, assignedFilter, temperaturaFilter, origemFilter, classeFilter, debouncedCidade, estadoFilter, debouncedTelefone, debouncedAdv, page, sortBy, sortDir, selectedPipelineId]);
+  useEffect(() => { loadContacts(); }, [JSON.stringify(filters), selectedPipelineId]);
+
+  // Load all contacts for map view (no pagination)
+  useEffect(() => {
+    if (isMapView) loadMapContacts();
+  }, [isMapView, JSON.stringify(filters), selectedPipelineId]);
+
+  const buildFilterParams = useCallback(() => {
+    const params = new URLSearchParams();
+    if (filters.search) params.set('search', filters.search);
+    if (filters.status !== 'all') params.set('status', filters.status);
+    if (filters.tipo !== 'all') params.set('tipo', filters.tipo);
+    if (filters.assigned !== 'all') params.set('assigned', filters.assigned);
+    if (filters.temperatura !== 'all') params.set('temperatura', filters.temperatura);
+    if (filters.origem !== 'all') params.set('origem', filters.origem);
+    if (filters.classe !== 'all') params.set('classe', filters.classe);
+    if (filters.cidade) params.set('cidade', filters.cidade);
+    if (filters.estado !== 'all') params.set('estado', filters.estado);
+    if (filters.telefone) params.set('telefone', filters.telefone);
+    if (filters.cpf) params.set('cpf', filters.cpf);
+    if (filters.cnpj) params.set('cnpj', filters.cnpj);
+    if (filters.whatsapp) params.set('whatsapp', filters.whatsapp);
+    if (filters.empresa) params.set('empresa', filters.empresa);
+    if (filters.referencia) params.set('referencia', filters.referencia);
+    if (filters.contato_nome) params.set('contato_nome', filters.contato_nome);
+    if (filters.cargo) params.set('cargo', filters.cargo);
+    if (filters.endereco) params.set('endereco', filters.endereco);
+    if (filters.cep) params.set('cep', filters.cep);
+    if (filters.website) params.set('website', filters.website);
+    if (filters.instagram) params.set('instagram', filters.instagram);
+    if (filters.proxima_acao_tipo !== 'all') params.set('proxima_acao_tipo', filters.proxima_acao_tipo);
+    if (filters.produtos_fornecidos) params.set('produtos_fornecidos', filters.produtos_fornecidos);
+    if (selectedPipelineId) params.set('pipeline_id', selectedPipelineId);
+    return params;
+  }, [filters, selectedPipelineId]);
 
   const loadContacts = async () => {
     if (abortRef.current) abortRef.current.abort();
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
-    const params = new URLSearchParams();
-    if (debouncedSearch) params.set('search', debouncedSearch);
-    if (statusFilter !== 'all') params.set('status', statusFilter);
-    if (tipoFilter !== 'all') params.set('tipo', tipoFilter);
-    if (assignedFilter !== 'all') params.set('assigned', assignedFilter);
-    if (temperaturaFilter !== 'all') params.set('temperatura', temperaturaFilter);
-    if (origemFilter !== 'all') params.set('origem', origemFilter);
-    if (classeFilter !== 'all') params.set('classe', classeFilter);
-    if (debouncedCidade) params.set('cidade', debouncedCidade);
-    if (estadoFilter !== 'all') params.set('estado', estadoFilter);
-    if (debouncedTelefone) params.set('telefone', debouncedTelefone);
-    if (debouncedAdv.cpf) params.set('cpf', debouncedAdv.cpf);
-    if (debouncedAdv.cnpj) params.set('cnpj', debouncedAdv.cnpj);
-    if (debouncedAdv.whatsapp) params.set('whatsapp', debouncedAdv.whatsapp);
-    if (debouncedAdv.empresa) params.set('empresa', debouncedAdv.empresa);
-    if (debouncedAdv.referencia) params.set('referencia', debouncedAdv.referencia);
-    if (debouncedAdv.contato_nome) params.set('contato_nome', debouncedAdv.contato_nome);
-    if (debouncedAdv.cargo) params.set('cargo', debouncedAdv.cargo);
-    if (debouncedAdv.endereco) params.set('endereco', debouncedAdv.endereco);
-    if (debouncedAdv.cep) params.set('cep', debouncedAdv.cep);
-    if (debouncedAdv.website) params.set('website', debouncedAdv.website);
-    if (debouncedAdv.instagram) params.set('instagram', debouncedAdv.instagram);
-    if (debouncedAdv.proxima_acao_tipo !== 'all') params.set('proxima_acao_tipo', debouncedAdv.proxima_acao_tipo);
-    if (debouncedAdv.produtos_fornecidos) params.set('produtos_fornecidos', debouncedAdv.produtos_fornecidos);
-    params.set('page', String(page));
+    const params = buildFilterParams();
+    params.set('page', filters.page);
     params.set('limit', String(limit));
-    params.set('sortBy', sortBy);
-    params.set('sortDir', sortDir);
-    if (selectedPipelineId) params.set('pipeline_id', selectedPipelineId);
+    params.set('sortBy', filters.sortBy);
+    params.set('sortDir', filters.sortDir);
     try {
       const res = await fetch(`/api/contacts?${params.toString()}`, { signal: controller.signal });
       const data = await res.json();
@@ -136,40 +170,45 @@ export default function ContactsPage() {
     setLoading(false);
   };
 
-  const handleSort = (field: SortField) => {
-    if (sortBy === field) setSortDir((p) => (p === 'asc' ? 'desc' : 'asc'));
-    else { setSortBy(field); setSortDir('asc'); }
+  const loadMapContacts = async () => {
+    if (mapAbortRef.current) mapAbortRef.current.abort();
+    const controller = new AbortController();
+    mapAbortRef.current = controller;
+    const params = buildFilterParams();
+    params.set('page', '1');
+    params.set('limit', '9999');
+    params.set('sortBy', filters.sortBy);
+    params.set('sortDir', filters.sortDir);
+    try {
+      const res = await fetch(`/api/contacts?${params.toString()}`, { signal: controller.signal });
+      const data = await res.json();
+      setMapContacts(data.contacts || []);
+    } catch (e: any) { if (e.name === 'AbortError') return; }
   };
 
+  const handleSort = (field: SortField) => {
+    if (filters.sortBy === field) {
+      setFilter('sortDir', filters.sortDir === 'asc' ? 'desc' : 'asc');
+    } else {
+      setFilters({ sortBy: field, sortDir: 'asc' });
+    }
+  };
+
+  // Filter out hidden contacts for the list view
+  const visibleContacts = useMemo(
+    () => contacts.filter((c) => !prefs.hiddenContactIds.has(c.id)),
+    [contacts, prefs.hiddenContactIds]
+  );
+
   const toggleSelect = (id: string) => { setSelectedIds((p) => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); return n; }); };
-  const toggleSelectAll = () => { if (selectedIds.size === contacts.length) setSelectedIds(new Set()); else setSelectedIds(new Set(contacts.map((c) => c.id))); };
+  const toggleSelectAll = () => {
+    if (selectedIds.size === visibleContacts.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(visibleContacts.map((c) => c.id)));
+  };
   const clearSelection = () => setSelectedIds(new Set());
 
   const handleExport = () => {
-    const params = new URLSearchParams();
-    if (debouncedSearch) params.set('search', debouncedSearch);
-    if (statusFilter !== 'all') params.set('status', statusFilter);
-    if (tipoFilter !== 'all') params.set('tipo', tipoFilter);
-    if (assignedFilter !== 'all') params.set('assigned', assignedFilter);
-    if (temperaturaFilter !== 'all') params.set('temperatura', temperaturaFilter);
-    if (origemFilter !== 'all') params.set('origem', origemFilter);
-    if (classeFilter !== 'all') params.set('classe', classeFilter);
-    if (debouncedCidade) params.set('cidade', debouncedCidade);
-    if (estadoFilter !== 'all') params.set('estado', estadoFilter);
-    if (debouncedTelefone) params.set('telefone', debouncedTelefone);
-    if (debouncedAdv.cpf) params.set('cpf', debouncedAdv.cpf);
-    if (debouncedAdv.cnpj) params.set('cnpj', debouncedAdv.cnpj);
-    if (debouncedAdv.whatsapp) params.set('whatsapp', debouncedAdv.whatsapp);
-    if (debouncedAdv.empresa) params.set('empresa', debouncedAdv.empresa);
-    if (debouncedAdv.referencia) params.set('referencia', debouncedAdv.referencia);
-    if (debouncedAdv.contato_nome) params.set('contato_nome', debouncedAdv.contato_nome);
-    if (debouncedAdv.cargo) params.set('cargo', debouncedAdv.cargo);
-    if (debouncedAdv.endereco) params.set('endereco', debouncedAdv.endereco);
-    if (debouncedAdv.cep) params.set('cep', debouncedAdv.cep);
-    if (debouncedAdv.website) params.set('website', debouncedAdv.website);
-    if (debouncedAdv.instagram) params.set('instagram', debouncedAdv.instagram);
-    if (debouncedAdv.proxima_acao_tipo !== 'all') params.set('proxima_acao_tipo', debouncedAdv.proxima_acao_tipo);
-    if (debouncedAdv.produtos_fornecidos) params.set('produtos_fornecidos', debouncedAdv.produtos_fornecidos);
+    const params = buildFilterParams();
     window.open(`/api/contacts/export?${params.toString()}`, '_blank');
     toast.success('Exportacao iniciada');
   };
@@ -204,6 +243,9 @@ export default function ContactsPage() {
 
   const selectCls = 'px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
+  const hiddenCount = contacts.length - visibleContacts.length;
+  const pipelineStages = currentPipeline?.stages && currentPipeline.stages.length > 0 ? currentPipeline.stages : null;
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -229,18 +271,20 @@ export default function ContactsPage() {
           </Link>
           <SavedViews
             storageKey="crm_contacts_views"
-            currentFilters={{ search, status: statusFilter, tipo: tipoFilter, assigned: assignedFilter, temperatura: temperaturaFilter, origem: origemFilter, classe: classeFilter, cidade: cidadeFilter, estado: estadoFilter, telefone: telefoneFilter }}
+            currentFilters={{ search: inputValues.search, status: filters.status, tipo: filters.tipo, assigned: filters.assigned, temperatura: filters.temperatura, origem: filters.origem, classe: filters.classe, cidade: inputValues.cidade, estado: filters.estado, telefone: inputValues.telefone }}
             onApply={(f) => {
-              setSearch(f.search || '');
-              setStatusFilter(f.status || 'all');
-              setTipoFilter(f.tipo || 'all');
-              setAssignedFilter(f.assigned || 'all');
-              setTemperaturaFilter(f.temperatura || 'all');
-              setOrigemFilter(f.origem || 'all');
-              setClasseFilter(f.classe || 'all');
-              setCidadeFilter(f.cidade || '');
-              setEstadoFilter(f.estado || 'all');
-              setTelefoneFilter(f.telefone || '');
+              setFilters({
+                search: f.search || '',
+                status: f.status || 'all',
+                tipo: f.tipo || 'all',
+                assigned: f.assigned || 'all',
+                temperatura: f.temperatura || 'all',
+                origem: f.origem || 'all',
+                classe: f.classe || 'all',
+                cidade: f.cidade || '',
+                estado: f.estado || 'all',
+                telefone: f.telefone || '',
+              });
             }}
           />
         </div>
@@ -251,9 +295,9 @@ export default function ContactsPage() {
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
           <div className="relative col-span-2 lg:col-span-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input type="text" placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <input type="text" placeholder="Buscar..." value={inputValues.search} onChange={(e) => setFilter('search', e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={selectCls}>
+          <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)} className={selectCls}>
             <option value="all">Status</option>
             <option value="NOVO">Novo</option>
             <option value="EM_PROSPECCAO">Em Prospecao</option>
@@ -262,38 +306,38 @@ export default function ContactsPage() {
             <option value="CONVERTIDO">Convertido</option>
             <option value="PERDIDO">Perdido</option>
           </select>
-          <select value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value)} className={selectCls}>
+          <select value={filters.tipo} onChange={(e) => setFilter('tipo', e.target.value)} className={selectCls}>
             <option value="all">Tipo</option>
             <option value="FORNECEDOR">Fornecedor</option>
             <option value="COMPRADOR">Comprador</option>
           </select>
-          <select value={assignedFilter} onChange={(e) => setAssignedFilter(e.target.value)} className={selectCls}>
+          <select value={filters.assigned} onChange={(e) => setFilter('assigned', e.target.value)} className={selectCls}>
             <option value="all">Responsavel</option>
             <option value="me">Meus contatos</option>
             <option value="unassigned">Sem responsavel</option>
           </select>
-          <select value={temperaturaFilter} onChange={(e) => setTemperaturaFilter(e.target.value)} className={selectCls}>
+          <select value={filters.temperatura} onChange={(e) => setFilter('temperatura', e.target.value)} className={selectCls}>
             <option value="all">Temperatura</option>
             {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
               <option key={key} value={key}>{label}</option>
             ))}
           </select>
-          <select value={origemFilter} onChange={(e) => setOrigemFilter(e.target.value)} className={selectCls}>
+          <select value={filters.origem} onChange={(e) => setFilter('origem', e.target.value)} className={selectCls}>
             <option value="all">Origem</option>
             {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
               <option key={key} value={key}>{label}</option>
             ))}
           </select>
-          <select value={classeFilter} onChange={(e) => setClasseFilter(e.target.value)} className={selectCls}>
+          <select value={filters.classe} onChange={(e) => setFilter('classe', e.target.value)} className={selectCls}>
             <option value="all">Classe</option>
             <option value="A">Classe A</option>
             <option value="B">Classe B</option>
             <option value="C">Classe C</option>
             <option value="D">Classe D</option>
           </select>
-          <input type="text" placeholder="Telefone..." value={telefoneFilter} onChange={(e) => setTelefoneFilter(e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          <input type="text" placeholder="Cidade..." value={cidadeFilter} onChange={(e) => setCidadeFilter(e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className={selectCls}>
+          <input type="text" placeholder="Telefone..." value={inputValues.telefone} onChange={(e) => setFilter('telefone', e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <input type="text" placeholder="Cidade..." value={inputValues.cidade} onChange={(e) => setFilter('cidade', e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <select value={filters.estado} onChange={(e) => setFilter('estado', e.target.value)} className={selectCls}>
             <option value="all">Estado</option>
             {ESTADOS_BRASIL.map((uf) => (
               <option key={uf} value={uf}>{uf}</option>
@@ -305,19 +349,19 @@ export default function ContactsPage() {
         </button>
         {showAdvanced && (
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mt-3 pt-3 border-t border-purple-800/20">
-            <input type="text" placeholder="CPF..." value={adv.cpf} onChange={(e) => setAdv((p) => ({ ...p, cpf: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="CNPJ..." value={adv.cnpj} onChange={(e) => setAdv((p) => ({ ...p, cnpj: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="WhatsApp..." value={adv.whatsapp} onChange={(e) => setAdv((p) => ({ ...p, whatsapp: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="Empresa..." value={adv.empresa} onChange={(e) => setAdv((p) => ({ ...p, empresa: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="Referencia..." value={adv.referencia} onChange={(e) => setAdv((p) => ({ ...p, referencia: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="Nome Contato..." value={adv.contato_nome} onChange={(e) => setAdv((p) => ({ ...p, contato_nome: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="Cargo..." value={adv.cargo} onChange={(e) => setAdv((p) => ({ ...p, cargo: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="Endereco..." value={adv.endereco} onChange={(e) => setAdv((p) => ({ ...p, endereco: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="CEP..." value={adv.cep} onChange={(e) => setAdv((p) => ({ ...p, cep: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="Website..." value={adv.website} onChange={(e) => setAdv((p) => ({ ...p, website: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="Instagram..." value={adv.instagram} onChange={(e) => setAdv((p) => ({ ...p, instagram: e.target.value }))} className={selectCls} />
-            <input type="text" placeholder="Produtos Fornecidos..." value={adv.produtos_fornecidos} onChange={(e) => setAdv((p) => ({ ...p, produtos_fornecidos: e.target.value }))} className={selectCls} />
-            <select value={adv.proxima_acao_tipo} onChange={(e) => setAdv((p) => ({ ...p, proxima_acao_tipo: e.target.value }))} className={selectCls}>
+            <input type="text" placeholder="CPF..." value={inputValues.cpf} onChange={(e) => setFilter('cpf', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="CNPJ..." value={inputValues.cnpj} onChange={(e) => setFilter('cnpj', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="WhatsApp..." value={inputValues.whatsapp} onChange={(e) => setFilter('whatsapp', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="Empresa..." value={inputValues.empresa} onChange={(e) => setFilter('empresa', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="Referencia..." value={inputValues.referencia} onChange={(e) => setFilter('referencia', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="Nome Contato..." value={inputValues.contato_nome} onChange={(e) => setFilter('contato_nome', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="Cargo..." value={inputValues.cargo} onChange={(e) => setFilter('cargo', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="Endereco..." value={inputValues.endereco} onChange={(e) => setFilter('endereco', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="CEP..." value={inputValues.cep} onChange={(e) => setFilter('cep', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="Website..." value={inputValues.website} onChange={(e) => setFilter('website', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="Instagram..." value={inputValues.instagram} onChange={(e) => setFilter('instagram', e.target.value)} className={selectCls} />
+            <input type="text" placeholder="Produtos Fornecidos..." value={inputValues.produtos_fornecidos} onChange={(e) => setFilter('produtos_fornecidos', e.target.value)} className={selectCls} />
+            <select value={filters.proxima_acao_tipo} onChange={(e) => setFilter('proxima_acao_tipo', e.target.value)} className={selectCls}>
               <option value="all">Proxima Acao</option>
               {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (
                 <option key={key} value={key}>{label}</option>
@@ -327,8 +371,22 @@ export default function ContactsPage() {
         )}
       </div>
 
+      {/* Toolbar: view toggle + density slider + hidden counter */}
+      <ContactsToolbar
+        activeView={prefs.activeView}
+        onViewChange={prefs.setActiveView}
+        density={prefs.density}
+        onDensityChange={prefs.setDensity}
+        hiddenCount={hiddenCount}
+        onRevealAll={prefs.revealAll}
+        isMapView={isMapView}
+      />
+
       {/* Content */}
-      {loading ? (
+      {isMapView ? (
+        /* ========== MAP VIEW ========== */
+        <ContactsMapView contacts={mapContacts} />
+      ) : loading ? (
         <SkeletonTable rows={6} cols={4} />
       ) : contacts.length === 0 ? (
         <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 text-center py-16">
@@ -350,127 +408,47 @@ export default function ContactsPage() {
         <>
           {/* Sort + select all */}
           <div className="flex items-center gap-2 px-1 flex-wrap">
-            <input type="checkbox" checked={contacts.length > 0 && selectedIds.size === contacts.length} onChange={toggleSelectAll} className="rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500" />
+            <input type="checkbox" checked={visibleContacts.length > 0 && selectedIds.size === visibleContacts.length} onChange={toggleSelectAll} className="rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500" />
             <span className="text-xs text-neutral-500">Selecionar todos</span>
             <div className="flex items-center gap-2 ml-auto">
               <button onClick={() => handleSort('name')} className="text-[11px] text-neutral-500 hover:text-emerald-400 transition-colors">
-                Nome {sortBy === 'name' ? (sortDir === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
+                Nome {filters.sortBy === 'name' ? (filters.sortDir === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
               </button>
               <button onClick={() => handleSort('created_at')} className="text-[11px] text-neutral-500 hover:text-emerald-400 transition-colors">
-                Data {sortBy === 'created_at' ? (sortDir === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
+                Data {filters.sortBy === 'created_at' ? (filters.sortDir === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
               </button>
               <button onClick={() => handleSort('status')} className="text-[11px] text-neutral-500 hover:text-emerald-400 transition-colors">
-                Status {sortBy === 'status' ? (sortDir === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
+                Status {filters.sortBy === 'status' ? (filters.sortDir === 'asc' ? '\u2191' : '\u2193') : '\u2195'}
               </button>
             </div>
           </div>
 
           {/* Cards */}
           <div className="space-y-2">
-            {contacts.map((contact) => {
-              const isUnassigned = !contact.assigned_to_user_id;
+            {visibleContacts.map((contact) => {
               const ownerId = contact.assigned_to_user_id || '';
               const owner = userMap[ownerId];
               const ownerColor = ownerId ? getUserColor(ownerId) : null;
-              const isSelected = selectedIds.has(contact.id);
 
               return (
-                <div key={contact.id} className={`bg-[#1e0f35] rounded-xl border card-hover transition-all ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
-                  <div className="p-3 sm:p-4">
-                    <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(contact.id)} className="mt-1 rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Link href={`/contacts/${contact.id}`} className="text-sm font-semibold text-white hover:text-emerald-400 transition-colors truncate">
-                            {contact.name}
-                          </Link>
-                          {contact.tipo?.map((t) => (
-                            <span key={t} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
-                              {CONTACT_TYPE_LABELS[t] || t}
-                            </span>
-                          ))}
-                          {contact.temperatura && (
-                            <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}>
-                              {TEMPERATURA_LABELS[contact.temperatura] || contact.temperatura}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 mt-2 text-xs">
-                          <div>
-                            <span className="text-purple-300 text-[10px] font-bold uppercase tracking-wider">Empresa</span>
-                            <p className="text-neutral-200 truncate">{contact.company || <span className="text-neutral-600">-</span>}</p>
-                          </div>
-                          <div>
-                            <span className="text-emerald-400 text-[10px] font-bold uppercase tracking-wider">Email</span>
-                            <p className="text-neutral-200 truncate">{contact.email || <span className="text-neutral-600">-</span>}</p>
-                          </div>
-                          <div>
-                            <span className="text-purple-300 text-[10px] font-bold uppercase tracking-wider">Telefone</span>
-                            <p className="text-neutral-200">{contact.phone || <span className="text-neutral-600">-</span>}</p>
-                          </div>
-                          <div>
-                            <span className="text-emerald-400 text-[10px] font-bold uppercase tracking-wider">Data</span>
-                            <p className="text-neutral-200">{new Date(contact.created_at).toLocaleDateString('pt-BR')}</p>
-                          </div>
-                        </div>
-
-                        {currentPipeline?.stages && currentPipeline.stages.length > 0 && (
-                          <ContactMiniPipeline
-                            stages={currentPipeline.stages}
-                            currentStageId={contact.stage_id}
-                          />
-                        )}
-                      </div>
-
-                      {/* Right: status + responsavel */}
-                      <div className="flex flex-col items-end gap-2 shrink-0">
-                        <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full whitespace-nowrap ${getStatusColor(contact.status)}`}>
-                          {formatStatus(contact.status)}
-                        </span>
-
-                        {isUnassigned ? (
-                          currentUserId ? (
-                            <button onClick={(e) => { e.stopPropagation(); handleClaimContact(contact.id); }}
-                              className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-emerald-400 border border-emerald-500/30 rounded-full hover:bg-emerald-500/10 hover:border-emerald-400 transition-all"
-                              title="Apontar para mim">
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                              Apontar
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-neutral-600">Sem resp.</span>
-                          )
-                        ) : (
-                          <div className="flex items-center gap-2" title={owner?.name || 'Responsavel'}>
-                            <div className="avatar-breathe shrink-0 w-9 h-9 rounded-full overflow-hidden">
-                              {owner?.avatar_url ? (
-                                <img src={owner.avatar_url} alt={owner.name} className="w-9 h-9 object-cover rounded-full" />
-                              ) : (
-                                <div className="w-9 h-9 flex items-center justify-center text-xs font-bold rounded-full"
-                                  style={{ backgroundColor: ownerColor?.bg || '#404040', color: ownerColor?.text || '#fff' }}>
-                                  {owner ? getUserInitials(owner.name) : '?'}
-                                </div>
-                              )}
-                            </div>
-                            <span className="text-[11px] text-neutral-400 max-w-[80px] truncate hidden sm:inline">{owner?.name || '...'}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-purple-800/30 px-3 sm:px-4 py-2 flex justify-end">
-                    <Link href={`/contacts/${contact.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-purple-300 transition-colors">
-                      Ver detalhes
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                    </Link>
-                  </div>
-                </div>
+                <ContactCard
+                  key={contact.id}
+                  contact={contact}
+                  densityMode={prefs.densityMode}
+                  isSelected={selectedIds.has(contact.id)}
+                  onToggleSelect={toggleSelect}
+                  onHide={prefs.hideContact}
+                  onClaim={handleClaimContact}
+                  owner={owner}
+                  ownerColor={ownerColor}
+                  currentUserId={currentUserId}
+                  currentPipelineStages={pipelineStages}
+                />
               );
             })}
           </div>
 
-          <Pagination page={page} totalPages={totalPages} total={total} limit={limit} onPageChange={setPage} />
+          <Pagination page={Number(filters.page)} totalPages={totalPages} total={total} limit={limit} onPageChange={(p) => setFilter('page', String(p))} />
         </>
       )}
 

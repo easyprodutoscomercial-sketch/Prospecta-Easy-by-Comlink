@@ -4,6 +4,7 @@ import DashboardWithTabs from '@/components/dashboard-with-tabs';
 import DailyTasksWidget from '@/components/daily-tasks-widget';
 import PipelineHealthWidget from '@/components/ai/pipeline-health-widget';
 import { ensureProfile } from '@/lib/ensure-profile';
+import DashboardGridWrapper from '@/components/dashboard/dashboard-grid-wrapper';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,7 @@ export default async function DashboardPage() {
     profilesResult,
     monthContactsResult,
     monthInteractionsResult,
+    meetingsResult,
   ] = await Promise.all([
     admin.from('contacts').select('id, status, created_at, created_by_user_id, tipo, valor_estimado, assigned_to_user_id, temperatura, origem, classe, estado, cidade, proxima_acao_tipo, cpf, cnpj, phone, whatsapp, company, referencia, contato_nome, cargo, produtos_fornecidos, pipeline_id').eq('organization_id', orgId),
     admin.from('contacts').select('*, pipeline_id').eq('organization_id', orgId).order('created_at', { ascending: false }).limit(20),
@@ -49,6 +51,7 @@ export default async function DashboardPage() {
     admin.from('profiles').select('user_id, name, avatar_url').eq('organization_id', orgId),
     admin.from('contacts').select('id, created_by_user_id, tipo, temperatura, origem, classe, assigned_to_user_id, estado, cidade, proxima_acao_tipo, cpf, cnpj, phone, whatsapp, company, referencia, contato_nome, cargo, produtos_fornecidos, pipeline_id').eq('organization_id', orgId).gte('created_at', monthStart).lt('created_at', monthEnd),
     admin.from('interactions').select('contact_id, created_by_user_id, type, outcome').eq('organization_id', orgId).gte('created_at', monthStart).lt('created_at', monthEnd),
+    admin.from('meetings').select('id, title, meeting_at, status, contact_id').eq('organization_id', orgId),
   ]);
 
   const allContacts = contactsResult.data || [];
@@ -57,12 +60,20 @@ export default async function DashboardPage() {
   const allProfiles = profilesResult.data || [];
   const monthContacts = monthContactsResult.data || [];
   const monthInteractions = monthInteractionsResult.data || [];
+  const allMeetings = meetingsResult.data || [];
 
   return (
     <div>
       <h1 className="text-2xl font-semibold text-emerald-400 mb-8">Dashboard</h1>
       <DailyTasksWidget />
       <PipelineHealthWidget />
+      <DashboardGridWrapper
+        contacts={allContacts}
+        interactions={allInteractions}
+        meetings={allMeetings}
+        recentContacts={recentContacts}
+        allProfiles={allProfiles}
+      />
       <DashboardWithTabs
         allContacts={allContacts}
         recentContacts={recentContacts}

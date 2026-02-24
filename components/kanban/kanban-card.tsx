@@ -36,6 +36,8 @@ interface KanbanCardProps {
   onBulkToggle?: (contactId: string) => void;
   pipelineType?: PipelineType;
   attachmentCount?: number;
+  isDimmed?: boolean;
+  isStuck?: boolean;
 }
 
 function daysInStage(updatedAt: string): number {
@@ -43,7 +45,7 @@ function daysInStage(updatedAt: string): number {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onRequestContact, hasPendingRequest, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting, canJumpForward: canFwd, canJumpBackward: canBwd, showScheduleMeeting: showMeeting, lastInteractionAt, bulkMode, bulkSelected, onBulkToggle, pipelineType, attachmentCount }: KanbanCardProps) {
+export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, currentUserId, onClaimContact, onRequestContact, hasPendingRequest, onJumpForward, onJumpBackward, onScheduleMeeting, hasMeeting, canJumpForward: canFwd, canJumpBackward: canBwd, showScheduleMeeting: showMeeting, lastInteractionAt, bulkMode, bulkSelected, onBulkToggle, pipelineType, attachmentCount, isDimmed, isStuck }: KanbanCardProps) {
   const router = useRouter();
   const {
     attributes,
@@ -105,7 +107,7 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
       onClick={handleClick}
-      className={`bg-[#1e0f35] rounded-xl p-3 border-l-[3px] border cursor-grab select-none transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+      className={`bg-[#1e0f35] rounded-xl p-3 border-l-[3px] border cursor-grab select-none transition-[transform,box-shadow,border-color,background-color,opacity] duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
         hasMeeting
           ? 'border-cyan-500/40 shadow-md shadow-cyan-500/10 hover:border-cyan-400/60 hover:shadow-cyan-500/20'
           : 'border-purple-800/20 hover:border-purple-600/40 hover:bg-[#241540] hover:shadow-purple-900/20'
@@ -113,6 +115,10 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
         overlay ? 'shadow-2xl ring-2 ring-emerald-500/30 rotate-2 scale-105 bg-[#241540]' : ''
       } ${
         bulkSelected ? 'ring-2 ring-amber-500/50 bg-amber-500/5' : ''
+      } ${
+        isDimmed ? 'opacity-30' : ''
+      } ${
+        isStuck ? 'ring-2 ring-red-500/50' : ''
       }`}
     >
       {/* Bulk selection checkbox */}

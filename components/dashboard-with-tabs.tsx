@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { formatStatus, getStatusColor, STATUS_CHART_COLORS, STATUS_LABELS, INTERACTION_TYPE_LABELS, TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS, ESTADOS_BRASIL } from '@/lib/utils/labels';
 import { usePipeline } from '@/lib/pipeline-context';
 import { normalizeSearch } from '@/lib/utils/normalize';
+import { FunnelView } from '@/components/funnel/funnel-view';
 
 export interface SegmentData {
   statusCounts: { name: string; value: number; color: string }[];
@@ -43,6 +44,7 @@ const TABS = [
   { key: 'geral', label: 'Geral' },
   { key: 'fornecedor', label: 'Fornecedores' },
   { key: 'comprador', label: 'Compradores' },
+  { key: 'funil', label: 'Funil' },
 ] as const;
 
 const STATUS_CONFIG = Object.entries(STATUS_LABELS).map(([key, label]) => ({
@@ -289,7 +291,7 @@ export default function DashboardWithTabs({
     return { geral, fornecedor, comprador };
   }, [pipelineContacts, pipelineInteractions, pipelineRecentContacts, allProfiles, pipelineMonthContacts, pipelineMonthInteractions, monthRanges, temperaturaFilter, origemFilter, classeFilter, responsavelFilter, estadoFilter, proximaAcaoFilter, advSearch, contactIdMap]);
 
-  const data = segments[activeTab as keyof typeof segments];
+  const data = activeTab !== 'funil' ? segments[activeTab as keyof typeof segments] : segments.geral;
 
   // Build race data from team comparison (sorted by total score)
   const raceData = [...data.teamComparison]
@@ -377,20 +379,32 @@ export default function DashboardWithTabs({
                   ? 'bg-purple-500/15 text-purple-400 border border-purple-500/25'
                   : tab.key === 'comprador'
                   ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/25'
+                  : tab.key === 'funil'
+                  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/25'
                   : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/25'
                 : 'text-purple-200/60 hover:text-emerald-300 border border-transparent'
             }`}
           >
             {tab.label}
-            <span className={`ml-2 text-xs ${
-              activeTab === tab.key ? 'text-current/50' : 'text-purple-300/40'
-            }`}>
-              {segments[tab.key as keyof typeof segments].totalContacts}
-            </span>
+            {tab.key !== 'funil' && (
+              <span className={`ml-2 text-xs ${
+                activeTab === tab.key ? 'text-current/50' : 'text-purple-300/40'
+              }`}>
+                {segments[tab.key as keyof typeof segments].totalContacts}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
+      {/* Funnel view tab */}
+      {activeTab === 'funil' && (
+        <FunnelView allContacts={pipelineContacts} />
+      )}
+
+      {/* Regular dashboard content — hidden when funnel tab is active */}
+      {activeTab === 'funil' ? null : (
+      <>
       {/* Corrida de avatares — quem lidera este mês */}
       {raceData.length > 0 && (
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 mb-8">
@@ -551,6 +565,8 @@ export default function DashboardWithTabs({
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -358,5 +358,38 @@ export interface BugComment {
   created_at: string;
 }
 
+// ============================================
+// Custom Fields
+// ============================================
+
+export type CustomFieldType = 'text' | 'number' | 'date' | 'select' | 'boolean';
+
+export interface PipelineCustomField {
+  id: string;
+  organization_id: string;
+  pipeline_id: string;
+  name: string;
+  slug: string;
+  field_type: CustomFieldType;
+  options: string[] | null;
+  is_required: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ContactCustomFieldValue {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  field_id: string;
+  value_text: string | null;
+  value_number: number | null;
+  value_date: string | null;
+  value_boolean: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Re-export AI types for convenience
 export type { Notification, RiskAlert, ActionSuggestion, PipelineHealth } from '@/lib/ai/types';
