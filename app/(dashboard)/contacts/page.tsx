@@ -12,6 +12,7 @@ import SavedViews from '@/components/saved-views';
 import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
+import ContactMiniPipeline from '@/components/contacts/contact-mini-pipeline';
 
 interface UserInfo {
   user_id: string;
@@ -25,7 +26,7 @@ type SortDir = 'asc' | 'desc';
 
 export default function ContactsPage() {
   const toast = useToast();
-  const { selectedPipelineId } = usePipeline();
+  const { selectedPipelineId, currentPipeline } = usePipeline();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -413,6 +414,13 @@ export default function ContactsPage() {
                             <p className="text-neutral-200">{new Date(contact.created_at).toLocaleDateString('pt-BR')}</p>
                           </div>
                         </div>
+
+                        {currentPipeline?.stages && currentPipeline.stages.length > 0 && (
+                          <ContactMiniPipeline
+                            stages={currentPipeline.stages}
+                            currentStageId={contact.stage_id}
+                          />
+                        )}
                       </div>
 
                       {/* Right: status + responsavel */}
