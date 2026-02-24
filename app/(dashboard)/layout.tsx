@@ -35,11 +35,13 @@ export default async function DashboardLayout({
       <main className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
         <DashboardBanner />
         <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10 max-w-[1600px]">
-          <Providers>{children}</Providers>
+          <Providers>
+            {children}
+            <ProductTour />
+          </Providers>
         </div>
       </main>
       <CommandPalette />
-      <ProductTour />
     </div>
   );
 }
