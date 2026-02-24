@@ -14,7 +14,7 @@ export default function ContactMiniPipeline({
   if (stages.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-0 mt-2.5 overflow-x-auto scrollbar-hide">
+    <div className="flex items-center gap-0 mt-2.5 pt-5 overflow-x-auto overflow-y-visible scrollbar-hide">
       {stages.map((stage, idx) => {
         const isCurrent = stage.id === currentStageId;
         const isPast = currentIndex >= 0 && idx < currentIndex;
