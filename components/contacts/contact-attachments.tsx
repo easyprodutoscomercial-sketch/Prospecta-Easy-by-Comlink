@@ -4,6 +4,9 @@ import { useState, useRef, useCallback } from 'react';
 import { ContactAttachment } from '@/lib/types';
 import ConfirmModal from '@/components/ui/confirm-modal';
 import { useToast } from '@/lib/toast-context';
+import { createClient } from '@/lib/supabase/client';
+
+const DIRECT_UPLOAD_THRESHOLD = 4 * 1024 * 1024; // 4MB
 
 interface ContactAttachmentsProps {
   contactId: string;
@@ -23,6 +26,9 @@ const FILE_ICONS: Record<string, { icon: string; color: string }> = {
   'application/vnd.ms-excel': { icon: 'XLS', color: 'bg-green-500/20 text-green-400' },
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { icon: 'XLSX', color: 'bg-green-500/20 text-green-400' },
   'text/csv': { icon: 'CSV', color: 'bg-green-500/20 text-green-400' },
+  'video/mp4': { icon: 'MP4', color: 'bg-orange-500/20 text-orange-400' },
+  'video/webm': { icon: 'WEBM', color: 'bg-orange-500/20 text-orange-400' },
+  'video/quicktime': { icon: 'MOV', color: 'bg-orange-500/20 text-orange-400' },
 };
 
 function formatFileSize(bytes: number): string {
@@ -42,21 +48,66 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
   const uploadFile = async (file: File) => {
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      if (file.size >= DIRECT_UPLOAD_THRESHOLD) {
+        // Large file: upload directly to Supabase Storage from browser
+        const supabase = createClient();
+        const ext = file.name.split('.').pop() || 'bin';
+        const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        // We need org_id and contact_id for the path. Use a prefetch to get org context.
+        // The API will validate ownership, so we use contactId directly.
+        const filePath = `direct/${contactId}/${safeName}`;
 
-      const r = await fetch(`/api/contacts/${contactId}/attachments`, {
-        method: 'POST',
-        body: formData,
-      });
+        const { error: uploadError } = await supabase.storage
+          .from('attachments')
+          .upload(filePath, file, {
+            contentType: file.type,
+            upsert: false,
+          });
 
-      if (r.ok) {
-        const attachment = await r.json();
-        setAttachments((prev) => [attachment, ...prev]);
-        toast.success(`"${file.name}" enviado com sucesso`);
+        if (uploadError) {
+          toast.error('Erro ao enviar arquivo: ' + uploadError.message);
+          setUploading(false);
+          return;
+        }
+
+        // Save metadata via lightweight JSON POST
+        const r = await fetch(`/api/contacts/${contactId}/attachments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            file_name: file.name,
+            file_path: filePath,
+            file_size: file.size,
+            mime_type: file.type,
+          }),
+        });
+
+        if (r.ok) {
+          const attachment = await r.json();
+          setAttachments((prev) => [attachment, ...prev]);
+          toast.success(`"${file.name}" enviado com sucesso`);
+        } else {
+          const d = await r.json();
+          toast.error(d.error || 'Erro ao enviar arquivo');
+        }
       } else {
-        const d = await r.json();
-        toast.error(d.error || 'Erro ao enviar arquivo');
+        // Small file: upload via API route (existing flow)
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const r = await fetch(`/api/contacts/${contactId}/attachments`, {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (r.ok) {
+          const attachment = await r.json();
+          setAttachments((prev) => [attachment, ...prev]);
+          toast.success(`"${file.name}" enviado com sucesso`);
+        } else {
+          const d = await r.json();
+          toast.error(d.error || 'Erro ao enviar arquivo');
+        }
       }
     } catch {
       toast.error('Erro ao enviar arquivo');
@@ -125,7 +176,7 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
             type="file"
             onChange={handleFileSelect}
             className="hidden"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.mp4,.webm,.mov"
           />
           {uploading ? (
             <div className="flex items-center justify-center gap-2">
@@ -141,7 +192,7 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p className="text-sm text-neutral-400">Clique ou arraste um arquivo aqui</p>
-              <p className="text-xs text-neutral-600 mt-1">PDF, imagens, DOC, XLS, CSV (max 10MB)</p>
+              <p className="text-xs text-neutral-600 mt-1">PDF, imagens, videos, DOC, XLS, CSV (max 50MB)</p>
             </>
           )}
         </div>

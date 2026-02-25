@@ -14,9 +14,12 @@ const ALLOWED_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/csv',
+  'video/mp4',
+  'video/webm',
+  'video/quicktime',
 ];
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 // GET /api/contacts/[id]/attachments - Listar anexos
 export async function GET(
@@ -87,6 +90,47 @@ export async function POST(
       return NextResponse.json({ error: 'Contato nao encontrado' }, { status: 404 });
     }
 
+    const contentType = request.headers.get('content-type') || '';
+
+    // Direct upload flow: browser already uploaded to Storage, just save metadata
+    if (contentType.includes('application/json')) {
+      const body = await request.json();
+      const { file_name, file_path, file_size, mime_type } = body;
+
+      if (!file_name || !file_path || !file_size || !mime_type) {
+        return NextResponse.json({ error: 'Campos obrigatorios: file_name, file_path, file_size, mime_type' }, { status: 400 });
+      }
+
+      if (!ALLOWED_TYPES.includes(mime_type)) {
+        return NextResponse.json({ error: 'Tipo de arquivo nao permitido.' }, { status: 400 });
+      }
+
+      if (file_size > MAX_FILE_SIZE) {
+        return NextResponse.json({ error: 'Arquivo muito grande. Maximo 50MB.' }, { status: 400 });
+      }
+
+      const { data: attachment, error: insertError } = await admin
+        .from('contact_attachments')
+        .insert({
+          organization_id: profile.organization_id,
+          contact_id: id,
+          file_name,
+          file_path,
+          file_size,
+          mime_type,
+          uploaded_by_user_id: user.id,
+          uploaded_by_name: profile.name,
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      const { data: urlData } = admin.storage.from('attachments').getPublicUrl(file_path);
+      return NextResponse.json({ ...attachment, public_url: urlData.publicUrl });
+    }
+
+    // FormData upload flow (small files via server)
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
 
@@ -95,11 +139,11 @@ export async function POST(
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {
-      return NextResponse.json({ error: 'Tipo de arquivo nao permitido. Use PDF, imagens, DOC, DOCX, XLS, XLSX ou CSV.' }, { status: 400 });
+      return NextResponse.json({ error: 'Tipo de arquivo nao permitido. Use PDF, imagens, videos, DOC, DOCX, XLS, XLSX ou CSV.' }, { status: 400 });
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'Arquivo muito grande. Maximo 10MB.' }, { status: 400 });
+      return NextResponse.json({ error: 'Arquivo muito grande. Maximo 50MB.' }, { status: 400 });
     }
 
     // Generate unique file path
