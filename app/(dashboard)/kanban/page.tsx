@@ -379,9 +379,9 @@ export default function KanbanPage() {
         groups[firstStage.id].push(c);
       }
     }
-    // Ordenacao estavel dentro de cada coluna: por nome (alfabetico)
+    // Ordenacao dentro de cada coluna: por updated_at decrescente (mais recente primeiro)
     for (const key of Object.keys(groups)) {
-      groups[key].sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt-BR'));
+      groups[key].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
     }
     return groups;
   }, [filtered, stages]);

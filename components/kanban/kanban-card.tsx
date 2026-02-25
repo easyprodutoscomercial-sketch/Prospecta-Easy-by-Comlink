@@ -318,6 +318,13 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
         )}
       </div>
 
+      {/* Data de ultima modificacao */}
+      {contact.updated_at && (
+        <div className="text-[9px] text-purple-300/25 mt-1">
+          Atualizado {new Date(contact.updated_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} {new Date(contact.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+        </div>
+      )}
+
       {/* Attachment indicator for BUGS pipeline */}
       {pipelineType === 'BUGS' && !overlay && (
         <div className="mt-2 pt-2 border-t border-purple-800/15">
