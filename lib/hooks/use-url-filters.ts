@@ -35,32 +35,51 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Build initial values: URL params > sessionStorage > defaults
-  const getInitialValues = useCallback((): FilterValues<T> => {
-    const hasUrlParams = Array.from(searchParams.keys()).some((k) => k in defs);
-    const stored = hasUrlParams ? null : loadFromSession(pathname);
-
+  // Safe initial values from URL params only (works during SSR)
+  const getValuesFromUrl = (): FilterValues<T> => {
     const vals = {} as FilterValues<T>;
     for (const key in defs) {
       const fromUrl = searchParams.get(key);
-      if (fromUrl !== null) {
-        (vals as any)[key] = fromUrl;
-      } else if (stored && key in stored) {
-        (vals as any)[key] = stored[key];
-      } else {
-        (vals as any)[key] = defs[key].default;
-      }
+      (vals as any)[key] = fromUrl !== null ? fromUrl : defs[key].default;
     }
     return vals;
-  }, [defs, searchParams, pathname]);
+  };
 
-  const [values, setValues] = useState<FilterValues<T>>(getInitialValues);
-  const [inputValues, setInputValues] = useState<FilterValues<T>>(getInitialValues);
+  const [values, setValues] = useState<FilterValues<T>>(getValuesFromUrl);
+  const [inputValues, setInputValues] = useState<FilterValues<T>>(getValuesFromUrl);
 
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const lastUrlRef = useRef<string>('');
+  const restoredRef = useRef(false);
 
-  // Sync URL + sessionStorage on every values change (including initial mount)
+  // After mount on client: restore from sessionStorage if URL has no filter params
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+
+    const hasUrlParams = Array.from(searchParams.keys()).some((k) => k in defs);
+    if (hasUrlParams) return; // URL already has filters, no need to restore
+
+    const stored = loadFromSession(pathname);
+    if (!stored) return;
+
+    // Check if stored has any non-default values
+    let hasNonDefault = false;
+    const restored = {} as FilterValues<T>;
+    for (const key in defs) {
+      const val = stored[key] ?? defs[key].default;
+      (restored as any)[key] = val;
+      if (val !== defs[key].default) hasNonDefault = true;
+    }
+
+    if (hasNonDefault) {
+      setValues(restored);
+      setInputValues(restored);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync URL + sessionStorage on every values change
   useEffect(() => {
     const params = new URLSearchParams();
     const toStore: Record<string, string> = {};
@@ -75,7 +94,7 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
     // Always persist to sessionStorage
     saveToSession(pathname, toStore);
 
-    // Only update URL if it actually changed (avoid infinite loop)
+    // Only update URL if it actually changed
     const qs = params.toString();
     const newUrl = qs ? `${pathname}?${qs}` : pathname;
     if (newUrl !== lastUrlRef.current) {
@@ -94,11 +113,9 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
     const def = defs[key];
     if (!def) return;
 
-    // Always update inputValues immediately
     setInputValues((prev) => ({ ...prev, [key]: value }));
 
     if (def.type === 'text') {
-      // Debounce: update committed values after delay
       if (debounceTimers.current[key]) clearTimeout(debounceTimers.current[key]);
       debounceTimers.current[key] = setTimeout(() => {
         setValues((prev) => {
@@ -110,7 +127,6 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
         });
       }, DEBOUNCE_MS);
     } else {
-      // Select: commit immediately
       setValues((prev) => {
         const next = { ...prev, [key]: value };
         if (key !== 'page' && 'page' in defs) {
@@ -149,7 +165,6 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
     clearSession(pathname);
   }, [defs, pathname]);
 
-  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       for (const key in debounceTimers.current) {
