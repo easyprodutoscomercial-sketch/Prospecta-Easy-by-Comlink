@@ -115,11 +115,8 @@ export async function PATCH(
       validated.proxima_acao_data = new Date(validated.proxima_acao_data).toISOString();
     }
 
-    // Campos que existem na tabela contacts do Supabase (schema.sql + migration v1)
-    // Campos da migration v2 (temperatura, origem, proxima_acao_tipo, proxima_acao_data,
-    // motivo_ganho_perdido) e v5 (valor_estimado) podem não ter sido executadas.
-    // Verificar dinamicamente quais colunas existem.
-    const baseFields = new Set([
+    // All known contact columns
+    const dbFields = new Set([
       'name', 'phone', 'email', 'cpf', 'cnpj', 'company', 'notes', 'status',
       'tipo', 'referencia', 'classe', 'produtos_fornecidos',
       'contato_nome', 'cargo', 'endereco', 'cidade', 'estado', 'cep',
@@ -128,17 +125,13 @@ export async function PATCH(
       'pipeline_id', 'stage_id',
       'inexistente',
       'telefones_adicionais',
+      'temperatura', 'origem', 'proxima_acao_tipo', 'proxima_acao_data',
+      'motivo_ganho_perdido', 'valor_estimado',
     ]);
 
-    // Testar quais colunas extras existem no banco
-    const extraCols = ['temperatura', 'origem', 'proxima_acao_tipo', 'proxima_acao_data', 'motivo_ganho_perdido', 'valor_estimado'];
-    const dbFields = new Set(baseFields);
-    for (const col of extraCols) {
-      const { error: colErr } = await admin.from('contacts').select(col).limit(0);
-      if (!colErr) dbFields.add(col);
-    }
-
     // Se stage_id foi enviado, sincronizar o campo status com o slug do stage
+    // Apenas atualizar status se o slug corresponder a um valor valido do CHECK constraint
+    const VALID_STATUSES = ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO'];
     if (validated.stage_id) {
       const { data: stage } = await admin
         .from('pipeline_stages')
@@ -146,7 +139,7 @@ export async function PATCH(
         .eq('id', validated.stage_id)
         .single();
 
-      if (stage) {
+      if (stage && VALID_STATUSES.includes(stage.slug)) {
         (validated as any).status = stage.slug;
       }
     }
@@ -154,7 +147,7 @@ export async function PATCH(
     // Re-normalize identity fields when they change
     const updateData: Record<string, any> = {};
     for (const [key, value] of Object.entries(validated)) {
-      if (dbFields.has(key)) {
+      if (dbFields.has(key) && value !== undefined) {
         updateData[key] = value;
       }
     }

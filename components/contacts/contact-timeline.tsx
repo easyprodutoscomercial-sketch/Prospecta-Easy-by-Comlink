@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { Interaction, Meeting, ContactAttachment } from '@/lib/types';
+import { createClient as createSupabaseBrowser } from '@/lib/supabase/client';
 import type { TimelineEvent, TimelineFilter } from './timeline/types';
 import {
   formatInteractionType,
@@ -232,13 +233,42 @@ export default function ContactTimeline({
     setMeetingActionLoading(null);
   };
 
-  // --- File upload ---
+  // --- File upload (direct to Supabase Storage to bypass Vercel 4.5MB body limit) ---
   const uploadFile = async (file: File) => {
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const r = await fetch(`/api/contacts/${contactId}/attachments`, { method: 'POST', body: formData });
+      const ext = file.name.split('.').pop() || 'bin';
+      const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      // We need the org_id for the path — fetch from /api/me
+      const meRes = await fetch('/api/me');
+      if (!meRes.ok) { toast.error('Erro de autenticacao'); setUploading(false); return; }
+      const me = await meRes.json();
+      const orgId = me.organization_id;
+      const filePath = `${orgId}/${contactId}/${safeName}`;
+
+      // Upload directly to Supabase Storage from browser
+      const supabase = createSupabaseBrowser();
+      const { error: uploadError } = await supabase.storage
+        .from('attachments')
+        .upload(filePath, file, { contentType: file.type, upsert: false });
+
+      if (uploadError) {
+        toast.error('Erro ao enviar arquivo: ' + uploadError.message);
+        setUploading(false);
+        return;
+      }
+
+      // Save metadata via API (JSON body, no file in body)
+      const r = await fetch(`/api/contacts/${contactId}/attachments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          file_name: file.name,
+          file_path: filePath,
+          file_size: file.size,
+          mime_type: file.type,
+        }),
+      });
       if (r.ok) {
         const attachment = await r.json();
         setAttachments((prev) => [attachment, ...prev]);
