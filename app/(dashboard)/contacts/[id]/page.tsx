@@ -2,7 +2,7 @@
 
 import { use, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Contact, Interaction, Meeting, ContactAttachment } from '@/lib/types';
+import { Contact, Interaction, Meeting, ContactAttachment, TelefoneAdicional } from '@/lib/types';
 import ContactForm from '@/components/contacts/contact-form';
 import ConfirmModal from '@/components/ui/confirm-modal';
 import MotivoModal from '@/components/ui/motivo-modal';
@@ -163,6 +163,36 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     } catch { toast.error('Erro'); } finally { setRequestingAccess(false); }
   };
 
+  const handleUpdatePhones = async (telefones: TelefoneAdicional[]) => {
+    try {
+      const r = await fetch(`/api/contacts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefones_adicionais: telefones }),
+      });
+      if (r.ok) {
+        const updated = await r.json();
+        setContact(updated);
+        toast.success('Telefones atualizados');
+      } else {
+        toast.error('Erro ao atualizar telefones');
+      }
+    } catch {
+      toast.error('Erro ao atualizar telefones');
+    }
+  };
+
+  const handleToggleInexistente = async () => {
+    if (!contact) return;
+    const newValue = !contact.inexistente;
+    setContact((p) => p ? { ...p, inexistente: newValue } : p);
+    try {
+      const r = await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inexistente: newValue }) });
+      if (r.ok) { const updated = await r.json(); setContact(updated); toast.success(newValue ? 'Contato marcado como inexistente' : 'Marca de inexistente removida'); }
+      else { setContact((p) => p ? { ...p, inexistente: !newValue } : p); toast.error('Erro ao atualizar contato'); }
+    } catch { setContact((p) => p ? { ...p, inexistente: !newValue } : p); toast.error('Erro ao atualizar contato'); }
+  };
+
   const baseTabs = [
     { key: 'timeline', label: 'Timeline', count: interactions.length + meetings.length + attachments.length },
     { key: 'detalhes', label: 'Detalhes' },
@@ -219,6 +249,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             onDelete={() => setShowDeleteModal(true)}
             onClaim={handleClaimContact}
             onRequestAccess={handleRequestAccess}
+            onUpdatePhones={handleUpdatePhones}
+            onToggleInexistente={handleToggleInexistente}
             onUnassign={async () => {
               try {
                 const r = await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assigned_to_user_id: null }) });

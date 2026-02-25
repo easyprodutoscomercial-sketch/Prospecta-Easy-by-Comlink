@@ -241,6 +241,29 @@ function ContactsPageContent() {
     }
   }, [currentUserId, toast]);
 
+  const handleToggleInexistente = useCallback(async (contactId: string) => {
+    const current = contacts.find((c) => c.id === contactId);
+    if (!current) return;
+    const newValue = !current.inexistente;
+    setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: newValue } : c)));
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inexistente: newValue }) });
+      if (!res.ok) throw new Error();
+      toast.success(newValue ? 'Contato marcado como inexistente' : 'Marca de inexistente removida');
+    } catch {
+      setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: !newValue } : c)));
+      toast.error('Erro ao atualizar contato');
+    }
+  }, [contacts, toast]);
+
+  const handleBulkInexistente = async () => {
+    setBulkLoading(true);
+    const res = await fetch('/api/contacts/batch', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: Array.from(selectedIds), inexistente: true }) });
+    if (res.ok) { toast.success(`${selectedIds.size} contatos marcados como inexistente`); clearSelection(); loadContacts(); }
+    else toast.error('Erro ao marcar contatos como inexistente');
+    setBulkLoading(false);
+  };
+
   const selectCls = 'px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
   const hiddenCount = contacts.length - visibleContacts.length;
@@ -439,6 +462,7 @@ function ContactsPageContent() {
                   onToggleSelect={toggleSelect}
                   onHide={prefs.hideContact}
                   onClaim={handleClaimContact}
+                  onToggleInexistente={handleToggleInexistente}
                   owner={owner}
                   ownerColor={ownerColor}
                   currentUserId={currentUserId}
@@ -452,7 +476,7 @@ function ContactsPageContent() {
         </>
       )}
 
-      <BulkActionBar selectedCount={selectedIds.size} onChangeStatus={handleBulkStatusChange} onDelete={currentUserRole === 'admin' ? () => setShowBulkDeleteModal(true) : undefined} onExport={handleExport} onCancel={clearSelection} />
+      <BulkActionBar selectedCount={selectedIds.size} onChangeStatus={handleBulkStatusChange} onDelete={currentUserRole === 'admin' ? () => setShowBulkDeleteModal(true) : undefined} onMarkInexistente={handleBulkInexistente} onExport={handleExport} onCancel={clearSelection} />
       <ConfirmModal isOpen={showBulkDeleteModal} onClose={() => setShowBulkDeleteModal(false)} onConfirm={handleBulkDelete}
         title="Deletar contatos" message={`Tem certeza que deseja deletar ${selectedIds.size} contato${selectedIds.size > 1 ? 's' : ''}?`} variant="danger" confirmLabel="Deletar" loading={bulkLoading} />
     </div>

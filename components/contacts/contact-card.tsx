@@ -21,6 +21,7 @@ interface ContactCardProps {
   onToggleSelect: (id: string) => void;
   onHide: (id: string) => void;
   onClaim: (id: string) => void;
+  onToggleInexistente?: (id: string) => void;
   owner: UserInfo | undefined;
   ownerColor: { bg: string; text: string } | null;
   currentUserId: string;
@@ -34,23 +35,28 @@ export default function ContactCard({
   onToggleSelect,
   onHide,
   onClaim,
+  onToggleInexistente,
   owner,
   ownerColor,
   currentUserId,
   currentPipelineStages,
 }: ContactCardProps) {
   const isUnassigned = !contact.assigned_to_user_id;
+  const isInexistente = contact.inexistente === true;
 
   // ---------- COMPACT MODE ----------
   if (densityMode === 'compact') {
     return (
-      <div className={`group bg-[#1e0f35] rounded-lg border transition-all ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
+      <div className={`group bg-[#1e0f35] rounded-lg border transition-all ${isInexistente ? 'opacity-60' : ''} ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
         <div className="p-2 flex items-center gap-2">
           <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(contact.id)} className="rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500 shrink-0" />
 
-          <Link href={`/contacts/${contact.id}`} className="text-xs font-semibold text-white hover:text-emerald-400 transition-colors truncate flex-1 min-w-0">
+          <Link href={`/contacts/${contact.id}`} className={`text-xs font-semibold hover:text-emerald-400 transition-colors truncate flex-1 min-w-0 ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
             {contact.name}
           </Link>
+          {isInexistente && (
+            <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400 whitespace-nowrap shrink-0">Inexistente</span>
+          )}
 
           <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full whitespace-nowrap shrink-0 ${getStatusColor(contact.status)}`}>
             {formatStatus(contact.status)}
@@ -68,6 +74,19 @@ export default function ContactCard({
                 </div>
               )}
             </div>
+          )}
+
+          {/* Inexistente toggle button */}
+          {onToggleInexistente && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleInexistente(contact.id); }}
+              className={`shrink-0 p-1 transition-colors ${isInexistente ? 'text-red-400 hover:text-neutral-400' : 'text-neutral-600 hover:text-red-400'}`}
+              title={isInexistente ? 'Remover marca de inexistente' : 'Marcar como inexistente'}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+              </svg>
+            </button>
           )}
 
           {/* Hide button - always visible in compact */}
@@ -88,15 +107,18 @@ export default function ContactCard({
   // ---------- NORMAL MODE ----------
   if (densityMode === 'normal') {
     return (
-      <div className={`group bg-[#1e0f35] rounded-xl border card-hover transition-all ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
+      <div className={`group bg-[#1e0f35] rounded-xl border card-hover transition-all ${isInexistente ? 'opacity-60' : ''} ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
         <div className="p-3 sm:p-4">
           <div className="flex items-start gap-3">
             <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(contact.id)} className="mt-1 rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500 shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <Link href={`/contacts/${contact.id}`} className="text-sm font-semibold text-white hover:text-emerald-400 transition-colors truncate">
+                <Link href={`/contacts/${contact.id}`} className={`text-sm font-semibold hover:text-emerald-400 transition-colors truncate ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
                   {contact.name}
                 </Link>
+                {isInexistente && (
+                  <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Inexistente</span>
+                )}
                 {contact.tipo?.map((t) => (
                   <span key={t} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
                     {CONTACT_TYPE_LABELS[t] || t}
@@ -139,6 +161,18 @@ export default function ContactCard({
                 <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full whitespace-nowrap ${getStatusColor(contact.status)}`}>
                   {formatStatus(contact.status)}
                 </span>
+                {/* Inexistente toggle button */}
+                {onToggleInexistente && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onToggleInexistente(contact.id); }}
+                    className={`p-1 opacity-0 group-hover:opacity-100 transition-all ${isInexistente ? 'text-red-400 hover:text-neutral-400 !opacity-100' : 'text-neutral-600 hover:text-red-400'}`}
+                    title={isInexistente ? 'Remover marca de inexistente' : 'Marcar como inexistente'}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                  </button>
+                )}
                 {/* Hide button - visible on hover */}
                 <button
                   onClick={(e) => { e.stopPropagation(); onHide(contact.id); }}
@@ -193,15 +227,18 @@ export default function ContactCard({
 
   // ---------- EXPANDED MODE ----------
   return (
-    <div className={`group bg-[#1e0f35] rounded-xl border card-hover transition-all ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
+    <div className={`group bg-[#1e0f35] rounded-xl border card-hover transition-all ${isInexistente ? 'opacity-60' : ''} ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-900/10' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
       <div className="p-4 sm:p-5">
         <div className="flex items-start gap-3">
           <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(contact.id)} className="mt-1 rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500 shrink-0" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <Link href={`/contacts/${contact.id}`} className="text-base font-semibold text-white hover:text-emerald-400 transition-colors truncate">
+              <Link href={`/contacts/${contact.id}`} className={`text-base font-semibold hover:text-emerald-400 transition-colors truncate ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
                 {contact.name}
               </Link>
+              {isInexistente && (
+                <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Inexistente</span>
+              )}
               {contact.tipo?.map((t) => (
                 <span key={t} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
                   {CONTACT_TYPE_LABELS[t] || t}
@@ -286,6 +323,18 @@ export default function ContactCard({
               <span className={`px-2 py-0.5 text-[11px] font-medium rounded-full whitespace-nowrap ${getStatusColor(contact.status)}`}>
                 {formatStatus(contact.status)}
               </span>
+              {/* Inexistente toggle button */}
+              {onToggleInexistente && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleInexistente(contact.id); }}
+                  className={`p-1 opacity-0 group-hover:opacity-100 transition-all ${isInexistente ? 'text-red-400 hover:text-neutral-400 !opacity-100' : 'text-neutral-600 hover:text-red-400'}`}
+                  title={isInexistente ? 'Remover marca de inexistente' : 'Marcar como inexistente'}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); onHide(contact.id); }}
                 className="p-1 text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"

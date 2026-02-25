@@ -6,6 +6,7 @@ interface BulkActionBarProps {
   selectedCount: number;
   onChangeStatus: (status: string) => void;
   onDelete?: () => void;
+  onMarkInexistente?: () => void;
   onExport: () => void;
   onCancel: () => void;
 }
@@ -14,6 +15,7 @@ export default function BulkActionBar({
   selectedCount,
   onChangeStatus,
   onDelete,
+  onMarkInexistente,
   onExport,
   onCancel,
 }: BulkActionBarProps) {
@@ -48,6 +50,14 @@ export default function BulkActionBar({
             </button>
           )}
         </div>
+        {onMarkInexistente && (
+          <button
+            onClick={onMarkInexistente}
+            className="px-3 py-1.5 text-xs font-medium text-orange-400 border border-orange-700 rounded-lg hover:bg-orange-900/30 transition-colors"
+          >
+            Marcar Inexistente
+          </button>
+        )}
         <button
           onClick={onExport}
           className="px-3 py-1.5 text-xs font-medium border border-neutral-600 rounded-lg hover:bg-neutral-800 transition-colors"

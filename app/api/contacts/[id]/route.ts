@@ -126,6 +126,8 @@ export async function PATCH(
       'website', 'instagram', 'whatsapp',
       'assigned_to_user_id',
       'pipeline_id', 'stage_id',
+      'inexistente',
+      'telefones_adicionais',
     ]);
 
     // Testar quais colunas extras existem no banco

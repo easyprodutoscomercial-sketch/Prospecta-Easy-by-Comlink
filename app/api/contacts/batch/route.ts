@@ -8,7 +8,10 @@ const batchUpdateSchema = z.object({
   ids: z.array(z.string().uuid()).min(1),
   status: z.enum([
     'NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO',
-  ]),
+  ]).optional(),
+  inexistente: z.boolean().optional(),
+}).refine((data) => data.status !== undefined || data.inexistente !== undefined, {
+  message: 'Pelo menos status ou inexistente deve ser informado',
 });
 
 const batchDeleteSchema = z.object({
@@ -32,13 +35,17 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { ids, status } = batchUpdateSchema.parse(body);
+    const { ids, status, inexistente } = batchUpdateSchema.parse(body);
 
     const allowedIds = ids;
 
+    const updateData: Record<string, any> = {};
+    if (status !== undefined) updateData.status = status;
+    if (inexistente !== undefined) updateData.inexistente = inexistente;
+
     const { error } = await admin
       .from('contacts')
-      .update({ status })
+      .update(updateData)
       .in('id', allowedIds);
 
     if (error) throw error;

@@ -95,6 +95,12 @@ export const contactUpdateSchema = z.object({
   proxima_acao_data: z.string().optional().nullable(),
   motivo_ganho_perdido: z.string().optional().nullable(),
   valor_estimado: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
+  inexistente: z.boolean().optional(),
+  telefones_adicionais: z.array(z.object({
+    phone: z.string().min(1),
+    nome_contato: z.string().optional().default(''),
+    correto: z.boolean().default(true),
+  })).optional().nullable(),
 });
 
 export const accessRequestSchema = z.object({

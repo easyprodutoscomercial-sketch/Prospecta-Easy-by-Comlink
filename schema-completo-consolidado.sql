@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS contacts (
   website TEXT,
   instagram TEXT,
   whatsapp TEXT,
+  telefones_adicionais JSONB DEFAULT '[]'::jsonb,
   name_normalized TEXT NOT NULL,
   phone_normalized TEXT,
   email_normalized TEXT,

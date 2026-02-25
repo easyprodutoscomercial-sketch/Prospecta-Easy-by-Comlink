@@ -43,6 +43,12 @@ export type InteractionOutcome =
   | 'INDICOU_TERCEIRO'
   | 'FECHADO_PARCIAL';
 
+export interface TelefoneAdicional {
+  phone: string;
+  nome_contato: string;
+  correto: boolean;
+}
+
 export interface Contact {
   id: string;
   organization_id: string;
@@ -86,6 +92,10 @@ export interface Contact {
   // Pipeline
   pipeline_id: string | null;
   stage_id: string | null;
+  // Telefones adicionais
+  telefones_adicionais: TelefoneAdicional[];
+  // Marcação
+  inexistente: boolean;
   // Status e atribuição
   status: ContactStatus;
   assigned_to_user_id: string | null;
