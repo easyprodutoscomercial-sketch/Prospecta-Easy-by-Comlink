@@ -14,20 +14,42 @@ type FilterValues<T extends FilterDefs> = { [K in keyof T]: string };
 
 const DEBOUNCE_MS = 400;
 
+function getSessionKey(pathname: string) {
+  return `filters:${pathname}`;
+}
+
 export function useUrlFilters<T extends FilterDefs>(defs: T) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Build initial values from URL search params (or defaults)
+  // Build initial values: URL params > sessionStorage > defaults
   const getInitialValues = useCallback((): FilterValues<T> => {
+    // Check if URL has any filter params
+    const hasUrlParams = Array.from(searchParams.keys()).some((k) => k in defs);
+
+    // Try to restore from sessionStorage if no URL params
+    let stored: Record<string, string> | null = null;
+    if (!hasUrlParams) {
+      try {
+        const raw = sessionStorage.getItem(getSessionKey(pathname));
+        if (raw) stored = JSON.parse(raw);
+      } catch {}
+    }
+
     const vals = {} as FilterValues<T>;
     for (const key in defs) {
       const fromUrl = searchParams.get(key);
-      (vals as any)[key] = fromUrl !== null ? fromUrl : defs[key].default;
+      if (fromUrl !== null) {
+        (vals as any)[key] = fromUrl;
+      } else if (stored && key in stored) {
+        (vals as any)[key] = stored[key];
+      } else {
+        (vals as any)[key] = defs[key].default;
+      }
     }
     return vals;
-  }, [defs, searchParams]);
+  }, [defs, searchParams, pathname]);
 
   // "committed" values = debounced for text fields; used for fetching
   const [values, setValues] = useState<FilterValues<T>>(getInitialValues);
@@ -37,19 +59,39 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const isInitialMount = useRef(true);
 
-  // Sync URL when values change (skip initial mount)
+  // Sync URL + sessionStorage when values change (skip initial mount)
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      // On initial mount, still sync URL if we restored from sessionStorage
+      const hasUrlParams = Array.from(searchParams.keys()).some((k) => k in defs);
+      if (!hasUrlParams) {
+        const params = new URLSearchParams();
+        for (const key in defs) {
+          const val = (values as any)[key];
+          if (val !== defs[key].default) {
+            params.set(key, val);
+          }
+        }
+        const qs = params.toString();
+        if (qs) {
+          const newUrl = `${pathname}?${qs}`;
+          router.replace(newUrl, { scroll: false });
+        }
+      }
       return;
     }
     const params = new URLSearchParams();
+    const toStore: Record<string, string> = {};
     for (const key in defs) {
       const val = (values as any)[key];
+      toStore[key] = val;
       if (val !== defs[key].default) {
         params.set(key, val);
       }
     }
+    // Persist to sessionStorage
+    try { sessionStorage.setItem(getSessionKey(pathname), JSON.stringify(toStore)); } catch {}
     const qs = params.toString();
     const newUrl = qs ? `${pathname}?${qs}` : pathname;
     router.replace(newUrl, { scroll: false });
@@ -115,7 +157,9 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
     }
     setValues(defaults);
     setInputValues(defaults);
-  }, [defs]);
+    // Clear sessionStorage
+    try { sessionStorage.removeItem(getSessionKey(pathname)); } catch {}
+  }, [defs, pathname]);
 
   // Cleanup timers on unmount
   useEffect(() => {
