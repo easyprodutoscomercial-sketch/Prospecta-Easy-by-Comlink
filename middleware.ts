@@ -7,6 +7,11 @@ const LOGIN_WINDOW_MS = 60_000; // 1 minute
 const LOGIN_MAX_ATTEMPTS = 10; // max 10 attempts per minute per IP
 
 export async function middleware(request: NextRequest) {
+  // Skip if Supabase env vars are not configured
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return NextResponse.next();
+  }
+
   // Rate limit login page requests
   if (request.nextUrl.pathname === '/login' && request.method === 'POST') {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';

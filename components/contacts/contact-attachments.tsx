@@ -176,7 +176,7 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
             type="file"
             onChange={handleFileSelect}
             className="hidden"
-            accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.doc,.docx,.xls,.xlsx,.csv,.mp4,.webm,.mov"
+            accept="*/*"
           />
           {uploading ? (
             <div className="flex items-center justify-center gap-2">
@@ -192,7 +192,7 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p className="text-sm text-neutral-400">Clique ou arraste um arquivo aqui</p>
-              <p className="text-xs text-neutral-600 mt-1">PDF, imagens, videos, DOC, XLS, CSV (max 50MB)</p>
+              <p className="text-xs text-neutral-600 mt-1">Qualquer tipo de arquivo (max 50MB)</p>
             </>
           )}
         </div>
