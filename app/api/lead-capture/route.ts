@@ -26,10 +26,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Link inativo', inactive: true }, { status: 410 });
     }
 
-    // Buscar nome do vendedor
+    // Buscar nome e avatar do vendedor
     const { data: profile } = await admin
       .from('profiles')
-      .select('name')
+      .select('name, avatar_url')
       .eq('user_id', link.user_id)
       .single();
 
@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       label: link.label,
       user_name: profile?.name || 'Vendedor',
+      user_avatar: profile?.avatar_url || null,
       pipeline_name: pipeline?.name || 'Pipeline',
       whatsapp_vendedor: link.whatsapp_vendedor || null,
     });

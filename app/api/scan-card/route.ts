@@ -31,13 +31,27 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'system',
-            content: `You extract data from business cards in ANY language (Portuguese, English, Spanish, French, German, Italian, Chinese, Japanese, Korean, Arabic, Russian, Hindi, Dutch, Swedish, Norwegian, Danish, Polish, Turkish, Thai, Vietnamese, etc). Return ONLY a valid JSON with the fields found. Possible fields: name, phone, email, company, cargo (job title), cidade (city), estado (state/province/region). If a field is not found, omit it. For phone, keep the original format with country code if present. For cargo, translate to Portuguese if possible. For cidade and estado, keep the original name. Do not include explanations, only the JSON.`,
+            content: `You are a business card data extractor. You can read business cards in ANY language worldwide.
+
+Extract contact information and return ONLY a valid JSON object with these fields (omit any field not found):
+- "name": full name of the person
+- "phone": phone number (keep original format with country code if present)
+- "email": email address
+- "company": company or organization name
+- "cargo": job title / position (translate to Portuguese if the card is in another language)
+- "cidade": city name
+- "estado": state, province or region (use abbreviation if Brazilian, e.g. SP, RJ, MG)
+
+Rules:
+- The card can be in Portuguese, English, Spanish, French, German, Italian, Chinese, Japanese, Korean, Arabic, Russian, or any other language
+- Always return valid JSON, no explanations, no markdown
+- If you cannot read any data, return {}`,
           },
           {
             role: 'user',
             content: [
-              { type: 'text', text: 'Extraia os dados deste cartao de visita:' },
-              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'auto' } },
+              { type: 'text', text: 'Extract the data from this business card image:' },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'high' } },
             ],
           },
         ],

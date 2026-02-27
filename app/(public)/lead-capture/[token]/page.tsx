@@ -7,6 +7,7 @@ import Script from 'next/script';
 interface LinkInfo {
   label: string | null;
   user_name: string;
+  user_avatar?: string | null;
   pipeline_name: string;
   whatsapp_vendedor?: string | null;
 }
@@ -308,22 +309,30 @@ export default function LeadCapturePage() {
       formData.append('image', file);
 
       const res = await fetch('/api/scan-card', { method: 'POST', body: formData });
-      const data = await res.json();
 
       if (!res.ok) {
-        setFieldErrors({ form: data.error || 'Erro ao processar imagem. Preencha manualmente.' });
+        let msg = 'Erro ao processar imagem. Preencha manualmente.';
+        try { const d = await res.json(); msg = d.error || msg; } catch {}
+        setFieldErrors({ form: `${msg} (${res.status})` });
         return;
       }
 
-      if (data.name) setName(data.name);
-      if (data.phone) setPhone(formatPhone(data.phone));
-      if (data.email) setEmail(data.email.toLowerCase());
-      if (data.company) setCompany(data.company);
-      if (data.cargo) setCargo(data.cargo);
-      if (data.cidade) setCidade(data.cidade);
-      if (data.estado) setEstado(data.estado);
-    } catch {
-      setFieldErrors({ form: 'Erro ao processar imagem. Preencha manualmente.' });
+      const data = await res.json();
+      let filled = 0;
+
+      if (data.name) { setName(data.name); filled++; }
+      if (data.phone) { setPhone(formatPhone(data.phone)); filled++; }
+      if (data.email) { setEmail(data.email.toLowerCase()); filled++; }
+      if (data.company) { setCompany(data.company); filled++; }
+      if (data.cargo) { setCargo(data.cargo); filled++; }
+      if (data.cidade) { setCidade(data.cidade); filled++; }
+      if (data.estado) { setEstado(data.estado); filled++; }
+
+      if (filled === 0) {
+        setFieldErrors({ form: 'Nao foi possivel ler dados do cartao. Tente outra foto ou preencha manualmente.' });
+      }
+    } catch (err: any) {
+      setFieldErrors({ form: `Erro: ${err?.message || 'falha de conexao'}. Preencha manualmente.` });
     } finally {
       setScanning(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -442,15 +451,32 @@ export default function LeadCapturePage() {
       />
 
       {/* Header */}
-      <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-5 text-center">
-        <h1 className="text-lg font-bold text-white">
-          {linkInfo?.label || 'Cadastro Rapido'}
-        </h1>
-        {linkInfo?.user_name && (
-          <p className="text-sm text-emerald-100/80 mt-1">
-            Atendimento: {linkInfo.user_name}
-          </p>
-        )}
+      <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-5">
+        <div className="flex items-center justify-center gap-3">
+          {linkInfo?.user_avatar ? (
+            <img
+              src={linkInfo.user_avatar}
+              alt={linkInfo.user_name}
+              className="w-12 h-12 rounded-full object-cover border-2 border-white/30 shadow-lg"
+            />
+          ) : linkInfo?.user_name ? (
+            <div className="w-12 h-12 rounded-full bg-white/20 border-2 border-white/30 flex items-center justify-center shadow-lg">
+              <span className="text-lg font-bold text-white">
+                {linkInfo.user_name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()}
+              </span>
+            </div>
+          ) : null}
+          <div className="text-left">
+            <h1 className="text-lg font-bold text-white">
+              {linkInfo?.label || 'Cadastro Rapido'}
+            </h1>
+            {linkInfo?.user_name && (
+              <p className="text-sm text-emerald-100/80">
+                Atendimento: {linkInfo.user_name}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Form */}
@@ -683,7 +709,7 @@ export default function LeadCapturePage() {
       {/* Footer */}
       <div className="px-4 py-3 text-center border-t border-purple-800/20">
         <p className="text-[10px] text-purple-300/30">
-          Powered by Controlei
+          Powered by Prospecta Easy
         </p>
       </div>
     </div>
