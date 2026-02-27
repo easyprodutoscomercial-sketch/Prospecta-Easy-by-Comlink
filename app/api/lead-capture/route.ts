@@ -138,34 +138,49 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Criar contato
-    const { error: insertError } = await admin
-      .from('contacts')
-      .insert({
-        organization_id: link.organization_id,
-        name: name.trim(),
-        phone: phone.trim(),
-        phone_normalized: phoneNormalized,
-        email: email?.trim() || null,
-        email_normalized: emailNormalized,
-        name_normalized: name.trim().toLowerCase(),
-        company: company?.trim() || null,
-        cargo: cargo?.trim() || null,
-        notes: notes?.trim() || null,
-        whatsapp: phone.trim(),
-        tipo: [],
-        origem: 'QRCODE',
-        temperatura: 'QUENTE',
-        sem_documento: true,
-        pipeline_id: link.pipeline_id,
-        stage_id: firstStage.id,
-        assigned_to_user_id: link.user_id,
-        created_by_user_id: link.user_id,
-      });
+    // Criar contato — tenta com todos os campos, fallback sem campos opcionais
+    const baseContactData: Record<string, any> = {
+      organization_id: link.organization_id,
+      name: name.trim(),
+      phone: phone.trim(),
+      phone_normalized: phoneNormalized,
+      email: email?.trim() || null,
+      email_normalized: emailNormalized,
+      name_normalized: name.trim().toLowerCase(),
+      company: company?.trim() || null,
+      cargo: cargo?.trim() || null,
+      notes: notes?.trim() || null,
+      whatsapp: phone.trim(),
+      tipo: [],
+      pipeline_id: link.pipeline_id,
+      stage_id: firstStage.id,
+      assigned_to_user_id: link.user_id,
+      created_by_user_id: link.user_id,
+    };
 
+    // Campos que podem nao existir na tabela
+    const optionalFields: Record<string, any> = {
+      origem: 'QRCODE',
+      temperatura: 'QUENTE',
+      sem_documento: true,
+    };
+
+    // Tenta com todos os campos primeiro
+    let { error: insertError } = await admin
+      .from('contacts')
+      .insert({ ...baseContactData, ...optionalFields });
+
+    // Se falhou (coluna inexistente), tenta sem os opcionais
     if (insertError) {
-      console.error('Error creating lead via QR:', insertError);
-      throw insertError;
+      console.warn('Insert with optional fields failed, retrying without:', insertError.message);
+      const { error: retryError } = await admin
+        .from('contacts')
+        .insert(baseContactData);
+
+      if (retryError) {
+        console.error('Error creating lead via QR:', retryError);
+        throw retryError;
+      }
     }
 
     // Incrementar leads_count
