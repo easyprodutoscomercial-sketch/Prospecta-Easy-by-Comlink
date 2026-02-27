@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export type DensityMode = 'compact' | 'normal' | 'expanded';
-export type ContactView = 'list' | 'map';
+export type ContactView = 'list' | 'map' | 'import';
 
 interface ContactPreferences {
   density: number;
@@ -41,7 +41,7 @@ export function useContactPreferences(): ContactPreferences {
       }
 
       const savedView = localStorage.getItem('crm_contacts_view');
-      if (savedView === 'list' || savedView === 'map') setActiveViewState(savedView);
+      if (savedView === 'list' || savedView === 'map' || savedView === 'import') setActiveViewState(savedView);
     } catch { /* silent */ }
     setHydrated(true);
   }, []);

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Contact } from '@/lib/types';
 import type { UserInfo } from './kanban-card';
 import { TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS } from '@/lib/utils/labels';
@@ -69,56 +69,57 @@ export function KanbanFilterBar({ contacts, userMap, onFiltersChange }: KanbanFi
 
   const hasActiveFilters = chipFilters.temperatura.size > 0 || chipFilters.responsavel.size > 0 || chipFilters.origem.size > 0;
 
-  // Compute which contacts match, then notify parent
-  const computeAndNotify = (newFilters: ActiveChipFilters, newMode: FilterMode, newStuckEnabled: boolean, newStuckDays: number) => {
+  // Notify parent via useEffect (avoids setState-during-render)
+  const onFiltersChangeRef = useRef(onFiltersChange);
+  onFiltersChangeRef.current = onFiltersChange;
+
+  useEffect(() => {
     const dimmedIds = new Set<string>();
     const hiddenIds = new Set<string>();
     const stuckIds = new Set<string>();
 
-    const hasAnyChipFilter = newFilters.temperatura.size > 0 || newFilters.responsavel.size > 0 || newFilters.origem.size > 0;
+    const hasAnyChipFilter = chipFilters.temperatura.size > 0 || chipFilters.responsavel.size > 0 || chipFilters.origem.size > 0;
 
     for (const c of contacts) {
-      // Check if contact matches all active chip filters (AND logic across categories)
       let matches = true;
 
-      if (newFilters.temperatura.size > 0) {
-        if (!c.temperatura || !newFilters.temperatura.has(c.temperatura)) {
+      if (chipFilters.temperatura.size > 0) {
+        if (!c.temperatura || !chipFilters.temperatura.has(c.temperatura)) {
           matches = false;
         }
       }
 
-      if (newFilters.responsavel.size > 0) {
+      if (chipFilters.responsavel.size > 0) {
         const uid = c.assigned_to_user_id || '_none';
-        if (!newFilters.responsavel.has(uid)) {
+        if (!chipFilters.responsavel.has(uid)) {
           matches = false;
         }
       }
 
-      if (newFilters.origem.size > 0) {
-        if (!c.origem || !newFilters.origem.has(c.origem)) {
+      if (chipFilters.origem.size > 0) {
+        if (!c.origem || !chipFilters.origem.has(c.origem)) {
           matches = false;
         }
       }
 
       if (hasAnyChipFilter && !matches) {
-        if (newMode === 'hide') {
+        if (mode === 'hide') {
           hiddenIds.add(c.id);
         } else {
           dimmedIds.add(c.id);
         }
       }
 
-      // Stuck detection
-      if (newStuckEnabled) {
+      if (stuckEnabled) {
         const daysSinceUpdate = Math.floor((Date.now() - new Date(c.updated_at).getTime()) / (1000 * 60 * 60 * 24));
-        if (daysSinceUpdate > newStuckDays) {
+        if (daysSinceUpdate > stuckDays) {
           stuckIds.add(c.id);
         }
       }
     }
 
-    onFiltersChange(dimmedIds, hiddenIds, stuckIds);
-  };
+    onFiltersChangeRef.current(dimmedIds, hiddenIds, stuckIds);
+  }, [contacts, chipFilters, mode, stuckEnabled, stuckDays]);
 
   const toggleChip = (category: keyof ActiveChipFilters, value: string) => {
     setChipFilters(prev => {
@@ -128,33 +129,25 @@ export function KanbanFilterBar({ contacts, userMap, onFiltersChange }: KanbanFi
       } else {
         next[category].add(value);
       }
-      computeAndNotify(next, mode, stuckEnabled, stuckDays);
       return next;
     });
   };
 
   const toggleMode = () => {
-    const newMode = mode === 'dim' ? 'hide' : 'dim';
-    setMode(newMode);
-    computeAndNotify(chipFilters, newMode, stuckEnabled, stuckDays);
+    setMode(prev => prev === 'dim' ? 'hide' : 'dim');
   };
 
   const toggleStuck = () => {
-    const newVal = !stuckEnabled;
-    setStuckEnabled(newVal);
-    computeAndNotify(chipFilters, mode, newVal, stuckDays);
+    setStuckEnabled(prev => !prev);
   };
 
   const updateStuckDays = (days: number) => {
     setStuckDays(days);
-    computeAndNotify(chipFilters, mode, stuckEnabled, days);
   };
 
   const clearAll = () => {
-    const empty: ActiveChipFilters = { temperatura: new Set(), responsavel: new Set(), origem: new Set() };
-    setChipFilters(empty);
+    setChipFilters({ temperatura: new Set(), responsavel: new Set(), origem: new Set() });
     setStuckEnabled(false);
-    computeAndNotify(empty, mode, false, stuckDays);
   };
 
   return (

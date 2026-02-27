@@ -1,31 +1,54 @@
 const COLUMNS = 6;
-const CARDS_PER_COLUMN = [3, 4, 2, 3, 2, 1];
+const CARDS_PER_COLUMN = [4, 5, 3, 4, 2, 1];
 
 export function KanbanSkeleton() {
   return (
-    <div className="flex gap-4 overflow-x-auto pb-4">
-      {Array.from({ length: COLUMNS }).map((_, colIdx) => (
-        <div key={colIdx} className="flex-shrink-0 w-72 bg-[#1e0f35] border border-purple-800/30 rounded-lg p-3">
-          {/* Column header */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="h-5 w-28 bg-purple-800/40 rounded animate-pulse" />
-            <div className="h-5 w-6 bg-purple-800/40 rounded-full animate-pulse" />
-          </div>
+    <div className="space-y-3">
+      {/* KPI micro-bar skeleton */}
+      <div className="flex items-center gap-4 px-2 py-2">
+        <div className="h-4 w-24 skeleton-shimmer rounded" />
+        <div className="w-px h-4 bg-purple-800/30" />
+        <div className="h-4 w-16 skeleton-shimmer rounded" />
+        <div className="w-px h-4 bg-purple-800/30" />
+        <div className="h-4 w-14 skeleton-shimmer rounded" />
+      </div>
 
-          {/* Cards */}
-          <div className="space-y-2">
-            {Array.from({ length: CARDS_PER_COLUMN[colIdx] }).map((_, cardIdx) => (
-              <div key={cardIdx} className="bg-[#2a1245] rounded-lg p-3 shadow-sm space-y-2">
-                <div className="h-4 w-3/4 bg-purple-800/40 rounded animate-pulse" />
-                <div className="h-3 w-1/2 bg-purple-800/40 rounded animate-pulse" />
-                <div className="flex gap-2">
-                  <div className="h-5 w-16 bg-purple-800/40 rounded animate-pulse" />
+      {/* Board skeleton */}
+      <div className="flex gap-3 overflow-x-auto pb-4" style={{ display: 'grid', gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))` }}>
+        {Array.from({ length: COLUMNS }).map((_, colIdx) => (
+          <div key={colIdx} className="bg-[#160b2e] border border-purple-800/15 rounded-xl overflow-hidden">
+            {/* Column header */}
+            <div className="flex items-center gap-2 px-3 py-2.5">
+              <div className="h-6 w-6 skeleton-shimmer rounded-md" />
+              <div className="h-4 w-20 skeleton-shimmer rounded" />
+              <div className="ml-auto h-5 w-6 skeleton-shimmer rounded-full" />
+            </div>
+
+            {/* Search bar skeleton */}
+            <div className="px-2 pb-2">
+              <div className="h-6 w-full skeleton-shimmer rounded-md" />
+            </div>
+
+            <div className="h-[2px] mx-3 skeleton-shimmer" />
+
+            {/* Compact card skeletons */}
+            <div className="p-2 space-y-2">
+              {Array.from({ length: CARDS_PER_COLUMN[colIdx] }).map((_, cardIdx) => (
+                <div key={cardIdx} className="bg-[#1e0f35] rounded-xl p-2 border-l-[3px] border-purple-800/20">
+                  <div className="flex items-center gap-2">
+                    <div className="h-6 w-6 skeleton-shimmer rounded-full shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="h-3.5 w-3/4 skeleton-shimmer rounded" />
+                      <div className="h-2.5 w-1/2 skeleton-shimmer rounded mt-1" />
+                    </div>
+                    <div className="h-4 w-10 skeleton-shimmer rounded shrink-0" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

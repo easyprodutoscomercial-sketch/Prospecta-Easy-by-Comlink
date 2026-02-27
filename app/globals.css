@@ -383,6 +383,15 @@ input[type="range"].density-slider:disabled {
   pointer-events: none;
 }
 
+/* Card expand animation (kanban hover) */
+@keyframes card-expand {
+  from { max-height: 70px; opacity: 0.95; }
+  to { max-height: 400px; opacity: 1; }
+}
+.animate-card-expand {
+  animation: card-expand 0.2s ease-out forwards;
+}
+
 /* Shimmer loading effect */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

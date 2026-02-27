@@ -28,6 +28,10 @@ interface KanbanColumnProps {
   dimmedContactIds?: Set<string>;
   hiddenContactIds?: Set<string>;
   stuckContactIds?: Set<string>;
+  compact?: boolean;
+  onCardClick?: (contactId: string) => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 const SLUG_ICONS: Record<string, string> = {
@@ -39,7 +43,6 @@ const SLUG_ICONS: Record<string, string> = {
   PERDIDO: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z',
 };
 
-// Map of named icons to SVG paths (for icon selector)
 export const STAGE_ICON_OPTIONS: Record<string, { label: string; path: string }> = {
   plus_circle: { label: 'Novo', path: 'M12 9v6m3-3H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z' },
   search: { label: 'Busca', path: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
@@ -60,14 +63,10 @@ export const STAGE_ICON_OPTIONS: Record<string, { label: string; path: string }>
 };
 
 function getIconForStage(stage: PipelineStage): string {
-  // Custom icon from stage config
   if (stage.icon && STAGE_ICON_OPTIONS[stage.icon]) return STAGE_ICON_OPTIONS[stage.icon].path;
-  // Try slug match for known slugs
   if (SLUG_ICONS[stage.slug]) return SLUG_ICONS[stage.slug];
-  // Terminal stages
   if (stage.is_terminal && stage.terminal_type === 'won') return SLUG_ICONS.CONVERTIDO;
   if (stage.is_terminal && stage.terminal_type === 'lost') return SLUG_ICONS.PERDIDO;
-  // Default
   return 'M13 10V3L4 14h7v7l9-11h-7z';
 }
 
@@ -98,7 +97,13 @@ function contactMatchesFilter(contact: Contact, query: string, userMap: Record<s
   return fields.some(f => f && normalizeSearch(f).includes(q));
 }
 
-export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds }: KanbanColumnProps) {
+function abbreviateValue(value: number): string {
+  if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
+  return value.toString();
+}
+
+export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsed, onToggleCollapse }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const [filter, setFilter] = useState('');
   const color = stage.color || '#a3a3a3';
@@ -119,17 +124,69 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
     return result;
   }, [contacts, filter, userMap, hiddenContactIds]);
 
+  // === COLLAPSED VIEW ===
+  if (collapsed) {
+    return (
+      <div
+        ref={setNodeRef}
+        onClick={onToggleCollapse}
+        className={`flex-shrink-0 w-12 bg-[#160b2e] rounded-xl flex flex-col items-center py-3 cursor-pointer transition-all duration-200 hover:bg-[#1e0f35] ${
+          isOver
+            ? 'ring-2 ring-emerald-500/40 bg-[#1e0f35] shadow-lg shadow-emerald-900/20'
+            : 'border border-purple-800/15'
+        }`}
+      >
+        {/* Icon */}
+        <div className="w-6 h-6 rounded-md flex items-center justify-center mb-2" style={{ backgroundColor: `${color}15` }}>
+          <svg className="w-3.5 h-3.5" style={{ color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={iconPath} />
+          </svg>
+        </div>
+
+        {/* Count badge */}
+        <span
+          className="text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center mb-2"
+          style={{ backgroundColor: `${color}25`, color }}
+        >
+          {contacts.length}
+        </span>
+
+        {/* Value abbreviated */}
+        {totalValue > 0 && (
+          <span className="text-[8px] font-bold text-emerald-400/60 mb-2">
+            {abbreviateValue(totalValue)}
+          </span>
+        )}
+
+        {/* Vertical name */}
+        <div
+          className="text-[10px] font-semibold text-neutral-400 whitespace-nowrap"
+          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+        >
+          {label}
+        </div>
+
+        {/* Drop indicator */}
+        {isOver && <div className="h-1 w-8 mt-2 rounded-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />}
+      </div>
+    );
+  }
+
+  // === EXPANDED VIEW ===
   return (
     <div
       className={`flex-shrink-0 w-60 md:w-64 xl:w-auto xl:flex-shrink xl:min-w-0 bg-[#160b2e] rounded-xl flex flex-col transition-all duration-200 overflow-hidden ${
         isOver
-          ? 'ring-2 ring-emerald-500/40 bg-[#1e0f35] shadow-lg shadow-emerald-900/20'
+          ? 'border border-emerald-500/30 bg-[#1e0f35] shadow-lg shadow-emerald-900/20'
           : 'border border-purple-800/15'
       }`}
     >
       {/* Header */}
       <div className="shrink-0">
-        <div className="flex items-center gap-2 px-3 py-2.5">
+        <div
+          className="flex items-center gap-2 px-3 py-2.5 cursor-pointer hover:bg-[#1e0f35]/50 transition-colors"
+          onClick={onToggleCollapse}
+        >
           <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
             <svg className="w-3.5 h-3.5" style={{ color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={iconPath} />
@@ -149,6 +206,10 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
           >
             {filter.trim() ? `${filtered.length}/${contacts.length}` : contacts.length}
           </span>
+          {/* Collapse chevron */}
+          <svg className="w-3.5 h-3.5 text-purple-400/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
         </div>
 
         {/* Value bar */}
@@ -219,6 +280,8 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
               attachmentCount={attachmentCountMap?.[contact.id] || 0}
               isDimmed={dimmedContactIds?.has(contact.id)}
               isStuck={stuckContactIds?.has(contact.id)}
+              compact={compact}
+              onCardClick={onCardClick}
             />
           ))}
         </SortableContext>
@@ -233,6 +296,9 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
             <p className="text-[10px] text-purple-300/30">{filter.trim() ? 'Nenhum resultado' : 'Nenhum contato'}</p>
           </div>
         )}
+
+        {/* Drop zone glow */}
+        {isOver && <div className="h-1 mx-2 rounded-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />}
       </div>
     </div>
   );

@@ -27,7 +27,7 @@ export const contactSchema = z.object({
   whatsapp: z.string().optional().nullable(),
   // Qualificação
   temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).optional().nullable(),
-  origem: z.enum(['MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO']).optional().nullable(),
+  origem: z.enum(['MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO', 'QRCODE']).optional().nullable(),
   proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'ENVIAR_PROPOSTA', 'OUTRO']).optional().nullable(),
   proxima_acao_data: z.string().optional().nullable(),
   motivo_ganho_perdido: z.string().optional().nullable(),
@@ -90,7 +90,7 @@ export const contactUpdateSchema = z.object({
   instagram: z.string().optional().nullable(),
   whatsapp: z.string().optional().nullable(),
   temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).optional().nullable(),
-  origem: z.enum(['MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO']).optional().nullable(),
+  origem: z.enum(['MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO', 'QRCODE']).optional().nullable(),
   proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'ENVIAR_PROPOSTA', 'OUTRO']).optional().nullable(),
   proxima_acao_data: z.string().optional().nullable(),
   motivo_ganho_perdido: z.string().optional().nullable(),

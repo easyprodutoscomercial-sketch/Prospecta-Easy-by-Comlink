@@ -25,14 +25,27 @@ export async function GET(
 
     const admin = getAdminClient();
 
-    const { data: pipeline, error } = await admin
+    let pipeline: any = null;
+    const { data: pipData, error } = await admin
       .from('pipelines')
       .select('*')
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
       .single();
 
-    if (error || !pipeline) {
+    if (error && error.message?.includes('pipeline_type')) {
+      const { data: fallbackData } = await admin
+        .from('pipelines')
+        .select('id, organization_id, name, description, is_default, position, created_at, updated_at')
+        .eq('id', id)
+        .eq('organization_id', profile.organization_id)
+        .single();
+      pipeline = fallbackData ? { ...fallbackData, pipeline_type: 'PADRAO' } : null;
+    } else {
+      pipeline = pipData;
+    }
+
+    if (!pipeline) {
       return NextResponse.json({ error: 'Pipeline nao encontrado' }, { status: 404 });
     }
 
@@ -248,11 +261,23 @@ export async function PUT(
     }
 
     // Retornar pipeline atualizado com stages
-    const { data: pipeline } = await admin
+    let pipeline: any = null;
+    const { data: updatedPipData, error: fetchError } = await admin
       .from('pipelines')
       .select('*')
       .eq('id', id)
       .single();
+
+    if (fetchError && fetchError.message?.includes('pipeline_type')) {
+      const { data: fallbackPip } = await admin
+        .from('pipelines')
+        .select('id, organization_id, name, description, is_default, position, created_at, updated_at')
+        .eq('id', id)
+        .single();
+      pipeline = fallbackPip ? { ...fallbackPip, pipeline_type: 'PADRAO' } : null;
+    } else {
+      pipeline = updatedPipData;
+    }
 
     const { data: stagesData } = await admin
       .from('pipeline_stages')

@@ -21,13 +21,29 @@ export async function GET(request: NextRequest) {
 
     const admin = getAdminClient();
 
-    const { data: pipelines, error } = await admin
+    // Try with pipeline_type first; fall back to without if column doesn't exist
+    let pipelines: any[] | null = null;
+    const { data: pipelinesData, error } = await admin
       .from('pipelines')
       .select('*')
       .eq('organization_id', profile.organization_id)
       .order('position', { ascending: true });
 
-    if (error) throw error;
+    if (error && error.message?.includes('pipeline_type')) {
+      // Column doesn't exist yet — select without it and default to PADRAO
+      const { data: fallbackData, error: fallbackError } = await admin
+        .from('pipelines')
+        .select('id, organization_id, name, description, is_default, position, created_at, updated_at')
+        .eq('organization_id', profile.organization_id)
+        .order('position', { ascending: true });
+
+      if (fallbackError) throw fallbackError;
+      pipelines = (fallbackData || []).map((p: any) => ({ ...p, pipeline_type: 'PADRAO' }));
+    } else if (error) {
+      throw error;
+    } else {
+      pipelines = pipelinesData;
+    }
 
     const pipelineIds = (pipelines || []).map((p: any) => p.id);
 
@@ -114,21 +130,38 @@ export async function POST(request: NextRequest) {
 
     const isDefault = (count || 0) === 0;
 
-    // Criar pipeline
-    const { data: pipeline, error: pipError } = await admin
+    // Criar pipeline — try with pipeline_type, fall back without
+    const insertData: Record<string, any> = {
+      organization_id: profile.organization_id,
+      name: validated.name,
+      description: validated.description || null,
+      pipeline_type: validated.pipeline_type || 'PADRAO',
+      is_default: isDefault,
+      position: nextPosition,
+    };
+
+    let pipeline: any;
+    const { data: pipData, error: pipError } = await admin
       .from('pipelines')
-      .insert({
-        organization_id: profile.organization_id,
-        name: validated.name,
-        description: validated.description || null,
-        pipeline_type: validated.pipeline_type || 'PADRAO',
-        is_default: isDefault,
-        position: nextPosition,
-      })
+      .insert(insertData)
       .select()
       .single();
 
-    if (pipError) throw pipError;
+    if (pipError && pipError.message?.includes('pipeline_type')) {
+      // Column doesn't exist — insert without it
+      delete insertData.pipeline_type;
+      const { data: fallbackData, error: fallbackError } = await admin
+        .from('pipelines')
+        .insert(insertData)
+        .select()
+        .single();
+      if (fallbackError) throw fallbackError;
+      pipeline = { ...fallbackData, pipeline_type: 'PADRAO' };
+    } else if (pipError) {
+      throw pipError;
+    } else {
+      pipeline = pipData;
+    }
 
     // Criar stages — campos basicos primeiro, depois opcionais individualmente
     const baseStagesToInsert = validated.stages.map((s, i) => ({

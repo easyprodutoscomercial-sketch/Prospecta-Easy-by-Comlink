@@ -10,7 +10,7 @@ export type ContactType = 'FORNECEDOR' | 'COMPRADOR';
 
 export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE';
 
-export type Origem = 'MANUAL' | 'INDICACAO' | 'FEIRA' | 'LINKEDIN' | 'SITE' | 'WHATSAPP_INBOUND' | 'OUTRO';
+export type Origem = 'MANUAL' | 'INDICACAO' | 'FEIRA' | 'LINKEDIN' | 'SITE' | 'WHATSAPP_INBOUND' | 'OUTRO' | 'QRCODE';
 
 export type ProximaAcaoTipo = 'LIGAR' | 'ENVIAR_WHATSAPP' | 'ENVIAR_EMAIL' | 'REUNIAO' | 'VISITA' | 'FOLLOW_UP' | 'ENVIAR_PROPOSTA' | 'OUTRO';
 
@@ -402,6 +402,8 @@ export interface ContactCustomFieldValue {
   created_at: string;
   updated_at: string;
 }
+
+export type KanbanViewMode = 'kanban' | 'list' | 'compact';
 
 // Re-export AI types for convenience
 export type { Notification, RiskAlert, ActionSuggestion, PipelineHealth } from '@/lib/ai/types';

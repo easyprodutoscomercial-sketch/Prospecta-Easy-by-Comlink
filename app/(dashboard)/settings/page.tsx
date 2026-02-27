@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import QrCodeSection from '@/components/settings/qr-code-section';
 
 export default function SettingsPage() {
   const [password, setPassword] = useState('');
@@ -266,6 +267,9 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* QR Code Lead Capture Section */}
+        <QrCodeSection />
       </div>
     </div>
   );

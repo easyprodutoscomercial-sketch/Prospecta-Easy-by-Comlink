@@ -17,6 +17,7 @@ import { useContactPreferences } from '@/lib/hooks/use-contact-preferences';
 import ContactCard from '@/components/contacts/contact-card';
 import ContactsToolbar from '@/components/contacts/contacts-toolbar';
 import ContactsMapView from '@/components/contacts/contacts-map-view';
+import ContactsImportView from '@/components/contacts/contacts-import-view';
 
 interface UserInfo {
   user_id: string;
@@ -91,6 +92,7 @@ function ContactsPageContent() {
   const [bulkLoading, setBulkLoading] = useState(false);
 
   const isMapView = prefs.activeView === 'map';
+  const isImportView = prefs.activeView === 'import';
 
   useEffect(() => {
     async function fetchUsersAndMe() {
@@ -288,10 +290,6 @@ function ContactsPageContent() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             Exportar
           </button>
-          <Link href="/import" className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-300 bg-[#2a1245] border border-purple-700/30 rounded-lg hover:bg-purple-800/30 hover:text-white transition-all">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-            Importar
-          </Link>
           <SavedViews
             storageKey="crm_contacts_views"
             currentFilters={{ search: inputValues.search, status: filters.status, tipo: filters.tipo, assigned: filters.assigned, temperatura: filters.temperatura, origem: filters.origem, classe: filters.classe, cidade: inputValues.cidade, estado: filters.estado, telefone: inputValues.telefone }}
@@ -406,9 +404,12 @@ function ContactsPageContent() {
       />
 
       {/* Content */}
-      {isMapView ? (
+      {isImportView ? (
+        /* ========== IMPORT VIEW ========== */
+        <ContactsImportView onImportComplete={loadContacts} />
+      ) : isMapView ? (
         /* ========== MAP VIEW ========== */
-        <ContactsMapView contacts={mapContacts} />
+        <ContactsMapView contacts={mapContacts} onEnrichComplete={loadMapContacts} />
       ) : loading ? (
         <SkeletonTable rows={6} cols={4} />
       ) : contacts.length === 0 ? (
@@ -421,10 +422,10 @@ function ContactsPageContent() {
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
               Criar Contato
             </Link>
-            <Link href="/import" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-neutral-300 bg-[#2a1245] border border-purple-700/30 rounded-lg hover:bg-purple-800/30 hover:text-white transition-all">
+            <button onClick={() => prefs.setActiveView('import')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-neutral-300 bg-[#2a1245] border border-purple-700/30 rounded-lg hover:bg-purple-800/30 hover:text-white transition-all">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
               Importar CSV
-            </Link>
+            </button>
           </div>
         </div>
       ) : (

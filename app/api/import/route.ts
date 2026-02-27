@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizeContactData, normalizePhone, normalizeCPF, normalizeCNPJ, normalizeEmail } from '@/lib/utils/normalize';
-import { ImportResult } from '@/lib/types';
+import { ImportResult, TelefoneAdicional } from '@/lib/types';
 import { ensureProfile } from '@/lib/ensure-profile';
 
 const MAX_ROWS = 2000;
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
     // Pre-fetch existing contacts for batch duplicate check (more efficient)
     const { data: existingContacts } = await admin
       .from('contacts')
-      .select('id, name, email, phone, cpf, cnpj, company, notes, email_normalized, phone_normalized, cpf_digits, cnpj_digits, tipo, referencia, classe, produtos_fornecidos, contato_nome, cargo, endereco, cidade, estado, cep, website, instagram, whatsapp, pipeline_id, stage_id')
+      .select('id, name, email, phone, cpf, cnpj, company, notes, email_normalized, phone_normalized, cpf_digits, cnpj_digits, tipo, referencia, classe, produtos_fornecidos, contato_nome, cargo, endereco, cidade, estado, cep, website, instagram, whatsapp, pipeline_id, stage_id, telefones_adicionais')
       .eq('organization_id', profile.organization_id);
 
     // Build lookup maps from existing contacts (using both raw and normalized fields)
@@ -230,6 +230,21 @@ export async function POST(request: NextRequest) {
           instagram: row.instagram,
           whatsapp: row.whatsapp,
         });
+
+        // Extract additional phones from row
+        const telefones_adicionais: TelefoneAdicional[] = [];
+        for (const suffix of ['_2', '_3']) {
+          const phone = row[`telefone${suffix}`]?.toString().trim();
+          if (phone) {
+            telefones_adicionais.push({
+              phone,
+              nome_contato: row[`contato${suffix}`]?.toString().trim() || '',
+              empresa: '',
+              setor: row[`cargo${suffix}`]?.toString().trim() || '',
+              correto: true,
+            });
+          }
+        }
 
         // Check duplicates against EXISTING contacts + within-batch
         let isDuplicate = false;
@@ -359,6 +374,26 @@ export async function POST(request: NextRequest) {
             if (updateData.phone) updateData.phone_normalized = normalized.phone_normalized;
             if (updateData.cpf) updateData.cpf_digits = normalized.cpf_digits;
             if (updateData.cnpj) updateData.cnpj_digits = normalized.cnpj_digits;
+
+            // Merge telefones_adicionais (avoid duplicating same phone number)
+            if (telefones_adicionais.length > 0) {
+              const existing: TelefoneAdicional[] = existingContact.telefones_adicionais || [];
+              const existingPhoneSet = new Set(
+                existing.map((t: TelefoneAdicional) => normalizePhone(t.phone) || '')
+              );
+              const merged = [...existing];
+              for (const tel of telefones_adicionais) {
+                const norm = normalizePhone(tel.phone);
+                if (norm && !existingPhoneSet.has(norm)) {
+                  merged.push(tel);
+                  existingPhoneSet.add(norm);
+                }
+              }
+              if (merged.length > existing.length) {
+                updateData.telefones_adicionais = merged;
+                fieldsUpdated.push('telefones_adicionais');
+              }
+            }
 
             // Assign pipeline/stage if contact doesn't have one yet
             if (!existingContact.pipeline_id && defaultPipelineId) {
@@ -493,6 +528,7 @@ export async function POST(request: NextRequest) {
               created_by_user_id: user.id,
               ...(defaultPipelineId ? { pipeline_id: defaultPipelineId } : {}),
               ...(firstStageId ? { stage_id: firstStageId } : {}),
+              ...(telefones_adicionais.length > 0 ? { telefones_adicionais } : {}),
             })
             .select()
             .single();

@@ -13,7 +13,7 @@ import {
   type DragEndEvent,
   type CollisionDetection,
 } from '@dnd-kit/core';
-import type { Contact, ContactStatus, ContactType, PipelineSettings, PipelineWithStages, PipelineStage, PipelineType } from '@/lib/types';
+import type { Contact, ContactStatus, ContactType, PipelineSettings, PipelineStage, PipelineType, KanbanViewMode } from '@/lib/types';
 import { TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS, ESTADOS_BRASIL } from '@/lib/utils/labels';
 import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
@@ -21,11 +21,17 @@ import { KanbanBoard } from '@/components/kanban/kanban-board';
 import { KanbanSkeleton } from '@/components/kanban/kanban-skeleton';
 import type { UserInfo } from '@/components/kanban/kanban-card';
 import { KanbanFilterBar } from '@/components/kanban/kanban-filter-bar';
+import { KanbanKpiBar } from '@/components/kanban/kanban-kpi-bar';
+import { KanbanFilterPopover, FilterChips } from '@/components/kanban/kanban-filter-popover';
+import { KanbanListView } from '@/components/kanban/kanban-list-view';
+import KanbanViewToggle from '@/components/kanban/kanban-view-toggle';
+import ContactPreviewDrawer from '@/components/kanban/contact-preview-drawer';
 import { getUserColor } from '@/lib/utils/user-colors';
 import MotivoModal from '@/components/ui/motivo-modal';
 import MeetingModal from '@/components/meetings/meeting-modal';
 import AiChatPanel from '@/components/ai-chat-panel';
 import { normalizeSearch } from '@/lib/utils/normalize';
+import { useSessionState } from '@/lib/hooks/use-session-state';
 
 
 // Sons usando Web Audio API
@@ -74,21 +80,39 @@ interface EmojiParticle {
 const CELEBRATE_EMOJIS = ['👏', '🎉', '🥳', '🎊', '🏆', '⭐', '🔥', '💪', '🚀', '✨'];
 const SAD_EMOJIS = ['😢', '😭', '💔', '😞', '😿', '🥺', '😩', '😔', '💧', '🫠'];
 
+// localStorage helpers for collapsed columns
+function loadCollapsedColumns(pipelineId: string): Set<string> {
+  try {
+    const raw = localStorage.getItem('kanban:collapsed-columns');
+    if (!raw) return new Set();
+    const data = JSON.parse(raw);
+    return new Set(data[pipelineId] || []);
+  } catch { return new Set(); }
+}
+
+function saveCollapsedColumns(pipelineId: string, collapsed: Set<string>) {
+  try {
+    const raw = localStorage.getItem('kanban:collapsed-columns');
+    const data = raw ? JSON.parse(raw) : {};
+    data[pipelineId] = Array.from(collapsed);
+    localStorage.setItem('kanban:collapsed-columns', JSON.stringify(data));
+  } catch {}
+}
+
 export default function KanbanPage() {
   const toast = useToast();
   const { pipelines, selectedPipelineId, setSelectedPipelineId, currentPipeline, refetch: refetchPipelines } = usePipeline();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [tipoFilter, setTipoFilter] = useState<'' | ContactType>('');
-  const [responsavelFilter, setResponsavelFilter] = useState('');
-  const [temperaturaFilter, setTemperaturaFilter] = useState('');
-  const [origemFilter, setOrigemFilter] = useState('');
-  const [classeFilter, setClasseFilter] = useState('');
-  const [estadoFilter, setEstadoFilter] = useState('');
-  const [proximaAcaoFilter, setProximaAcaoFilter] = useState('');
-  const [showFilters, setShowFilters] = useState(false);
-  const [advSearch, setAdvSearch] = useState({ cpf: '', cnpj: '', whatsapp: '', empresa: '', cidade: '', telefone: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
+  const [search, setSearch] = useSessionState('kanban:search', '');
+  const [tipoFilter, setTipoFilter] = useSessionState<'' | ContactType>('kanban:tipo', '');
+  const [responsavelFilter, setResponsavelFilter] = useSessionState('kanban:responsavel', '');
+  const [temperaturaFilter, setTemperaturaFilter] = useSessionState('kanban:temperatura', '');
+  const [origemFilter, setOrigemFilter] = useSessionState('kanban:origemFilter', '');
+  const [classeFilter, setClasseFilter] = useSessionState('kanban:classe', '');
+  const [estadoFilter, setEstadoFilter] = useSessionState('kanban:estado', '');
+  const [proximaAcaoFilter, setProximaAcaoFilter] = useSessionState('kanban:proximaAcao', '');
+  const [advSearch, setAdvSearch] = useSessionState('kanban:advSearch', { cpf: '', cnpj: '', whatsapp: '', empresa: '', cidade: '', telefone: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
   const [showMotivoModal, setShowMotivoModal] = useState(false);
@@ -113,6 +137,15 @@ export default function KanbanPage() {
   const [dimmedContactIds, setDimmedContactIds] = useState<Set<string>>(new Set());
   const [hiddenContactIds, setHiddenContactIds] = useState<Set<string>>(new Set());
   const [stuckContactIds, setStuckContactIds] = useState<Set<string>>(new Set());
+
+  // New UX state
+  const [viewMode, setViewMode] = useState<KanbanViewMode>('kanban');
+  const [kpiExpanded, setKpiExpanded] = useState(false);
+  const [showChipFilters, setShowChipFilters] = useState(true);
+  const [filterPopoverOpen, setFilterPopoverOpen] = useState(false);
+  const [drawerContactId, setDrawerContactId] = useState<string | null>(null);
+  const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
+  const [collapsedColumnsInitialized, setCollapsedColumnsInitialized] = useState(false);
 
   const handleChipFiltersChange = useCallback((dimmed: Set<string>, hidden: Set<string>, stuck: Set<string>) => {
     setDimmedContactIds(dimmed);
@@ -149,6 +182,37 @@ export default function KanbanPage() {
   }, [stages]);
 
   const stageIds = useMemo(() => new Set(stages.map(s => s.id)), [stages]);
+
+  // Initialize collapsed columns (terminal stages collapsed by default on first access)
+  useEffect(() => {
+    if (!selectedPipelineId || stages.length === 0 || collapsedColumnsInitialized) return;
+
+    const stored = loadCollapsedColumns(selectedPipelineId);
+    if (stored.size > 0) {
+      setCollapsedColumns(stored);
+    } else {
+      // First access: collapse terminal stages by default
+      const terminalIds = new Set(stages.filter(s => s.is_terminal).map(s => s.id));
+      setCollapsedColumns(terminalIds);
+      saveCollapsedColumns(selectedPipelineId, terminalIds);
+    }
+    setCollapsedColumnsInitialized(true);
+  }, [selectedPipelineId, stages, collapsedColumnsInitialized]);
+
+  // Reset collapsed state when pipeline changes
+  useEffect(() => {
+    setCollapsedColumnsInitialized(false);
+  }, [selectedPipelineId]);
+
+  const handleToggleCollapse = useCallback((stageId: string) => {
+    setCollapsedColumns(prev => {
+      const next = new Set(prev);
+      if (next.has(stageId)) next.delete(stageId);
+      else next.add(stageId);
+      if (selectedPipelineId) saveCollapsedColumns(selectedPipelineId, next);
+      return next;
+    });
+  }, [selectedPipelineId]);
 
   // Collision detection that prioritizes columns (stage ids) over cards
   const columnFirstCollision: CollisionDetection = useCallback((args) => {
@@ -238,7 +302,7 @@ export default function KanbanPage() {
 
   useEffect(() => {
     fetchData();
-    refetchPipelines(); // Garantir stages/icones atualizados ao abrir o kanban
+    refetchPipelines();
   }, [fetchData, refetchPipelines]);
 
   // Current pipeline type
@@ -280,11 +344,11 @@ export default function KanbanPage() {
     }
   }, [selectedPipelineId, fetchContacts]);
 
-  // Auto-refresh a cada 30s (silencioso, sem loading spinner)
+  // Auto-refresh a cada 30s
   useEffect(() => {
     const interval = setInterval(() => {
       fetchData();
-      refetchPipelines(); // Atualiza stages/colunas do pipeline tambem
+      refetchPipelines();
       if (selectedPipelineId) fetchContacts(selectedPipelineId);
     }, 30000);
     return () => clearInterval(interval);
@@ -321,35 +385,14 @@ export default function KanbanPage() {
       );
     }
 
-    if (tipoFilter) {
-      result = result.filter((c) => c.tipo?.includes(tipoFilter));
-    }
+    if (tipoFilter) result = result.filter((c) => c.tipo?.includes(tipoFilter));
+    if (responsavelFilter) result = result.filter((c) => responsavelFilter === '_none' ? !c.assigned_to_user_id : c.assigned_to_user_id === responsavelFilter || c.created_by_user_id === responsavelFilter);
+    if (temperaturaFilter) result = result.filter((c) => c.temperatura === temperaturaFilter);
+    if (origemFilter) result = result.filter((c) => c.origem === origemFilter);
+    if (classeFilter) result = result.filter((c) => c.classe === classeFilter);
+    if (estadoFilter) result = result.filter((c) => c.estado === estadoFilter);
+    if (proximaAcaoFilter) result = result.filter((c) => c.proxima_acao_tipo === proximaAcaoFilter);
 
-    if (responsavelFilter) {
-      result = result.filter((c) =>
-        responsavelFilter === '_none'
-          ? !c.assigned_to_user_id
-          : c.assigned_to_user_id === responsavelFilter || c.created_by_user_id === responsavelFilter
-      );
-    }
-
-    if (temperaturaFilter) {
-      result = result.filter((c) => c.temperatura === temperaturaFilter);
-    }
-
-    if (origemFilter) {
-      result = result.filter((c) => c.origem === origemFilter);
-    }
-
-    if (classeFilter) {
-      result = result.filter((c) => c.classe === classeFilter);
-    }
-    if (estadoFilter) {
-      result = result.filter((c) => c.estado === estadoFilter);
-    }
-    if (proximaAcaoFilter) {
-      result = result.filter((c) => c.proxima_acao_tipo === proximaAcaoFilter);
-    }
     const ilike = (val: string | null | undefined, q: string) => val ? normalizeSearch(val).includes(normalizeSearch(q)) : false;
     if (advSearch.cpf) result = result.filter((c) => ilike(c.cpf, advSearch.cpf));
     if (advSearch.cnpj) result = result.filter((c) => ilike(c.cnpj, advSearch.cnpj));
@@ -374,12 +417,9 @@ export default function KanbanPage() {
       if (c.stage_id && groups[c.stage_id]) {
         groups[c.stage_id].push(c);
       } else if (firstStage) {
-        // Contato sem stage_id OU com stage_id que nao existe nos stages atuais
-        // — coloca no primeiro stage para NUNCA sumir da tela
         groups[firstStage.id].push(c);
       }
     }
-    // Ordenacao dentro de cada coluna: por updated_at decrescente (mais recente primeiro)
     for (const key of Object.keys(groups)) {
       groups[key].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
     }
@@ -410,12 +450,8 @@ export default function KanbanPage() {
       prev.map((c) => (c.id === contactId ? { ...c, stage_id: newStageId, status: newStage.slug as ContactStatus, ...(motivo ? { motivo_ganho_perdido: motivo } : {}) } : c))
     );
 
-    // Trigger celebration or sad effect
-    if (isForward) {
-      triggerEmojis('celebrate');
-    } else {
-      triggerEmojis('sad');
-    }
+    if (isForward) triggerEmojis('celebrate');
+    else triggerEmojis('sad');
 
     try {
       const body: Record<string, string> = { stage_id: newStageId };
@@ -432,8 +468,23 @@ export default function KanbanPage() {
         throw new Error(data.error || 'Erro');
       }
       toast.success(isForward ? 'Avancou no pipeline!' : 'Status atualizado');
+
+      // Auto-completar reunioes ao sair da coluna de reuniao
+      const isOldStageReuniao = currentStage && (/reuni[aã]o/i.test(currentStage.slug || '') || /reuni[aã]o/i.test(currentStage.name || '') || currentStage.allow_meeting === true);
+      const isNewStageReuniao = newStage && (/reuni[aã]o/i.test(newStage.slug || '') || /reuni[aã]o/i.test(newStage.name || '') || newStage.allow_meeting === true);
+
+      if (isOldStageReuniao && !isNewStageReuniao && contactsWithMeeting.has(contactId)) {
+        try {
+          await fetch('/api/meetings/complete-by-contact', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contact_id: contactId }),
+          });
+          setContactsWithMeeting((prev) => { const next = new Set(prev); next.delete(contactId); return next; });
+          toast.success('Reuniao marcada como realizada');
+        } catch {}
+      }
     } catch (err: any) {
-      // Revert
       setContacts((prev) =>
         prev.map((c) => (c.id === contactId ? { ...c, stage_id: contact.stage_id, status: contact.status } : c))
       );
@@ -449,20 +500,16 @@ export default function KanbanPage() {
     const contactId = active.id as string;
     let targetStageId = over.id as string;
 
-    // If dropped on a card, use that card's stage
     if (!stageIds.has(targetStageId)) {
       const overContact = contacts.find((c) => c.id === targetStageId);
-      if (overContact?.stage_id) {
-        targetStageId = overContact.stage_id;
-      } else {
-        return;
-      }
+      if (overContact?.stage_id) targetStageId = overContact.stage_id;
+      else return;
     }
 
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact || contact.stage_id === targetStageId) return;
 
-    // Ownership: only responsible (or admin) can move
+    // Ownership check
     if (currentUserRole !== 'admin') {
       if (!contact.assigned_to_user_id) {
         toast.error('Este contato nao tem responsavel. Aponte para voce primeiro.');
@@ -475,7 +522,6 @@ export default function KanbanPage() {
       }
     }
 
-    // Intercept terminal stages
     const targetStage = stageMap[targetStageId];
     if (targetStage?.is_terminal && targetStage.terminal_type) {
       setPendingDrag({ contactId, newStageId: targetStageId, terminalType: targetStage.terminal_type as 'won' | 'lost' });
@@ -490,35 +536,25 @@ export default function KanbanPage() {
     const pending = pendingDrag || pendingJump;
     if (!pending) return;
     setMotivoLoading(true);
-
     await moveContact(pending.contactId, pending.newStageId, motivo);
-
     setMotivoLoading(false);
     setShowMotivoModal(false);
     setPendingDrag(null);
     setPendingJump(null);
   }
 
-  // Can move contact?
   function canMoveContact(contact: Contact): boolean {
     if (currentUserRole === 'admin') return true;
     return !!contact.assigned_to_user_id && contact.assigned_to_user_id === currentUserId;
   }
 
-  // Jump forward/backward using stages
   async function handleJumpForward(contactId: string) {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
-
-    if (!canMoveContact(contact)) {
-      toast.error('Voce nao e o responsavel deste contato.');
-      return;
-    }
+    if (!canMoveContact(contact)) { toast.error('Voce nao e o responsavel deste contato.'); return; }
 
     const currentStage = contact.stage_id ? stageMap[contact.stage_id] : null;
     const currentPos = currentStage?.position ?? -1;
-
-    // Find next non-terminal stage, or next terminal stage
     const sortedStages = [...stages].sort((a, b) => a.position - b.position);
     const nextStage = sortedStages.find(s => s.position > currentPos);
     if (!nextStage) return;
@@ -528,26 +564,19 @@ export default function KanbanPage() {
       setShowMotivoModal(true);
       return;
     }
-
     await moveContact(contactId, nextStage.id);
   }
 
   async function handleJumpBackward(contactId: string) {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact) return;
-
-    if (!canMoveContact(contact)) {
-      toast.error('Voce nao e o responsavel deste contato.');
-      return;
-    }
+    if (!canMoveContact(contact)) { toast.error('Voce nao e o responsavel deste contato.'); return; }
 
     const currentStage = contact.stage_id ? stageMap[contact.stage_id] : null;
     const currentPos = currentStage?.position ?? stages.length;
-
     const sortedStages = [...stages].sort((a, b) => b.position - a.position);
     const prevStage = sortedStages.find(s => s.position < currentPos);
     if (!prevStage) return;
-
     await moveContact(contactId, prevStage.id);
   }
 
@@ -591,7 +620,33 @@ export default function KanbanPage() {
     setProximaAcaoFilter('');
     setAdvSearch({ cpf: '', cnpj: '', whatsapp: '', empresa: '', cidade: '', telefone: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
     setSearch('');
+    setFilterPopoverOpen(false);
   }
+
+  // Filter change handler for popover
+  const handleFilterChange = useCallback(<K extends keyof typeof filterState>(key: K, value: (typeof filterState)[K]) => {
+    switch (key) {
+      case 'tipoFilter': setTipoFilter(value as '' | ContactType); break;
+      case 'responsavelFilter': setResponsavelFilter(value as string); break;
+      case 'temperaturaFilter': setTemperaturaFilter(value as string); break;
+      case 'origemFilter': setOrigemFilter(value as string); break;
+      case 'classeFilter': setClasseFilter(value as string); break;
+      case 'estadoFilter': setEstadoFilter(value as string); break;
+      case 'proximaAcaoFilter': setProximaAcaoFilter(value as string); break;
+      case 'advSearch': setAdvSearch(value as typeof advSearch); break;
+    }
+  }, []);
+
+  const filterState = useMemo(() => ({
+    tipoFilter,
+    responsavelFilter,
+    temperaturaFilter,
+    origemFilter,
+    classeFilter,
+    estadoFilter,
+    proximaAcaoFilter,
+    advSearch,
+  }), [tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
 
   // Claim contact
   async function handleClaimContact(contactId: string) {
@@ -608,7 +663,6 @@ export default function KanbanPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assigned_to_user_id: currentUserId }),
       });
-
       if (!res.ok) throw new Error();
       toast.success('Contato atribuido a voce');
     } catch {
@@ -619,9 +673,8 @@ export default function KanbanPage() {
     }
   }
 
-  // Request contact (pegar cliente)
+  // Request contact
   async function handleRequestContact(contactId: string) {
-    // If already pending, just show info
     if (pendingRequestContactIds.has(contactId)) {
       toast.error('Substituicao ja solicitada. Aguarde aprovacao do responsavel.');
       return;
@@ -635,7 +688,6 @@ export default function KanbanPage() {
       });
 
       if (res.status === 409) {
-        // Mark locally so the indicator shows
         setPendingRequestContactIds(prev => new Set(prev).add(contactId));
         toast.error('Substituicao ja solicitada. Aguarde aprovacao do responsavel.');
         return;
@@ -646,7 +698,6 @@ export default function KanbanPage() {
         throw new Error(data.error || 'Erro ao solicitar');
       }
 
-      // Add to local set and refresh data
       setPendingRequestContactIds(prev => new Set(prev).add(contactId));
       toast.success('Substituicao solicitada! Aguarde aprovacao do responsavel.');
       fetchData();
@@ -670,10 +721,7 @@ export default function KanbanPage() {
       const res = await fetch('/api/meetings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contact_id: meetingContact.id,
-          ...data,
-        }),
+        body: JSON.stringify({ contact_id: meetingContact.id, ...data }),
       });
 
       if (!res.ok) {
@@ -691,7 +739,6 @@ export default function KanbanPage() {
     }
   }
 
-  // Motivo modal tipo (CONVERTIDO/PERDIDO for backwards compat)
   const motivoTipo = useMemo(() => {
     const pending = pendingDrag || pendingJump;
     if (!pending) return 'CONVERTIDO' as const;
@@ -713,11 +760,7 @@ export default function KanbanPage() {
     setBulkLoading(true);
     try {
       const promises = Array.from(bulkSelectedIds).map(id =>
-        fetch(`/api/contacts/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stage_id: stageId }),
-        })
+        fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage_id: stageId }) })
       );
       await Promise.all(promises);
       toast.success(`${bulkSelectedIds.size} contatos movidos`);
@@ -736,11 +779,7 @@ export default function KanbanPage() {
     setBulkLoading(true);
     try {
       const promises = Array.from(bulkSelectedIds).map(id =>
-        fetch(`/api/contacts/${id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ assigned_to_user_id: userId || null }),
-        })
+        fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assigned_to_user_id: userId || null }) })
       );
       await Promise.all(promises);
       toast.success(`${bulkSelectedIds.size} contatos atribuidos`);
@@ -754,18 +793,16 @@ export default function KanbanPage() {
     }
   };
 
-  const selectClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-full";
-  const inputClass = "text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg px-2.5 py-2 text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 w-full";
+  // Card click handler — opens drawer
+  const handleCardClick = useCallback((contactId: string) => {
+    setDrawerContactId(contactId);
+  }, []);
 
-  // Sum of contacts in all columns (must match filtered.length)
   const totalInColumns = useMemo(() => {
     return Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
   }, [grouped]);
 
-  // Detect mismatch between fetched count and API total
   const hasTruncation = totalContactsFromApi > contacts.length;
-
-  // Funnel data from non-terminal stages
   const funnelStages = useMemo(() => stages.filter(s => !s.is_terminal), [stages]);
 
   return (
@@ -785,32 +822,28 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* === TOP BAR: Header + Pipeline Selector + Search + Filters === */}
-      <div className="bg-[#120826]/80 backdrop-blur-sm border-b border-purple-500/10 px-4 lg:px-6 py-3">
-        <div className="flex items-center gap-3 flex-wrap">
+      {/* === TOP BAR: Compact header === */}
+      <div className="bg-[#120826]/80 backdrop-blur-sm border-b border-purple-500/10 px-4 lg:px-6 py-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {/* Title */}
-          <div className="flex items-center gap-2.5 mr-auto">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500/20 to-purple-600/20 border border-emerald-500/20 flex items-center justify-center">
-              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center gap-2 mr-auto">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500/20 to-purple-600/20 border border-emerald-500/20 flex items-center justify-center">
+              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2m0 10V7m6 10V7" />
               </svg>
             </div>
             <div>
-              <h1 className="text-base font-bold text-white leading-tight">Pipeline</h1>
-              <p className="text-[10px] text-purple-300/40">
-                {totalInColumns} de {totalContactsFromApi} contatos
-                {hasTruncation && (
-                  <span className="text-amber-400 ml-1" title={`Exibindo ${contacts.length} de ${totalContactsFromApi}. Alguns contatos podem nao estar visiveis.`}>
-                    (limite atingido)
-                  </span>
-                )}
+              <h1 className="text-sm font-bold text-white leading-tight">Pipeline</h1>
+              <p className="text-[9px] text-purple-300/40">
+                {totalInColumns} de {totalContactsFromApi}
+                {hasTruncation && <span className="text-amber-400 ml-1">(limite)</span>}
               </p>
             </div>
           </div>
 
-          {/* Pipeline name (selected in sidebar) */}
+          {/* Pipeline name */}
           {currentPipeline && (
-            <span className="text-xs font-semibold text-emerald-400/70 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-1.5">
+            <span className="text-[10px] font-semibold text-emerald-400/70 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1">
               {currentPipeline.name}
             </span>
           )}
@@ -822,19 +855,19 @@ export default function KanbanPage() {
             </svg>
             <input
               type="text"
-              placeholder="Buscar nome, empresa, tel..."
+              placeholder="Buscar..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-52"
+              className="pl-8 pr-3 py-1.5 text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-40"
             />
           </div>
 
-          {/* Filter toggle button */}
+          {/* Filter button (popover) */}
           <div className="relative">
             <button
-              onClick={() => setShowFilters((p) => !p)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                showFilters || activeFilterCount > 0
+              onClick={() => setFilterPopoverOpen(p => !p)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                filterPopoverOpen || activeFilterCount > 0
                   ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
                   : 'bg-[#1e0f35] text-purple-300/60 border border-purple-700/20 hover:text-purple-200 hover:border-purple-600/30'
               }`}
@@ -847,18 +880,21 @@ export default function KanbanPage() {
                 <span className="w-4 h-4 rounded-full bg-emerald-500 text-white text-[9px] font-bold flex items-center justify-center">{activeFilterCount}</span>
               )}
             </button>
+            <KanbanFilterPopover
+              filters={filterState}
+              onFilterChange={handleFilterChange}
+              onClearAll={clearAllFilters}
+              activeFilterCount={activeFilterCount}
+              userMap={userMap}
+              isOpen={filterPopoverOpen}
+              onClose={() => setFilterPopoverOpen(false)}
+            />
           </div>
 
-          {activeFilterCount > 0 && (
-            <button onClick={clearAllFilters} className="text-[10px] text-red-400/70 hover:text-red-400 font-medium">
-              Limpar filtros
-            </button>
-          )}
-
-          {/* Bulk mode toggle */}
+          {/* Bulk mode */}
           <button
             onClick={() => { setBulkMode(p => !p); setBulkSelectedIds(new Set()); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
               bulkMode
                 ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
                 : 'bg-[#1e0f35] text-purple-300/60 border border-purple-700/20 hover:text-purple-200'
@@ -867,132 +903,60 @@ export default function KanbanPage() {
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
-            {bulkMode ? `Selecionados: ${bulkSelectedIds.size}` : 'Selecao'}
+            {bulkMode ? bulkSelectedIds.size.toString() : 'Sel.'}
+          </button>
+
+          {/* View toggle */}
+          <KanbanViewToggle view={viewMode} onChange={setViewMode} />
+
+          {/* KPI toggle */}
+          <button
+            onClick={() => setKpiExpanded(p => !p)}
+            className="px-2 py-1.5 rounded-lg text-xs font-medium bg-[#1e0f35] text-purple-300/60 border border-purple-700/20 hover:text-purple-200 transition-all"
+            title={kpiExpanded ? 'Compactar KPIs' : 'Expandir KPIs'}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </button>
+
+          {/* Chip filter toggle */}
+          <button
+            onClick={() => setShowChipFilters(p => !p)}
+            className={`px-2 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              showChipFilters
+                ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30'
+                : 'bg-[#1e0f35] text-purple-300/60 border border-purple-700/20 hover:text-purple-200'
+            }`}
+            title={showChipFilters ? 'Ocultar chips' : 'Mostrar chips'}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+            </svg>
           </button>
         </div>
 
-        {/* Filter Panel (collapsible) */}
-        {showFilters && (
-          <div className="mt-3 pt-3 border-t border-purple-500/10 animate-fade-in">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
-              <select value={tipoFilter} onChange={(e) => setTipoFilter(e.target.value as '' | ContactType)} className={selectClass}>
-                <option value="">Tipo</option>
-                <option value="FORNECEDOR">Fornecedor</option>
-                <option value="COMPRADOR">Comprador</option>
-              </select>
-              <select value={responsavelFilter} onChange={(e) => setResponsavelFilter(e.target.value)} className={selectClass}>
-                <option value="">Responsavel</option>
-                <option value="_none">Sem responsavel</option>
-                {Object.entries(userMap).map(([userId, user]) => (
-                  <option key={userId} value={userId}>{user.name}</option>
-                ))}
-              </select>
-              <select value={temperaturaFilter} onChange={(e) => setTemperaturaFilter(e.target.value)} className={selectClass}>
-                <option value="">Temperatura</option>
-                {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-              <select value={origemFilter} onChange={(e) => setOrigemFilter(e.target.value)} className={selectClass}>
-                <option value="">Origem</option>
-                {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
-                  <option key={key} value={key}>{label}</option>
-                ))}
-              </select>
-              <select value={classeFilter} onChange={(e) => setClasseFilter(e.target.value)} className={selectClass}>
-                <option value="">Classe</option>
-                <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option>
-              </select>
-              <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className={selectClass}>
-                <option value="">Estado</option>
-                {ESTADOS_BRASIL.map((uf) => (<option key={uf} value={uf}>{uf}</option>))}
-              </select>
-              <select value={proximaAcaoFilter} onChange={(e) => setProximaAcaoFilter(e.target.value)} className={selectClass}>
-                <option value="">Proxima Acao</option>
-                {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
-              </select>
-            </div>
-            {/* Advanced text search */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2 mt-2">
-              <input type="text" placeholder="CPF" value={advSearch.cpf} onChange={(e) => setAdvSearch((p) => ({ ...p, cpf: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="CNPJ" value={advSearch.cnpj} onChange={(e) => setAdvSearch((p) => ({ ...p, cnpj: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="Telefone" value={advSearch.telefone} onChange={(e) => setAdvSearch((p) => ({ ...p, telefone: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="Empresa" value={advSearch.empresa} onChange={(e) => setAdvSearch((p) => ({ ...p, empresa: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="Cidade" value={advSearch.cidade} onChange={(e) => setAdvSearch((p) => ({ ...p, cidade: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="WhatsApp" value={advSearch.whatsapp} onChange={(e) => setAdvSearch((p) => ({ ...p, whatsapp: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="Referencia" value={advSearch.referencia} onChange={(e) => setAdvSearch((p) => ({ ...p, referencia: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="Contato" value={advSearch.contato_nome} onChange={(e) => setAdvSearch((p) => ({ ...p, contato_nome: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="Cargo" value={advSearch.cargo} onChange={(e) => setAdvSearch((p) => ({ ...p, cargo: e.target.value }))} className={inputClass} />
-              <input type="text" placeholder="Produtos" value={advSearch.produtos_fornecidos} onChange={(e) => setAdvSearch((p) => ({ ...p, produtos_fornecidos: e.target.value }))} className={inputClass} />
-            </div>
+        {/* Active filter chips inline */}
+        {activeFilterCount > 0 && (
+          <div className="mt-2">
+            <FilterChips filters={filterState} onFilterChange={handleFilterChange} userMap={userMap} />
           </div>
         )}
       </div>
 
-      {/* === KPI BAR === */}
+      {/* === KPI BAR (compact by default, toggleable) === */}
       {!loading && (
-        <div className="px-4 lg:px-6 py-3 border-b border-purple-500/10 bg-[#120826]/40">
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
-              <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Valor no Pipeline</p>
-              <p className="text-lg font-bold text-emerald-400 mt-0.5">
-                {kpis.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
-              </p>
-            </div>
-            <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
-              <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Contatos Ativos</p>
-              <p className="text-lg font-bold text-white mt-0.5">{kpis.activeCount}</p>
-            </div>
-            <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
-              <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Taxa Conversao</p>
-              <div className="flex items-end gap-2 mt-0.5">
-                <p className="text-lg font-bold text-white">{kpis.conversionRate}%</p>
-                <p className="text-[10px] text-purple-300/30 pb-0.5">{kpis.convertidos}W / {kpis.perdidos}L</p>
-              </div>
-            </div>
-            <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
-              <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Sem Responsavel</p>
-              <p className={`text-lg font-bold mt-0.5 ${kpis.noOwner > 0 ? 'text-amber-400' : 'text-white'}`}>{kpis.noOwner}</p>
-            </div>
-            <div className="hidden lg:flex bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20 items-center gap-3">
-              <div className="flex-1 min-w-0">
-                <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium mb-1.5">Funil</p>
-                <div className="flex flex-col items-center gap-[2px]">
-                  {funnelStages.map((stage, i) => {
-                    const count = grouped[stage.id]?.length || 0;
-                    const total = funnelStages.length;
-                    const widthPct = 100 - (i / total) * 60;
-                    return (
-                      <div
-                        key={stage.id}
-                        className="flex items-center justify-center relative transition-all"
-                        style={{
-                          width: `${widthPct}%`,
-                          height: '14px',
-                          backgroundColor: `${stage.color}25`,
-                          borderLeft: `2px solid ${stage.color}50`,
-                          borderRight: `2px solid ${stage.color}50`,
-                          borderTop: i === 0 ? `2px solid ${stage.color}50` : 'none',
-                          borderBottom: i === total - 1 ? `2px solid ${stage.color}50` : 'none',
-                          borderRadius: i === 0 ? '4px 4px 0 0' : i === total - 1 ? '0 0 3px 3px' : '0',
-                        }}
-                        title={`${stage.name}: ${count}`}
-                      >
-                        <span className="text-[7px] font-bold" style={{ color: stage.color }}>
-                          {stage.name} ({count})
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <KanbanKpiBar
+          kpis={kpis}
+          funnelStages={funnelStages}
+          grouped={grouped}
+          expanded={kpiExpanded}
+          onToggle={() => setKpiExpanded(p => !p)}
+        />
       )}
 
-      {/* === CHIP FILTER BAR === */}
-      {!loading && filtered.length > 0 && (
+      {/* === CHIP FILTER BAR (toggleable) === */}
+      {!loading && showChipFilters && filtered.length > 0 && (
         <div className="px-4 lg:px-6 py-2 border-b border-purple-500/10 bg-[#120826]/40 overflow-x-auto">
           <KanbanFilterBar
             contacts={filtered}
@@ -1002,10 +966,19 @@ export default function KanbanPage() {
         </div>
       )}
 
-      {/* === BOARD === */}
+      {/* === BOARD / LIST / COMPACT === */}
       <div className="flex-1 overflow-hidden px-4 lg:px-6 py-4" data-tour="kanban-board">
         {loading ? (
           <KanbanSkeleton />
+        ) : viewMode === 'list' ? (
+          <KanbanListView
+            contacts={filtered}
+            stages={stages}
+            userMap={userMap}
+            onCardClick={handleCardClick}
+            lastInteractionMap={lastInteractionMap}
+            stageMap={stageMap}
+          />
         ) : (
           <DndContext
             sensors={sensors}
@@ -1036,10 +1009,29 @@ export default function KanbanPage() {
               dimmedContactIds={dimmedContactIds}
               hiddenContactIds={hiddenContactIds}
               stuckContactIds={stuckContactIds}
+              compact={viewMode === 'kanban'}
+              onCardClick={handleCardClick}
+              collapsedColumns={collapsedColumns}
+              onToggleCollapse={handleToggleCollapse}
             />
           </DndContext>
         )}
       </div>
+
+      {/* Contact Preview Drawer */}
+      <ContactPreviewDrawer
+        contactId={drawerContactId}
+        onClose={() => setDrawerContactId(null)}
+        userMap={userMap}
+        stages={stages}
+        pipelineName={currentPipeline?.name || ''}
+        onJumpForward={handleJumpForward}
+        onJumpBackward={handleJumpBackward}
+        onScheduleMeeting={handleScheduleMeeting}
+        onClaimContact={handleClaimContact}
+        onRequestContact={handleRequestContact}
+        currentUserId={currentUserId}
+      />
 
       {/* Motivo modal */}
       {(pendingDrag || pendingJump) && (

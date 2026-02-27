@@ -112,6 +112,7 @@ export const ORIGEM_LABELS: Record<string, string> = {
   LINKEDIN: 'LinkedIn',
   SITE: 'Site',
   WHATSAPP_INBOUND: 'WhatsApp Inbound',
+  QRCODE: 'QR Code',
   OUTRO: 'Outro',
 };
 
