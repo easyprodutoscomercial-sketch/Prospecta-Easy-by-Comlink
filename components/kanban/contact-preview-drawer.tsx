@@ -5,7 +5,18 @@ import { useRouter } from 'next/navigation';
 import type { Contact, Interaction, PipelineStage } from '@/lib/types';
 import type { UserInfo } from './kanban-card';
 import ContactPipelineTracker from '@/components/contacts/contact-pipeline-tracker';
-import { TEMPERATURA_LABELS, TEMPERATURA_COLORS, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS } from '@/lib/utils/labels';
+import {
+  TEMPERATURA_LABELS,
+  TEMPERATURA_COLORS,
+  CONTACT_TYPE_LABELS,
+  CONTACT_TYPE_COLORS,
+  ORIGEM_LABELS,
+  CLASSE_LABELS,
+  INTERACTION_TYPE_LABELS,
+  INTERACTION_OUTCOME_LABELS,
+  ACTIVITY_TEMPLATES,
+  formatInteractionType,
+} from '@/lib/utils/labels';
 
 interface ContactPreviewDrawerProps {
   contactId: string | null;
@@ -19,11 +30,13 @@ interface ContactPreviewDrawerProps {
   onClaimContact?: (contactId: string) => void;
   onRequestContact?: (contactId: string) => void;
   currentUserId?: string;
+  onInteractionAdded?: () => void;
 }
 
 interface InteractionDisplay {
   id: string;
   type: string;
+  outcome?: string;
   note: string | null;
   happened_at: string;
   created_by_name: string;
@@ -41,6 +54,7 @@ export default function ContactPreviewDrawer({
   onClaimContact,
   onRequestContact,
   currentUserId,
+  onInteractionAdded,
 }: ContactPreviewDrawerProps) {
   const router = useRouter();
   const [contact, setContact] = useState<Contact | null>(null);
@@ -48,19 +62,29 @@ export default function ContactPreviewDrawer({
   const [loading, setLoading] = useState(false);
   const isOpen = !!contactId;
 
-  // Fetch contact details + interactions
-  useEffect(() => {
-    if (!contactId) { setContact(null); setInteractions([]); return; }
+  // Interaction form state
+  const [showForm, setShowForm] = useState(false);
+  const [formType, setFormType] = useState('LIGACAO');
+  const [formOutcome, setFormOutcome] = useState('SEM_RESPOSTA');
+  const [formNote, setFormNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
+  // Fetch contact details + interactions
+  const fetchDrawerData = useCallback((cId: string) => {
     setLoading(true);
     Promise.all([
-      fetch(`/api/contacts/${contactId}`).then(r => r.ok ? r.json() : null),
-      fetch(`/api/interactions?contact_id=${contactId}&limit=5`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/contacts/${cId}`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/interactions?contact_id=${cId}&limit=5`).then(r => r.ok ? r.json() : null),
     ]).then(([contactData, intData]) => {
       if (contactData) setContact(contactData);
       if (intData?.interactions) setInteractions(intData.interactions.slice(0, 5));
     }).catch(() => {}).finally(() => setLoading(false));
-  }, [contactId]);
+  }, []);
+
+  useEffect(() => {
+    if (!contactId) { setContact(null); setInteractions([]); setShowForm(false); return; }
+    fetchDrawerData(contactId);
+  }, [contactId, fetchDrawerData]);
 
   // Escape key
   useEffect(() => {
@@ -75,6 +99,35 @@ export default function ContactPreviewDrawer({
   const handleStageClick = useCallback((stage: PipelineStage) => {
     // no-op in preview, show only
   }, []);
+
+  // Submit interaction (quick template or form)
+  async function submitInteraction(type: string, outcome: string, note: string) {
+    if (!contact) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact_id: contact.id, type, outcome, note: note || undefined }),
+      });
+      if (!res.ok) throw new Error();
+      // Refresh interactions list
+      const intRes = await fetch(`/api/interactions?contact_id=${contact.id}&limit=5`);
+      if (intRes.ok) {
+        const intData = await intRes.json();
+        setInteractions((intData.interactions || []).slice(0, 5));
+      }
+      // Reset form
+      setFormNote('');
+      setShowForm(false);
+      // Notify parent to refresh board
+      onInteractionAdded?.();
+    } catch {
+      // silently fail
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   const isUnassigned = contact ? !contact.assigned_to_user_id : false;
   const owner = contact ? userMap[contact.assigned_to_user_id || contact.created_by_user_id] : null;
@@ -212,8 +265,35 @@ export default function ContactPreviewDrawer({
                   {contact.company && (
                     <InfoRow label="Empresa" value={contact.company} />
                   )}
+                  {contact.cpf && (
+                    <InfoRow label="CPF" value={contact.cpf} />
+                  )}
+                  {contact.cnpj && (
+                    <InfoRow label="CNPJ" value={contact.cnpj} />
+                  )}
+                  {contact.origem && (
+                    <InfoRow label="Origem" value={ORIGEM_LABELS[contact.origem] || contact.origem} />
+                  )}
+                  {contact.classe && (
+                    <InfoRow label="Classe" value={CLASSE_LABELS[contact.classe] || contact.classe} />
+                  )}
+                  {contact.referencia && (
+                    <InfoRow label="Referencia" value={contact.referencia} />
+                  )}
                   {contact.cidade && (
                     <InfoRow label="Cidade" value={`${contact.cidade}${contact.estado ? ` - ${contact.estado}` : ''}`} />
+                  )}
+                  {contact.endereco && (
+                    <InfoRow label="Endereco" value={`${contact.endereco}${contact.cep ? ` - ${contact.cep}` : ''}`} />
+                  )}
+                  {contact.website && (
+                    <InfoRow label="Website" value={contact.website} />
+                  )}
+                  {contact.instagram && (
+                    <InfoRow label="Instagram" value={contact.instagram} />
+                  )}
+                  {contact.contato_nome && (
+                    <InfoRow label="Contato" value={`${contact.contato_nome}${contact.cargo ? ` (${contact.cargo})` : ''}`} />
                   )}
                   {owner && (
                     <InfoRow label="Responsavel" value={owner.name} />
@@ -221,7 +301,104 @@ export default function ContactPreviewDrawer({
                   {isUnassigned && (
                     <InfoRow label="Responsavel" value="Sem responsavel" dimmed />
                   )}
+                  <InfoRow
+                    label="Criado em"
+                    value={new Date(contact.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  />
+                  {contact.notes && (
+                    <div className="pt-1 border-t border-purple-800/10">
+                      <span className="text-[10px] text-purple-300/40 font-medium">Notas</span>
+                      <p className="text-[11px] text-neutral-400 mt-0.5 line-clamp-3 whitespace-pre-line">{contact.notes}</p>
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              {/* Register Interaction */}
+              <div>
+                <h3 className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium mb-2">Registrar interacao</h3>
+
+                {/* Quick templates */}
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {ACTIVITY_TEMPLATES.map((tpl) => (
+                    <button
+                      key={tpl.label}
+                      disabled={submitting}
+                      onClick={() => submitInteraction(tpl.type, tpl.outcome, tpl.note)}
+                      className="text-[10px] px-2.5 py-1.5 rounded-lg bg-[#1e0f35]/80 border border-purple-800/15 text-purple-300/70 hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 transition-colors disabled:opacity-40"
+                    >
+                      {tpl.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Expandable form */}
+                <button
+                  onClick={() => setShowForm(f => !f)}
+                  className="text-[10px] font-medium text-purple-300/50 hover:text-purple-300 transition-colors flex items-center gap-1"
+                >
+                  <svg className={`w-3 h-3 transition-transform ${showForm ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  Formulario completo
+                </button>
+
+                {showForm && (
+                  <div className="mt-2 bg-[#1e0f35]/80 rounded-xl p-3 space-y-3 border border-purple-800/15">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-purple-300/40 font-medium mb-1 block">Tipo</label>
+                        <select
+                          value={formType}
+                          onChange={(e) => setFormType(e.target.value)}
+                          className="w-full text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        >
+                          {Object.entries(INTERACTION_TYPE_LABELS).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-purple-300/40 font-medium mb-1 block">Resultado</label>
+                        <select
+                          value={formOutcome}
+                          onChange={(e) => setFormOutcome(e.target.value)}
+                          className="w-full text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50"
+                        >
+                          {Object.entries(INTERACTION_OUTCOME_LABELS).map(([k, v]) => (
+                            <option key={k} value={k}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-purple-300/40 font-medium mb-1 block">Notas</label>
+                      <textarea
+                        value={formNote}
+                        onChange={(e) => setFormNote(e.target.value)}
+                        rows={2}
+                        placeholder="Detalhes da interacao..."
+                        className="w-full text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 resize-none"
+                      />
+                    </div>
+                    <button
+                      onClick={() => submitInteraction(formType, formOutcome, formNote)}
+                      disabled={submitting}
+                      className="w-full text-xs font-bold py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/25 transition-colors disabled:opacity-40 flex items-center justify-center gap-2"
+                    >
+                      {submitting ? (
+                        <div className="w-3.5 h-3.5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                          </svg>
+                          Registrar
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Recent Interactions */}
@@ -234,7 +411,7 @@ export default function ContactPreviewDrawer({
                     {interactions.map((int) => (
                       <div key={int.id} className="bg-[#1e0f35]/80 rounded-lg p-2.5 border border-purple-800/15">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-purple-300/70">{int.type}</span>
+                          <span className="text-[10px] font-bold text-purple-300/70">{formatInteractionType(int.type)}</span>
                           <span className="text-[9px] text-purple-300/30">
                             {new Date(int.happened_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                           </span>
@@ -314,7 +491,7 @@ function InfoRow({ label, value, dimmed }: { label: string; value: string; dimme
   return (
     <div className="flex items-center justify-between">
       <span className="text-[10px] text-purple-300/40 font-medium">{label}</span>
-      <span className={`text-xs ${dimmed ? 'text-purple-300/25 italic' : 'text-neutral-300'}`}>{value}</span>
+      <span className={`text-xs text-right max-w-[60%] ${dimmed ? 'text-purple-300/25 italic' : 'text-neutral-300'}`}>{value}</span>
     </div>
   );
 }
