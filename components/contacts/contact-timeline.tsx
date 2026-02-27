@@ -250,7 +250,7 @@ export default function ContactTimeline({
       const supabase = createSupabaseBrowser();
       const { error: uploadError } = await supabase.storage
         .from('attachments')
-        .upload(filePath, file, { contentType: file.type, upsert: false });
+        .upload(filePath, file, { contentType: file.type || 'application/octet-stream', upsert: false });
 
       if (uploadError) {
         toast.error('Erro ao enviar arquivo: ' + uploadError.message);
@@ -266,7 +266,7 @@ export default function ContactTimeline({
           file_name: file.name,
           file_path: filePath,
           file_size: file.size,
-          mime_type: file.type,
+          mime_type: file.type || 'application/octet-stream',
         }),
       });
       if (r.ok) {

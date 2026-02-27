@@ -46,6 +46,7 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const uploadFile = async (file: File) => {
+    console.log('[UPLOAD] Starting', { name: file.name, type: file.type, size: file.size, threshold: DIRECT_UPLOAD_THRESHOLD, isDirect: file.size >= DIRECT_UPLOAD_THRESHOLD });
     setUploading(true);
     try {
       if (file.size >= DIRECT_UPLOAD_THRESHOLD) {
@@ -60,16 +61,18 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
         const { error: uploadError } = await supabase.storage
           .from('attachments')
           .upload(filePath, file, {
-            contentType: file.type,
+            contentType: file.type || 'application/octet-stream',
             upsert: false,
           });
 
         if (uploadError) {
+          console.error('[UPLOAD] Direct storage error:', uploadError);
           toast.error('Erro ao enviar arquivo: ' + uploadError.message);
           setUploading(false);
           return;
         }
 
+        console.log('[UPLOAD] Direct storage OK, saving metadata...');
         // Save metadata via lightweight JSON POST
         const r = await fetch(`/api/contacts/${contactId}/attachments`, {
           method: 'POST',
@@ -78,20 +81,24 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
             file_name: file.name,
             file_path: filePath,
             file_size: file.size,
-            mime_type: file.type,
+            mime_type: file.type || 'application/octet-stream',
           }),
         });
 
+        console.log('[UPLOAD] Metadata response status:', r.status);
         if (r.ok) {
           const attachment = await r.json();
+          console.log('[UPLOAD] Direct flow success', attachment?.id);
           setAttachments((prev) => [attachment, ...prev]);
           toast.success(`"${file.name}" enviado com sucesso`);
         } else {
           const d = await r.json();
+          console.error('[UPLOAD] Metadata API error:', r.status, d);
           toast.error(d.error || 'Erro ao enviar arquivo');
         }
       } else {
         // Small file: upload via API route (existing flow)
+        console.log('[UPLOAD] FormData flow');
         const formData = new FormData();
         formData.append('file', file);
 
@@ -100,16 +107,20 @@ export default function ContactAttachments({ contactId, attachments, setAttachme
           body: formData,
         });
 
+        console.log('[UPLOAD] FormData response status:', r.status);
         if (r.ok) {
           const attachment = await r.json();
+          console.log('[UPLOAD] FormData flow success', attachment?.id);
           setAttachments((prev) => [attachment, ...prev]);
           toast.success(`"${file.name}" enviado com sucesso`);
         } else {
           const d = await r.json();
+          console.error('[UPLOAD] FormData API error:', r.status, d);
           toast.error(d.error || 'Erro ao enviar arquivo');
         }
       }
-    } catch {
+    } catch (err) {
+      console.error('[UPLOAD] Unhandled error:', err);
       toast.error('Erro ao enviar arquivo');
     }
     setUploading(false);
