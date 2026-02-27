@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
         messages: [
           {
             role: 'system',
-            content: `Voce extrai dados de cartoes de visita. Retorne APENAS um JSON valido com os campos encontrados. Campos possiveis: name, phone, email, company, cargo, cidade, estado. Se nao encontrar um campo, omita-o. Para phone, mantenha no formato (XX) XXXXX-XXXX. Para estado, use a sigla (SP, RJ, MG, etc). Nao inclua explicacoes, apenas o JSON.`,
+            content: `You extract data from business cards in ANY language (Portuguese, English, Spanish, French, German, Italian, Chinese, Japanese, Korean, Arabic, Russian, Hindi, Dutch, Swedish, Norwegian, Danish, Polish, Turkish, Thai, Vietnamese, etc). Return ONLY a valid JSON with the fields found. Possible fields: name, phone, email, company, cargo (job title), cidade (city), estado (state/province/region). If a field is not found, omit it. For phone, keep the original format with country code if present. For cargo, translate to Portuguese if possible. For cidade and estado, keep the original name. Do not include explanations, only the JSON.`,
           },
           {
             role: 'user',
