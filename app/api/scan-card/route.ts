@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
             role: 'user',
             content: [
               { type: 'text', text: 'Extraia os dados deste cartao de visita:' },
-              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'low' } },
+              { type: 'image_url', image_url: { url: `data:${mimeType};base64,${base64}`, detail: 'auto' } },
             ],
           },
         ],
