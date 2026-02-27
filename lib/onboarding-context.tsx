@@ -20,17 +20,24 @@ const STORAGE_KEY = 'controlei_tour_completed';
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [tourActive, setTourActive] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [checked, setChecked] = useState(false);
   const totalSteps = 7;
 
-  // Auto-start tour if never completed
+  // Auto-start tour only on very first visit ever
   useEffect(() => {
-    const completed = localStorage.getItem(STORAGE_KEY);
-    if (!completed) {
-      // Delay to let the UI render first
+    if (checked) return;
+    setChecked(true);
+    try {
+      const completed = localStorage.getItem(STORAGE_KEY);
+      if (completed) return;
+      // Mark as completed immediately so refreshing never shows it again
+      localStorage.setItem(STORAGE_KEY, 'true');
       const timer = setTimeout(() => setTourActive(true), 1500);
       return () => clearTimeout(timer);
+    } catch {
+      // localStorage unavailable — skip tour
     }
-  }, []);
+  }, [checked]);
 
   const startTour = useCallback(() => {
     setCurrentStep(0);
