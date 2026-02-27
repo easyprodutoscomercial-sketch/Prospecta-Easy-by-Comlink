@@ -68,7 +68,8 @@ export default function ContactsPage() {
 
 function ContactsPageContent() {
   const toast = useToast();
-  const { selectedPipelineId, currentPipeline } = usePipeline();
+  const { selectedPipelineId, currentPipeline, pipelines } = usePipeline();
+  const [contactsPipelineFilter, setContactsPipelineFilter] = useState('all');
   const { values: filters, inputValues, setFilter, setFilters, resetAll } = useUrlFilters(CONTACT_FILTER_DEFS);
   const prefs = useContactPreferences();
 
@@ -116,7 +117,7 @@ function ContactsPageContent() {
     fetchUsersAndMe();
   }, []);
 
-  useEffect(() => { loadContacts(); }, [JSON.stringify(filters), selectedPipelineId]);
+  useEffect(() => { loadContacts(); }, [JSON.stringify(filters), contactsPipelineFilter]);
 
   // Refresh ao voltar para a aba/página
   useEffect(() => {
@@ -132,7 +133,7 @@ function ContactsPageContent() {
   // Load all contacts for map view (no pagination)
   useEffect(() => {
     if (isMapView) loadMapContacts();
-  }, [isMapView, JSON.stringify(filters), selectedPipelineId]);
+  }, [isMapView, JSON.stringify(filters), contactsPipelineFilter]);
 
   const buildFilterParams = useCallback(() => {
     const params = new URLSearchParams();
@@ -159,9 +160,9 @@ function ContactsPageContent() {
     if (filters.instagram) params.set('instagram', filters.instagram);
     if (filters.proxima_acao_tipo !== 'all') params.set('proxima_acao_tipo', filters.proxima_acao_tipo);
     if (filters.produtos_fornecidos) params.set('produtos_fornecidos', filters.produtos_fornecidos);
-    if (selectedPipelineId) params.set('pipeline_id', selectedPipelineId);
+    if (contactsPipelineFilter && contactsPipelineFilter !== 'all') params.set('pipeline_id', contactsPipelineFilter);
     return params;
-  }, [filters, selectedPipelineId]);
+  }, [filters, contactsPipelineFilter]);
 
   const loadContacts = async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -352,6 +353,12 @@ function ContactsPageContent() {
             <option value="all">Temperatura</option>
             {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
               <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+          <select value={contactsPipelineFilter} onChange={(e) => setContactsPipelineFilter(e.target.value)} className={selectCls}>
+            <option value="all">Todos Pipelines</option>
+            {pipelines.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
           <select value={filters.origem} onChange={(e) => setFilter('origem', e.target.value)} className={selectCls}>
