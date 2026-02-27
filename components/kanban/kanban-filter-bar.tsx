@@ -151,7 +151,7 @@ export function KanbanFilterBar({ contacts, userMap, onFiltersChange }: KanbanFi
   };
 
   return (
-    <div className="flex items-center gap-2 flex-wrap" data-tour="kanban-filters">
+    <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto flex-nowrap sm:flex-wrap scrollbar-hide" data-tour="kanban-filters">
       {/* Temperatura chips */}
       {(['FRIO', 'MORNO', 'QUENTE'] as const).map(temp => {
         const isActive = chipFilters.temperatura.has(temp);
@@ -170,7 +170,7 @@ export function KanbanFilterBar({ contacts, userMap, onFiltersChange }: KanbanFi
         );
       })}
 
-      <div className="w-px h-5 bg-purple-800/30" />
+      <div className="w-px h-5 bg-purple-800/30 shrink-0" />
 
       {/* Responsavel chips */}
       {Object.entries(responsavelCounts).slice(0, 6).map(([uid, count]) => {
@@ -194,7 +194,7 @@ export function KanbanFilterBar({ contacts, userMap, onFiltersChange }: KanbanFi
 
       {Object.keys(origemCounts).length > 0 && (
         <>
-          <div className="w-px h-5 bg-purple-800/30" />
+          <div className="w-px h-5 bg-purple-800/30 shrink-0" />
           {/* Origem chips — show only non-zero */}
           {Object.entries(origemCounts).slice(0, 5).map(([key, count]) => {
             const isActive = chipFilters.origem.has(key);
@@ -216,7 +216,7 @@ export function KanbanFilterBar({ contacts, userMap, onFiltersChange }: KanbanFi
         </>
       )}
 
-      <div className="w-px h-5 bg-purple-800/30" />
+      <div className="w-px h-5 bg-purple-800/30 shrink-0" />
 
       {/* Mode toggle */}
       {hasActiveFilters && (

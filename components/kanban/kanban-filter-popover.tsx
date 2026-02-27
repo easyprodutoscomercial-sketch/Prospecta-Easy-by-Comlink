@@ -71,7 +71,7 @@ export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activ
   return (
     <div
       ref={popoverRef}
-      className="absolute top-full left-0 mt-2 z-50 w-[480px] max-w-[calc(100vw-2rem)] bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 animate-fade-in"
+      className="absolute top-full right-0 sm:left-0 sm:right-auto mt-2 z-50 w-[480px] max-w-[calc(100vw-2rem)] bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 animate-fade-in"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-purple-800/20">
@@ -121,7 +121,7 @@ export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activ
       {/* Content */}
       <div className="p-4">
         {tab === 'quick' ? (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <select value={filters.tipoFilter} onChange={(e) => onFilterChange('tipoFilter', e.target.value as '' | ContactType)} className={selectClass}>
               <option value="">Tipo</option>
               <option value="FORNECEDOR">Fornecedor</option>
@@ -160,7 +160,7 @@ export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activ
             </select>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <input type="text" placeholder="CPF" value={filters.advSearch.cpf} onChange={(e) => onFilterChange('advSearch', { ...filters.advSearch, cpf: e.target.value })} className={inputClass} />
             <input type="text" placeholder="CNPJ" value={filters.advSearch.cnpj} onChange={(e) => onFilterChange('advSearch', { ...filters.advSearch, cnpj: e.target.value })} className={inputClass} />
             <input type="text" placeholder="Telefone" value={filters.advSearch.telefone} onChange={(e) => onFilterChange('advSearch', { ...filters.advSearch, telefone: e.target.value })} className={inputClass} />

@@ -222,7 +222,7 @@ export default function PipelineDashboard({
   return (
     <div className="space-y-6">
       {/* ── Linha 1: KPI Cards ──────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           label="Contatos Ativos"
           value={kpis.contatosAtivos.toString()}
@@ -263,7 +263,7 @@ export default function PipelineDashboard({
               const pct = stageDistribution.maxCount > 0 ? (count / stageDistribution.maxCount) * 100 : 0;
               return (
                 <div key={stage.id} className="flex items-center gap-3">
-                  <span className="text-xs text-neutral-300 w-28 truncate shrink-0">{stage.name}</span>
+                  <span className="text-xs text-neutral-300 w-20 sm:w-28 truncate shrink-0">{stage.name}</span>
                   <div className="flex-1 h-6 bg-purple-900/20 rounded-md overflow-hidden relative">
                     <div
                       className="h-full rounded-md transition-all duration-700 ease-out"
@@ -287,7 +287,7 @@ export default function PipelineDashboard({
                   const pct = stageDistribution.maxCount > 0 ? (count / stageDistribution.maxCount) * 100 : 0;
                   return (
                     <div key={stage.id} className="flex items-center gap-3">
-                      <span className="text-xs text-neutral-400 w-28 truncate shrink-0">{stage.name}</span>
+                      <span className="text-xs text-neutral-400 w-20 sm:w-28 truncate shrink-0">{stage.name}</span>
                       <div className="flex-1 h-6 bg-purple-900/20 rounded-md overflow-hidden relative">
                         <div
                           className="h-full rounded-md transition-all duration-700 ease-out opacity-70"
@@ -557,7 +557,7 @@ function KpiCard({
       <p className="text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">
         {label}
       </p>
-      <p className={`${small ? 'text-2xl' : 'text-3xl'} font-bold ${colors.text} mt-2`}>
+      <p className={`${small ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'} font-bold ${colors.text} mt-2`}>
         {value}
       </p>
     </div>

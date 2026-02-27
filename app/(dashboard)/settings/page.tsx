@@ -130,7 +130,7 @@ export default function SettingsPage() {
             Sua foto aparecera no pipeline, contatos e sidebar.
           </p>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4">
             {/* Avatar preview */}
             <div className="relative">
               <div className="avatar-orbit">

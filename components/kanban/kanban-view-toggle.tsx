@@ -13,7 +13,7 @@ export default function KanbanViewToggle({ view, onChange }: KanbanViewTogglePro
       {/* Kanban */}
       <button
         onClick={() => onChange('kanban')}
-        className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+        className={`min-w-[40px] min-h-[40px] sm:min-w-0 sm:min-h-0 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center ${
           view === 'kanban' ? 'bg-emerald-500/15 text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
         }`}
         title="Kanban"
@@ -25,7 +25,7 @@ export default function KanbanViewToggle({ view, onChange }: KanbanViewTogglePro
       {/* List */}
       <button
         onClick={() => onChange('list')}
-        className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+        className={`min-w-[40px] min-h-[40px] sm:min-w-0 sm:min-h-0 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center ${
           view === 'list' ? 'bg-emerald-500/15 text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
         }`}
         title="Lista"
@@ -37,7 +37,7 @@ export default function KanbanViewToggle({ view, onChange }: KanbanViewTogglePro
       {/* Compact */}
       <button
         onClick={() => onChange('compact')}
-        className={`px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors ${
+        className={`min-w-[40px] min-h-[40px] sm:min-w-0 sm:min-h-0 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center justify-center ${
           view === 'compact' ? 'bg-emerald-500/15 text-emerald-400' : 'text-neutral-500 hover:text-neutral-300'
         }`}
         title="Compacto"

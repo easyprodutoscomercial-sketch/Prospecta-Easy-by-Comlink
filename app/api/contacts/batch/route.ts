@@ -88,8 +88,12 @@ export async function DELETE(request: NextRequest) {
     const body = await request.json();
     const { ids } = batchDeleteSchema.parse(body);
 
-    // Delete interactions first
+    // Delete all related records first
     await admin.from('interactions').delete().in('contact_id', ids);
+    await admin.from('meetings').delete().in('contact_id', ids);
+    await admin.from('notifications').delete().in('contact_id', ids);
+    await admin.from('access_requests').delete().in('contact_id', ids);
+    await admin.from('contact_attachments').delete().in('contact_id', ids);
 
     // Delete contacts
     const { error } = await admin.from('contacts').delete().in('id', ids);

@@ -354,6 +354,18 @@ export default function KanbanPage() {
     return () => clearInterval(interval);
   }, [fetchData, fetchContacts, selectedPipelineId, refetchPipelines]);
 
+  // Refresh ao voltar para a aba/página (garante dados frescos após ações em outras páginas)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && selectedPipelineId) {
+        fetchContacts(selectedPipelineId);
+        fetchData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [fetchContacts, fetchData, selectedPipelineId]);
+
   // Emoji explosion effect
   function triggerEmojis(type: 'celebrate' | 'sad') {
     playSound(type);
@@ -386,7 +398,7 @@ export default function KanbanPage() {
     }
 
     if (tipoFilter) result = result.filter((c) => c.tipo?.includes(tipoFilter));
-    if (responsavelFilter) result = result.filter((c) => responsavelFilter === '_none' ? !c.assigned_to_user_id : c.assigned_to_user_id === responsavelFilter || c.created_by_user_id === responsavelFilter);
+    if (responsavelFilter) result = result.filter((c) => responsavelFilter === '_none' ? !c.assigned_to_user_id : c.assigned_to_user_id === responsavelFilter);
     if (temperaturaFilter) result = result.filter((c) => c.temperatura === temperaturaFilter);
     if (origemFilter) result = result.filter((c) => c.origem === origemFilter);
     if (classeFilter) result = result.filter((c) => c.classe === classeFilter);
@@ -823,8 +835,8 @@ export default function KanbanPage() {
       )}
 
       {/* === TOP BAR: Compact header === */}
-      <div className="bg-[#120826]/80 backdrop-blur-sm border-b border-purple-500/10 px-4 lg:px-6 py-2.5">
-        <div className="flex items-center gap-2.5 flex-wrap">
+      <div className="bg-[#120826]/80 backdrop-blur-sm border-b border-purple-500/10 px-3 sm:px-4 lg:px-6 py-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
           {/* Title */}
           <div className="flex items-center gap-2 mr-auto">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500/20 to-purple-600/20 border border-emerald-500/20 flex items-center justify-center">
@@ -843,7 +855,7 @@ export default function KanbanPage() {
 
           {/* Pipeline name */}
           {currentPipeline && (
-            <span className="text-[10px] font-semibold text-emerald-400/70 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1">
+            <span className="text-[10px] font-semibold text-emerald-400/70 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1 max-w-[100px] sm:max-w-none truncate">
               {currentPipeline.name}
             </span>
           )}
@@ -858,7 +870,7 @@ export default function KanbanPage() {
               placeholder="Buscar..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-40"
+              className="pl-8 pr-3 py-1.5 text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-24 sm:w-40"
             />
           </div>
 
@@ -1057,7 +1069,7 @@ export default function KanbanPage() {
 
       {/* Kanban Bulk Action Bar */}
       {bulkMode && bulkSelectedIds.size > 0 && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 px-5 py-3 flex items-center gap-3 animate-fade-in">
+        <div className="fixed bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-40 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 px-3 sm:px-5 py-3 flex items-center gap-3 animate-fade-in">
           <span className="text-xs font-bold text-amber-400">{bulkSelectedIds.size} selecionados</span>
           <div className="w-px h-5 bg-purple-800/30" />
           <select
@@ -1090,7 +1102,7 @@ export default function KanbanPage() {
       {/* AI Chat FAB */}
       <button
         onClick={() => setChatOpen(true)}
-        className={`fixed bottom-6 right-6 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-purple-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-105 flex items-center justify-center transition-all duration-200 ${
+        className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-purple-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-105 flex items-center justify-center transition-all duration-200 ${
           chatOpen ? 'scale-0 opacity-0' : 'scale-100 opacity-100'
         }`}
         title="Assistente IA"

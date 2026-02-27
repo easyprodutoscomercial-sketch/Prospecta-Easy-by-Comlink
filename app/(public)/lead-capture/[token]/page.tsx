@@ -1,12 +1,38 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import Script from 'next/script';
 
 interface LinkInfo {
   label: string | null;
   user_name: string;
   pipeline_name: string;
+}
+
+interface GoogleCredentialResponse {
+  credential: string;
+  select_by: string;
+}
+
+interface GoogleJwtPayload {
+  name?: string;
+  email?: string;
+  given_name?: string;
+  family_name?: string;
+  picture?: string;
+}
+
+function decodeJwtPayload(token: string): GoogleJwtPayload {
+  const base64Url = token.split('.')[1];
+  const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+  const jsonPayload = decodeURIComponent(
+    atob(base64)
+      .split('')
+      .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+      .join('')
+  );
+  return JSON.parse(jsonPayload);
 }
 
 export default function LeadCapturePage() {
@@ -25,11 +51,95 @@ export default function LeadCapturePage() {
   const [company, setCompany] = useState('');
   const [cargo, setCargo] = useState('');
   const [notes, setNotes] = useState('');
+  const [socialFilled, setSocialFilled] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const googleButtonRef = useRef<HTMLDivElement>(null);
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const appleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID;
+  const appleRedirectUri = process.env.NEXT_PUBLIC_APPLE_REDIRECT_URI;
+
+  // Google Sign-In callback
+  const handleGoogleResponse = useCallback((response: GoogleCredentialResponse) => {
+    try {
+      const payload = decodeJwtPayload(response.credential);
+      if (payload.name) setName(payload.name);
+      if (payload.email) setEmail(payload.email);
+      setSocialFilled(true);
+      setTimeout(() => phoneInputRef.current?.focus(), 100);
+    } catch {
+      setFieldErrors((prev) => ({ ...prev, form: 'Erro ao processar login Google. Preencha manualmente.' }));
+    }
+  }, []);
+
+  // Initialize Google button when script loads
+  const handleGoogleScriptLoad = useCallback(() => {
+    if (!googleClientId || !googleButtonRef.current) return;
+    const google = (window as unknown as Record<string, unknown>).google as {
+      accounts: {
+        id: {
+          initialize: (config: Record<string, unknown>) => void;
+          renderButton: (el: HTMLElement, config: Record<string, unknown>) => void;
+        };
+      };
+    };
+    if (!google?.accounts?.id) return;
+    google.accounts.id.initialize({
+      client_id: googleClientId,
+      callback: handleGoogleResponse,
+      auto_select: false,
+    });
+    google.accounts.id.renderButton(googleButtonRef.current, {
+      type: 'standard',
+      theme: 'filled_black',
+      size: 'large',
+      text: 'continue_with',
+      shape: 'pill',
+      width: 320,
+      locale: 'pt-BR',
+    });
+  }, [googleClientId, handleGoogleResponse]);
+
+  // Apple Sign-In handler
+  const handleAppleSignIn = async () => {
+    try {
+      const AppleID = (window as unknown as Record<string, unknown>).AppleID as {
+        auth: {
+          init: (config: Record<string, unknown>) => void;
+          signIn: () => Promise<{
+            authorization: { id_token: string };
+            user?: { name?: { firstName?: string; lastName?: string }; email?: string };
+          }>;
+        };
+      };
+      if (!AppleID?.auth) return;
+      AppleID.auth.init({
+        clientId: appleClientId,
+        scope: 'name email',
+        redirectURI: appleRedirectUri,
+        usePopup: true,
+      });
+      const response = await AppleID.auth.signIn();
+      if (response.user) {
+        const firstName = response.user.name?.firstName || '';
+        const lastName = response.user.name?.lastName || '';
+        if (firstName || lastName) setName(`${firstName} ${lastName}`.trim());
+        if (response.user.email) setEmail(response.user.email);
+      } else if (response.authorization?.id_token) {
+        const payload = decodeJwtPayload(response.authorization.id_token);
+        if (payload.email) setEmail(payload.email);
+      }
+      setSocialFilled(true);
+      setTimeout(() => phoneInputRef.current?.focus(), 100);
+    } catch {
+      setFieldErrors((prev) => ({ ...prev, form: 'Erro ao processar login Apple. Preencha manualmente.' }));
+    }
+  };
 
   useEffect(() => {
     const fetchInfo = async () => {
@@ -182,6 +292,22 @@ export default function LeadCapturePage() {
   // Form
   return (
     <div className="min-h-screen bg-[#120826] flex flex-col">
+      {/* Google Identity Services */}
+      {googleClientId && (
+        <Script
+          src="https://accounts.google.com/gsi/client"
+          strategy="afterInteractive"
+          onLoad={handleGoogleScriptLoad}
+        />
+      )}
+      {/* Apple Sign In */}
+      {appleClientId && (
+        <Script
+          src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"
+          strategy="afterInteractive"
+        />
+      )}
+
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-5 text-center">
         <h1 className="text-lg font-bold text-white">
@@ -196,9 +322,55 @@ export default function LeadCapturePage() {
 
       {/* Form */}
       <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
-        <p className="text-sm text-purple-300/60 mb-5 text-center">
-          Preencha seus dados para que possamos entrar em contato.
-        </p>
+        {/* Social Login - Quick Fill */}
+        {(googleClientId || appleClientId) && !socialFilled && (
+          <div className="mb-5">
+            <p className="text-sm text-purple-300/60 mb-3 text-center">
+              Preencha rapido com sua conta
+            </p>
+            <div className="space-y-2.5">
+              {/* Google Button - rendered by Google SDK */}
+              {googleClientId && (
+                <div className="flex justify-center">
+                  <div ref={googleButtonRef} />
+                </div>
+              )}
+
+              {/* Apple Button */}
+              {appleClientId && (
+                <button
+                  type="button"
+                  onClick={handleAppleSignIn}
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-3 bg-white text-black text-sm font-medium rounded-full hover:bg-neutral-100 transition-colors active:scale-[0.98]"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
+                  </svg>
+                  Continuar com Apple
+                </button>
+              )}
+            </div>
+
+            {/* Separator */}
+            <div className="flex items-center gap-3 my-5">
+              <div className="flex-1 h-px bg-purple-700/30" />
+              <span className="text-xs text-purple-300/40">ou preencha manualmente</span>
+              <div className="flex-1 h-px bg-purple-700/30" />
+            </div>
+          </div>
+        )}
+
+        {socialFilled && (
+          <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm border border-emerald-500/20 text-center">
+            Dados preenchidos! Confira e adicione seu telefone.
+          </div>
+        )}
+
+        {!socialFilled && !(googleClientId || appleClientId) && (
+          <p className="text-sm text-purple-300/60 mb-5 text-center">
+            Preencha seus dados para que possamos entrar em contato.
+          </p>
+        )}
 
         {fieldErrors.form && (
           <div className="mb-4 p-3 rounded-lg bg-red-500/15 text-red-400 text-sm border border-red-500/20">
@@ -233,6 +405,7 @@ export default function LeadCapturePage() {
               Telefone / WhatsApp <span className="text-red-400">*</span>
             </label>
             <input
+              ref={phoneInputRef}
               type="tel"
               value={phone}
               onChange={(e) => handlePhoneChange(e.target.value)}

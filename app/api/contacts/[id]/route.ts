@@ -235,6 +235,11 @@ export async function DELETE(
     // Deletar interações
     await admin.from('interactions').delete().eq('contact_id', id);
 
+    // Deletar reuniões, notificações e solicitações de acesso
+    await admin.from('meetings').delete().eq('contact_id', id);
+    await admin.from('notifications').delete().eq('contact_id', id);
+    await admin.from('access_requests').delete().eq('contact_id', id);
+
     // Deletar contato
     const { error } = await admin.from('contacts').delete().eq('id', id);
 

@@ -24,27 +24,27 @@ export function KanbanKpiBar({ kpis, funnelStages, grouped, expanded, onToggle }
   if (!expanded) {
     // === COMPACT MODE: single line ===
     return (
-      <div className="flex items-center gap-3 px-4 lg:px-6 py-2 border-b border-purple-500/10 bg-[#120826]/40">
-        <div className="flex items-center gap-4 flex-1 min-w-0">
-          <span className="text-xs font-bold text-emerald-400">
+      <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 lg:px-6 py-2 border-b border-purple-500/10 bg-[#120826]/40 overflow-x-auto">
+        <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+          <span className="text-xs font-bold text-emerald-400 shrink-0">
             {kpis.totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}
           </span>
-          <span className="w-px h-4 bg-purple-800/30" />
-          <span className="text-xs text-neutral-300">
+          <span className="w-px h-4 bg-purple-800/30 shrink-0" />
+          <span className="text-xs text-neutral-300 shrink-0">
             <span className="font-bold">{kpis.activeCount}</span>
-            <span className="text-purple-300/40 ml-1">ativos</span>
+            <span className="text-purple-300/40 ml-1 hidden sm:inline">ativos</span>
           </span>
-          <span className="w-px h-4 bg-purple-800/30" />
-          <span className="text-xs text-neutral-300">
+          <span className="w-px h-4 bg-purple-800/30 shrink-0" />
+          <span className="text-xs text-neutral-300 shrink-0">
             <span className="font-bold">{kpis.conversionRate}%</span>
-            <span className="text-purple-300/40 ml-1">conv</span>
+            <span className="text-purple-300/40 ml-1 hidden sm:inline">conv</span>
           </span>
           {kpis.noOwner > 0 && (
             <>
-              <span className="w-px h-4 bg-purple-800/30" />
-              <span className="text-xs text-amber-400 font-bold">
+              <span className="w-px h-4 bg-purple-800/30 shrink-0" />
+              <span className="text-xs text-amber-400 font-bold shrink-0">
                 {kpis.noOwner}
-                <span className="text-amber-400/50 ml-1 font-normal">sem resp</span>
+                <span className="text-amber-400/50 ml-1 font-normal hidden sm:inline">sem resp</span>
               </span>
             </>
           )}
@@ -77,7 +77,7 @@ export function KanbanKpiBar({ kpis, funnelStages, grouped, expanded, onToggle }
           Compactar
         </button>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-[#1e0f35]/80 rounded-xl px-4 py-3 border border-purple-800/20">
           <p className="text-[10px] text-purple-300/40 uppercase tracking-wider font-medium">Valor no Pipeline</p>
           <p className="text-lg font-bold text-emerald-400 mt-0.5">

@@ -4,6 +4,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Scrollbar hide utility for mobile horizontal scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 /* Dark theme range slider (density control) */
 input[type="range"].density-slider {
   -webkit-appearance: none;

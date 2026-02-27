@@ -118,6 +118,17 @@ function ContactsPageContent() {
 
   useEffect(() => { loadContacts(); }, [JSON.stringify(filters), selectedPipelineId]);
 
+  // Refresh ao voltar para a aba/página
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadContacts();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   // Load all contacts for map view (no pagination)
   useEffect(() => {
     if (isMapView) loadMapContacts();
@@ -275,7 +286,7 @@ function ContactsPageContent() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <div>
             <h1 className="text-lg sm:text-xl font-bold text-emerald-400">Contatos</h1>
             <p className="text-xs sm:text-sm text-purple-300/60">{total} contato{total !== 1 ? 's' : ''}</p>
@@ -313,8 +324,8 @@ function ContactsPageContent() {
 
       {/* Filters */}
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-3 sm:p-4">
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3">
-          <div className="relative col-span-2 lg:col-span-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+          <div className="relative col-span-1 sm:col-span-2 lg:col-span-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
             <input type="text" placeholder="Buscar..." value={inputValues.search} onChange={(e) => setFilter('search', e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           </div>
@@ -369,7 +380,7 @@ function ContactsPageContent() {
           {showAdvanced ? 'Ocultar filtros avancados' : 'Mostrar filtros avancados'}
         </button>
         {showAdvanced && (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 sm:gap-3 mt-3 pt-3 border-t border-purple-800/20">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mt-3 pt-3 border-t border-purple-800/20">
             <input type="text" placeholder="CPF..." value={inputValues.cpf} onChange={(e) => setFilter('cpf', e.target.value)} className={selectCls} />
             <input type="text" placeholder="CNPJ..." value={inputValues.cnpj} onChange={(e) => setFilter('cnpj', e.target.value)} className={selectCls} />
             <input type="text" placeholder="WhatsApp..." value={inputValues.whatsapp} onChange={(e) => setFilter('whatsapp', e.target.value)} className={selectCls} />

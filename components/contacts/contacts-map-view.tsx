@@ -90,7 +90,7 @@ export default function ContactsMapView({ contacts, onEnrichComplete }: Contacts
 
   return (
     <div className="relative">
-      <div className="h-[500px] sm:h-[600px] rounded-xl overflow-hidden border border-purple-800/30">
+      <div className="h-[400px] sm:h-[500px] lg:h-[600px] rounded-xl overflow-hidden border border-purple-800/30">
         <MapInner contacts={mapped} />
       </div>
       {unmappedCount > 0 && (

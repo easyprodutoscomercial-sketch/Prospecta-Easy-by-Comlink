@@ -22,7 +22,7 @@ export default function ContactsToolbar({
   isMapView,
 }: ContactsToolbarProps) {
   return (
-    <div className="flex items-center justify-between gap-3 flex-wrap bg-[#1e0f35] rounded-xl border border-purple-800/30 px-3 py-2.5">
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-[#1e0f35] rounded-xl border border-purple-800/30 px-3 py-2.5">
       {/* Left: View toggle */}
       <div className="flex items-center bg-[#160b2e] rounded-lg p-0.5 shrink-0">
         <button
