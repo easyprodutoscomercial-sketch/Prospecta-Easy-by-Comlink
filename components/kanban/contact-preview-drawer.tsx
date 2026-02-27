@@ -131,6 +131,8 @@ export default function ContactPreviewDrawer({
 
   const isUnassigned = contact ? !contact.assigned_to_user_id : false;
   const owner = contact ? userMap[contact.assigned_to_user_id || contact.created_by_user_id] : null;
+  const currentStage = contact ? stages.find(s => s.id === contact.stage_id) : null;
+  const canScheduleMeeting = currentStage?.allow_meeting === true;
 
   return (
     <>
@@ -295,16 +297,32 @@ export default function ContactPreviewDrawer({
                   {contact.contato_nome && (
                     <InfoRow label="Contato" value={`${contact.contato_nome}${contact.cargo ? ` (${contact.cargo})` : ''}`} />
                   )}
+                  {contact.produtos_fornecidos && (
+                    <InfoRow label="Produtos" value={contact.produtos_fornecidos} />
+                  )}
+                  {contact.telefones_adicionais && contact.telefones_adicionais.length > 0 && (
+                    <div className="pt-1 border-t border-purple-800/10">
+                      <span className="text-[10px] text-purple-300/40 font-medium">Telefones adicionais</span>
+                      {contact.telefones_adicionais.map((tel, i) => (
+                        <div key={i} className="flex items-center justify-between mt-1">
+                          <span className="text-[10px] text-purple-300/40">{tel.nome_contato || `Contato ${i + 2}`}{tel.setor ? ` (${tel.setor})` : ''}</span>
+                          <span className="text-xs text-neutral-300">{tel.phone}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {owner && (
                     <InfoRow label="Responsavel" value={owner.name} />
                   )}
                   {isUnassigned && (
                     <InfoRow label="Responsavel" value="Sem responsavel" dimmed />
                   )}
-                  <InfoRow
-                    label="Criado em"
-                    value={new Date(contact.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
-                  />
+                  {contact.created_at && (
+                    <InfoRow
+                      label="Criado em"
+                      value={new Date(contact.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    />
+                  )}
                   {contact.notes && (
                     <div className="pt-1 border-t border-purple-800/10">
                       <span className="text-[10px] text-purple-300/40 font-medium">Notas</span>
@@ -411,7 +429,14 @@ export default function ContactPreviewDrawer({
                     {interactions.map((int) => (
                       <div key={int.id} className="bg-[#1e0f35]/80 rounded-lg p-2.5 border border-purple-800/15">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-purple-300/70">{formatInteractionType(int.type)}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-purple-300/70">{formatInteractionType(int.type)}</span>
+                            {int.outcome && (
+                              <span className="text-[9px] text-purple-300/40">
+                                {INTERACTION_OUTCOME_LABELS[int.outcome as keyof typeof INTERACTION_OUTCOME_LABELS] || int.outcome}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[9px] text-purple-300/30">
                             {new Date(int.happened_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                           </span>
@@ -451,7 +476,7 @@ export default function ContactPreviewDrawer({
                   </svg>
                 </button>
               )}
-              {onScheduleMeeting && (
+              {onScheduleMeeting && canScheduleMeeting && (
                 <button
                   onClick={() => { onScheduleMeeting(contact.id, contact.name); onClose(); }}
                   className="flex items-center gap-1 text-[10px] font-bold text-cyan-400/60 hover:text-cyan-400 hover:bg-cyan-500/10 px-3 py-1.5 rounded-lg transition-colors"
