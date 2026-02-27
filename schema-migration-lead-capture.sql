@@ -57,3 +57,6 @@ ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_origem_check;
 -- Recriar com QRCODE incluido
 ALTER TABLE contacts ADD CONSTRAINT contacts_origem_check
   CHECK (origem IS NULL OR origem IN ('MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO', 'QRCODE'));
+
+-- 3. Adicionar campo whatsapp_vendedor para botao WhatsApp pos-cadastro
+ALTER TABLE lead_capture_links ADD COLUMN IF NOT EXISTS whatsapp_vendedor TEXT;

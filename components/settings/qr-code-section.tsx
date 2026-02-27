@@ -24,6 +24,7 @@ export default function QrCodeSection() {
   const [links, setLinks] = useState<LeadCaptureLink[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState('');
   const [label, setLabel] = useState('');
+  const [whatsappVendedor, setWhatsappVendedor] = useState('');
   const [generating, setGenerating] = useState(false);
   const [generatedLink, setGeneratedLink] = useState<LeadCaptureLink | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
@@ -93,6 +94,7 @@ export default function QrCodeSection() {
         body: JSON.stringify({
           pipeline_id: selectedPipeline,
           label: label.trim() || undefined,
+          whatsapp_vendedor: whatsappVendedor.trim() || undefined,
         }),
       });
 
@@ -103,6 +105,7 @@ export default function QrCodeSection() {
         const dataUrl = await generateQrDataUrl(data.token);
         setQrDataUrl(dataUrl);
         setLabel('');
+        setWhatsappVendedor('');
         fetchLinks();
         setActionResult({ type: 'success', message: 'QR Code gerado com sucesso!' });
       } else {
@@ -208,6 +211,19 @@ export default function QrCodeSection() {
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Ex: Agrishow 2026"
+            className="w-full px-3 py-2 text-sm bg-[#2a1245] border border-purple-700/30 text-neutral-100 placeholder:text-purple-300/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-purple-300/80 mb-1">
+            Seu WhatsApp <span className="text-purple-300/40">(opcional - exibido apos cadastro do lead)</span>
+          </label>
+          <input
+            type="tel"
+            value={whatsappVendedor}
+            onChange={(e) => setWhatsappVendedor(e.target.value)}
+            placeholder="(00) 00000-0000"
             className="w-full px-3 py-2 text-sm bg-[#2a1245] border border-purple-700/30 text-neutral-100 placeholder:text-purple-300/40 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
           />
         </div>

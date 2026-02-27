@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     const admin = getAdminClient();
     const body = await request.json();
 
-    const { pipeline_id, label } = body;
+    const { pipeline_id, label, whatsapp_vendedor } = body;
 
     if (!pipeline_id) {
       return NextResponse.json({ error: 'pipeline_id e obrigatorio' }, { status: 400 });
@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         pipeline_id,
         token,
         label: label || null,
+        whatsapp_vendedor: whatsapp_vendedor?.trim() || null,
       })
       .select()
       .single();
