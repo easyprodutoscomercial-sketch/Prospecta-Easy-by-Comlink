@@ -47,7 +47,7 @@ export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUs
   return (
     <>
       <div
-        className="flex gap-2.5 overflow-x-auto pb-4 min-h-0 h-full"
+        className="flex gap-2 sm:gap-2.5 overflow-x-auto pb-4 min-h-0 h-full snap-x snap-mandatory sm:snap-none"
         style={colCount <= 8 && gridTemplateColumns ? { display: 'grid', gridTemplateColumns } : undefined}
       >
         {stages.map((stage) => (

@@ -22,6 +22,7 @@ interface ContactCardProps {
   onHide: (id: string) => void;
   onClaim: (id: string) => void;
   onToggleInexistente?: (id: string) => void;
+  onDelete?: (id: string) => void;
   owner: UserInfo | undefined;
   ownerColor: { bg: string; text: string } | null;
   currentUserId: string;
@@ -36,6 +37,7 @@ export default function ContactCard({
   onHide,
   onClaim,
   onToggleInexistente,
+  onDelete,
   owner,
   ownerColor,
   currentUserId,
@@ -92,13 +94,25 @@ export default function ContactCard({
           {/* Hide button - always visible in compact */}
           <button
             onClick={(e) => { e.stopPropagation(); onHide(contact.id); }}
-            className="shrink-0 p-1 text-neutral-600 hover:text-red-400 transition-colors"
-            title="Ocultar contato"
+            className="shrink-0 p-1 text-neutral-600 hover:text-amber-400 transition-colors"
+            title="Ocultar contato (só para você)"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
             </svg>
           </button>
+          {/* Delete button - admin only */}
+          {onDelete && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(contact.id); }}
+              className="shrink-0 p-1 text-neutral-600 hover:text-red-500 transition-colors"
+              title="Deletar contato permanentemente"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -176,13 +190,25 @@ export default function ContactCard({
                 {/* Hide button - visible on hover */}
                 <button
                   onClick={(e) => { e.stopPropagation(); onHide(contact.id); }}
-                  className="p-1 text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all"
-                  title="Ocultar contato"
+                  className="p-1 text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-amber-400 transition-all"
+                  title="Ocultar contato (só para você)"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
                   </svg>
                 </button>
+                {/* Delete button - admin only */}
+                {onDelete && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(contact.id); }}
+                    className="p-1 text-neutral-600 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-all"
+                    title="Deletar contato permanentemente"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
               </div>
 
               {isUnassigned ? (

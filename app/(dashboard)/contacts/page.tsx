@@ -91,6 +91,8 @@ function ContactsPageContent() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [singleDeleteId, setSingleDeleteId] = useState<string | null>(null);
+  const [singleDeleteLoading, setSingleDeleteLoading] = useState(false);
 
   const isMapView = prefs.activeView === 'map';
   const isImportView = prefs.activeView === 'import';
@@ -241,6 +243,15 @@ function ContactsPageContent() {
     if (res.ok) { toast.success(`${selectedIds.size} contatos deletados`); clearSelection(); setShowBulkDeleteModal(false); loadContacts(); }
     else toast.error('Erro ao deletar contatos em massa');
     setBulkLoading(false);
+  };
+
+  const handleSingleDelete = async () => {
+    if (!singleDeleteId) return;
+    setSingleDeleteLoading(true);
+    const res = await fetch(`/api/contacts/${singleDeleteId}`, { method: 'DELETE' });
+    if (res.ok) { toast.success('Contato deletado permanentemente'); setSingleDeleteId(null); loadContacts(); }
+    else toast.error('Erro ao deletar contato');
+    setSingleDeleteLoading(false);
   };
 
   const handleClaimContact = useCallback(async (contactId: string) => {
@@ -482,6 +493,7 @@ function ContactsPageContent() {
                   onHide={prefs.hideContact}
                   onClaim={handleClaimContact}
                   onToggleInexistente={handleToggleInexistente}
+                  onDelete={currentUserRole === 'admin' ? (id) => setSingleDeleteId(id) : undefined}
                   owner={owner}
                   ownerColor={ownerColor}
                   currentUserId={currentUserId}
@@ -498,6 +510,8 @@ function ContactsPageContent() {
       <BulkActionBar selectedCount={selectedIds.size} onChangeStatus={handleBulkStatusChange} onDelete={currentUserRole === 'admin' ? () => setShowBulkDeleteModal(true) : undefined} onMarkInexistente={handleBulkInexistente} onExport={handleExport} onCancel={clearSelection} />
       <ConfirmModal isOpen={showBulkDeleteModal} onClose={() => setShowBulkDeleteModal(false)} onConfirm={handleBulkDelete}
         title="Deletar contatos" message={`Tem certeza que deseja deletar ${selectedIds.size} contato${selectedIds.size > 1 ? 's' : ''}?`} variant="danger" confirmLabel="Deletar" loading={bulkLoading} />
+      <ConfirmModal isOpen={!!singleDeleteId} onClose={() => setSingleDeleteId(null)} onConfirm={handleSingleDelete}
+        title="Deletar contato" message={`Deletar "${contacts.find(c => c.id === singleDeleteId)?.name || ''}"? Esta acao e irreversivel e remove de todos os usuarios.`} variant="danger" confirmLabel="Deletar" loading={singleDeleteLoading} />
     </div>
   );
 }

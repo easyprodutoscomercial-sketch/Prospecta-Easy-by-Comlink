@@ -71,7 +71,7 @@ export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activ
   return (
     <div
       ref={popoverRef}
-      className="absolute top-full right-0 sm:left-0 sm:right-auto mt-2 z-50 w-[480px] max-w-[calc(100vw-2rem)] bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 animate-fade-in"
+      className="fixed inset-x-3 top-auto bottom-0 sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-full sm:left-0 sm:right-auto sm:mt-2 z-50 sm:w-[480px] sm:max-w-[calc(100vw-2rem)] bg-[#1e0f35] border border-purple-800/30 rounded-t-xl sm:rounded-xl shadow-2xl shadow-purple-900/40 animate-fade-in max-h-[80vh] sm:max-h-none overflow-y-auto"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-purple-800/20">

@@ -175,7 +175,7 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
   // === EXPANDED VIEW ===
   return (
     <div
-      className={`flex-shrink-0 w-60 md:w-64 xl:w-auto xl:flex-shrink xl:min-w-0 bg-[#160b2e] rounded-xl flex flex-col transition-all duration-200 overflow-hidden ${
+      className={`flex-shrink-0 w-[72vw] sm:w-60 md:w-64 xl:w-auto xl:flex-shrink xl:min-w-0 bg-[#160b2e] rounded-xl flex flex-col transition-all duration-200 overflow-hidden snap-center sm:snap-start ${
         isOver
           ? 'border border-emerald-500/30 bg-[#1e0f35] shadow-lg shadow-emerald-900/20'
           : 'border border-purple-800/15'
