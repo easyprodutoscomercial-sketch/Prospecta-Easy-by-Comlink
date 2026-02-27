@@ -76,7 +76,7 @@ export default function ContactPreviewDrawer({
       fetch(`/api/contacts/${cId}`).then(r => r.ok ? r.json() : null),
       fetch(`/api/interactions?contact_id=${cId}&limit=5`).then(r => r.ok ? r.json() : null),
     ]).then(([contactData, intData]) => {
-      if (contactData) setContact(contactData);
+      if (contactData?.contact) setContact(contactData.contact);
       if (intData?.interactions) setInteractions(intData.interactions.slice(0, 5));
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
