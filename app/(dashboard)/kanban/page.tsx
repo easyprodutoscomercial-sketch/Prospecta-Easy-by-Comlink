@@ -1043,6 +1043,7 @@ export default function KanbanPage() {
         onClaimContact={handleClaimContact}
         onRequestContact={handleRequestContact}
         currentUserId={currentUserId}
+        onInteractionAdded={() => { if (selectedPipelineId) fetchContacts(selectedPipelineId); }}
       />
 
       {/* Motivo modal */}
