@@ -46,6 +46,8 @@ export type InteractionOutcome =
 export interface TelefoneAdicional {
   phone: string;
   nome_contato: string;
+  empresa: string;
+  setor: string;
   correto: boolean;
 }
 
