@@ -248,8 +248,8 @@ export default function PipelineDashboard({
 
       {/* ── Linha 2: Distribuicao por Etapa ─────────────────────── */}
       {stages.length > 0 && (
-        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-4 sm:p-5">
+          <h3 className="text-sm font-semibold text-white mb-3 sm:mb-4 flex items-center gap-2">
             <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
             </svg>
@@ -319,24 +319,24 @@ export default function PipelineDashboard({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Interacoes do Mes */}
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-purple-800/20 flex items-center justify-between">
+          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Interacoes do Mes</h3>
             <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
               {monthInteractions.total}
             </span>
           </div>
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             {monthInteractions.data.length > 0 ? (
-              <div className="h-56">
+              <div className="h-48 sm:h-56">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart
                     data={monthInteractions.data}
                     layout="vertical"
-                    margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
+                    margin={{ top: 0, right: 20, left: 0, bottom: 0 }}
                   >
                     <XAxis
                       type="number"
-                      tick={{ fontSize: 11, fill: '#c4b5fd' }}
+                      tick={{ fontSize: 10, fill: '#c4b5fd' }}
                       axisLine={false}
                       tickLine={false}
                       allowDecimals={false}
@@ -344,10 +344,10 @@ export default function PipelineDashboard({
                     <YAxis
                       type="category"
                       dataKey="name"
-                      tick={{ fontSize: 11, fill: '#c4b5fd' }}
+                      tick={{ fontSize: 10, fill: '#c4b5fd' }}
                       axisLine={false}
                       tickLine={false}
-                      width={110}
+                      width={85}
                     />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
@@ -372,22 +372,22 @@ export default function PipelineDashboard({
 
         {/* Reunioes + Equipe */}
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-purple-800/20">
+          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20">
             <h3 className="text-sm font-semibold text-white">Reunioes & Equipe</h3>
           </div>
-          <div className="p-5">
+          <div className="p-4 sm:p-5">
             {/* Meeting numbers */}
-            <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-5">
               <div className="text-center">
-                <p className="text-2xl font-bold text-blue-400">{meetingStats.agendadas}</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-400">{meetingStats.agendadas}</p>
                 <p className="text-[10px] text-neutral-500 mt-0.5">Agendadas</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-emerald-400">{meetingStats.realizadas}</p>
+                <p className="text-xl sm:text-2xl font-bold text-emerald-400">{meetingStats.realizadas}</p>
                 <p className="text-[10px] text-neutral-500 mt-0.5">Realizadas</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-red-400">{meetingStats.canceladas}</p>
+                <p className="text-xl sm:text-2xl font-bold text-red-400">{meetingStats.canceladas}</p>
                 <p className="text-[10px] text-neutral-500 mt-0.5">Canceladas</p>
               </div>
             </div>
@@ -403,9 +403,9 @@ export default function PipelineDashboard({
                     <thead>
                       <tr className="text-purple-300/50 border-b border-purple-800/20">
                         <th className="text-left py-1.5 font-medium">Membro</th>
-                        <th className="text-center py-1.5 font-medium">Contatos</th>
-                        <th className="text-center py-1.5 font-medium">Interacoes</th>
-                        <th className="text-center py-1.5 font-medium">Reunioes</th>
+                        <th className="text-center py-1.5 font-medium"><span className="hidden sm:inline">Contatos</span><span className="sm:hidden">Cont.</span></th>
+                        <th className="text-center py-1.5 font-medium"><span className="hidden sm:inline">Interacoes</span><span className="sm:hidden">Inter.</span></th>
+                        <th className="text-center py-1.5 font-medium"><span className="hidden sm:inline">Reunioes</span><span className="sm:hidden">Reun.</span></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -433,7 +433,7 @@ export default function PipelineDashboard({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent contacts */}
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-purple-800/20 flex items-center justify-between">
+          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Contatos Recentes</h3>
             <Link href="/contacts" className="text-xs text-purple-300/50 hover:text-emerald-400 transition-colors">
               Ver todos
@@ -447,18 +447,18 @@ export default function PipelineDashboard({
                   <Link
                     key={contact.id}
                     href={`/contacts/${contact.id}`}
-                    className="px-5 py-3 hover:bg-purple-800/15 flex items-center justify-between transition-colors"
+                    className="px-4 py-2.5 sm:px-5 sm:py-3 hover:bg-purple-800/15 flex items-center justify-between transition-colors"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-neutral-100 truncate">{contact.name}</p>
-                      <p className="text-[11px] text-purple-300/50 mt-0.5 truncate">
+                      <p className="text-[13px] sm:text-sm font-medium text-neutral-100 truncate">{contact.name}</p>
+                      <p className="text-[10px] sm:text-[11px] text-purple-300/50 mt-0.5 truncate">
                         {contact.company || contact.email || contact.phone || '-'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-3">
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-2 sm:ml-3">
                       {stage && (
                         <span
-                          className="px-2 py-0.5 text-[10px] font-semibold rounded-full"
+                          className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded-full hidden sm:inline"
                           style={{
                             backgroundColor: `${stage.color}20`,
                             color: stage.color,
@@ -467,7 +467,13 @@ export default function PipelineDashboard({
                           {stage.name}
                         </span>
                       )}
-                      <span className="text-[10px] text-purple-300/40">
+                      {stage && (
+                        <span
+                          className="w-2 h-2 rounded-full sm:hidden shrink-0"
+                          style={{ backgroundColor: stage.color }}
+                        />
+                      )}
+                      <span className="text-[9px] sm:text-[10px] text-purple-300/40">
                         {new Date(contact.created_at).toLocaleDateString('pt-BR')}
                       </span>
                     </div>
@@ -484,7 +490,7 @@ export default function PipelineDashboard({
 
         {/* Upcoming meetings */}
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-purple-800/20 flex items-center justify-between">
+          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-white">Proximas Reunioes</h3>
             <span className="text-xs text-purple-300/50">{upcomingMeetings.length} agendadas</span>
           </div>
@@ -495,9 +501,9 @@ export default function PipelineDashboard({
                 const meetingDate = new Date(meeting.meeting_at);
                 const isToday = meetingDate.toDateString() === new Date().toDateString();
                 return (
-                  <div key={meeting.id} className="px-5 py-3 hover:bg-purple-800/15 transition-colors">
+                  <div key={meeting.id} className="px-4 py-2.5 sm:px-5 sm:py-3 hover:bg-purple-800/15 transition-colors">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-neutral-100 truncate flex-1">{meeting.title}</p>
+                      <p className="text-[13px] sm:text-sm font-medium text-neutral-100 truncate flex-1">{meeting.title}</p>
                       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ml-2 ${
                         isToday ? 'text-amber-400 bg-amber-500/15' : 'text-purple-300/50'
                       }`}>
@@ -553,8 +559,8 @@ function KpiCard({
   const colors = colorMap[accentColor];
 
   return (
-    <div className={`bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 border-l-4 ${colors.border}`}>
-      <p className="text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">
+    <div className={`bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3 sm:p-5 border-l-4 ${colors.border}`}>
+      <p className="text-[9px] sm:text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">
         {label}
       </p>
       <p className={`${small ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'} font-bold ${colors.text} mt-2`}>

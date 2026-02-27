@@ -112,25 +112,25 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] lg:h-screen -mx-4 -my-6 sm:-mx-6 sm:-my-8 lg:-mx-10 lg:-my-10">
+    <div className="fixed inset-0 top-14 lg:top-0 lg:left-64 flex flex-col bg-[#120826] z-30">
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-purple-500/15 bg-[#120826]/80 backdrop-blur-sm">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-purple-600 flex items-center justify-center">
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-500/15 bg-[#120826]/95 backdrop-blur-sm shrink-0">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-purple-600 flex items-center justify-center shrink-0">
+          <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
         </div>
-        <div>
-          <h1 className="text-base font-semibold text-white">Assistente IA</h1>
-          <p className="text-xs text-purple-300/50">Notifica responsaveis · Pesquisa na internet · Analisa pipeline</p>
+        <div className="min-w-0">
+          <h1 className="text-sm sm:text-base font-semibold text-white">Assistente IA</h1>
+          <p className="text-[10px] sm:text-xs text-purple-300/50 truncate">Notifica responsaveis · Pesquisa · Pipeline</p>
         </div>
       </div>
 
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+      <div className="flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4 space-y-3 sm:space-y-4 min-h-0">
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] sm:max-w-[75%] ${msg.role === 'user' ? '' : 'flex flex-col gap-2'}`}>
+            <div className={`max-w-[90%] sm:max-w-[75%] ${msg.role === 'user' ? '' : 'flex flex-col gap-1.5'}`}>
               {/* Action badges - before assistant message */}
               {msg.role === 'assistant' && msg.actions && (msg.actions.notificationsSent > 0 || msg.actions.searchesPerformed > 0) && (
                 <div className="flex flex-wrap gap-1.5 mb-1">
@@ -147,14 +147,14 @@ export default function ChatPage() {
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
-                      Pesquisa web realizada
+                      Pesquisa web
                     </span>
                   )}
                 </div>
               )}
 
               <div
-                className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                className={`px-3 py-2.5 sm:px-4 sm:py-3 rounded-2xl text-[13px] sm:text-sm leading-relaxed whitespace-pre-wrap ${
                   msg.role === 'user'
                     ? 'bg-emerald-600/90 text-white rounded-br-md'
                     : 'bg-purple-900/50 text-purple-100 border border-purple-500/20 rounded-bl-md'
@@ -188,13 +188,13 @@ export default function ChatPage() {
 
       {/* Suggestion chips (only when no user messages yet) */}
       {messages.length <= 1 && !loading && (
-        <div className="px-4 pb-2">
-          <div className="flex flex-wrap gap-2 max-w-4xl mx-auto">
+        <div className="px-3 pb-2 sm:px-4 shrink-0">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2 max-w-4xl mx-auto">
             {[
-              'Quais contatos estao parados?',
-              'Notifique os responsaveis dos contatos parados',
-              'Quais contatos nao tem responsavel?',
-              'O que devo priorizar hoje?',
+              'Contatos parados?',
+              'Notificar responsaveis',
+              'Sem responsavel?',
+              'Priorizar hoje?',
             ].map((suggestion) => (
               <button
                 key={suggestion}
@@ -202,7 +202,7 @@ export default function ChatPage() {
                   setInput('');
                   sendMessage(suggestion, messages);
                 }}
-                className="text-xs px-3 py-1.5 rounded-full border border-purple-500/20 text-purple-300/60 hover:text-emerald-400 hover:border-emerald-500/30 transition-colors"
+                className="text-[11px] sm:text-xs px-2.5 py-1.5 rounded-full border border-purple-500/20 text-purple-300/60 hover:text-emerald-400 hover:border-emerald-500/30 transition-colors"
               >
                 {suggestion}
               </button>
@@ -211,29 +211,29 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* Input area */}
-      <div className="border-t border-purple-500/15 bg-[#120826]/80 backdrop-blur-sm px-4 py-3">
+      {/* Input area - safe area bottom for iOS */}
+      <div className="border-t border-purple-500/15 bg-[#120826]/95 backdrop-blur-sm px-3 py-2.5 sm:px-4 sm:py-3 pb-[calc(0.625rem+env(safe-area-inset-bottom,0px))] sm:pb-3 shrink-0">
         <div className="flex items-end gap-2 max-w-4xl mx-auto">
           <textarea
             ref={textareaRef}
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ex: notifique os responsaveis, pesquise sobre o setor X, o que fazer hoje..."
+            placeholder="Pergunte sobre o pipeline..."
             rows={1}
-            className="flex-1 bg-purple-900/30 border border-purple-500/20 rounded-xl px-4 py-2.5 text-sm text-white placeholder-purple-300/40 resize-none focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-colors"
+            className="flex-1 bg-purple-900/30 border border-purple-500/20 rounded-xl px-3 py-2 sm:px-4 sm:py-2.5 text-[13px] sm:text-sm text-white placeholder-purple-300/40 resize-none focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/30 transition-colors"
           />
           <button
             onClick={handleSend}
             disabled={!input.trim() || loading}
-            className="shrink-0 w-10 h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-purple-800/50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+            className="shrink-0 w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-purple-800/50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
           >
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           </button>
         </div>
-        <p className="text-[10px] text-purple-400/30 text-center mt-2">
+        <p className="text-[9px] sm:text-[10px] text-purple-400/30 text-center mt-1.5 hidden sm:block">
           Enter para enviar · Shift+Enter para nova linha
         </p>
       </div>
