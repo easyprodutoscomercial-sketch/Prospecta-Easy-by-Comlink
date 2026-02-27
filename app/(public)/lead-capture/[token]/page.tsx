@@ -45,9 +45,6 @@ export default function LeadCapturePage() {
   const [error, setError] = useState<string | null>(null);
   const [inactive, setInactive] = useState(false);
 
-  // Multi-step state
-  const [step, setStep] = useState<1 | 2>(1);
-
   // Form state
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -168,6 +165,8 @@ export default function LeadCapturePage() {
         if (data.email) setEmail(data.email);
         if (data.company) setCompany(data.company);
         if (data.cargo) setCargo(data.cargo);
+        if (data.cidade) setCidade(data.cidade);
+        if (data.estado) setEstado(data.estado);
         if (data.name || data.phone) setPrefilled(true);
       }
     } catch { /* ignore parse errors */ }
@@ -239,19 +238,12 @@ export default function LeadCapturePage() {
     if (!name.trim() || name.trim().length < 2) errors.name = 'Nome e obrigatorio';
     const phoneDigits = phone.replace(/\D/g, '');
     if (phoneDigits.length < 10) errors.phone = 'Telefone invalido';
-    setFieldErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const validateStep2 = () => {
-    const errors: Record<string, string> = {};
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Email invalido';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  // Step 1: POST name + phone (+ cidade/estado from geolocation)
-  const handleSubmitStep1 = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
@@ -264,21 +256,26 @@ export default function LeadCapturePage() {
           token,
           name: name.trim(),
           phone: phone.trim(),
-          cidade: cidade || undefined,
-          estado: estado || undefined,
+          email: email.trim() || undefined,
+          company: company.trim() || undefined,
+          cargo: cargo.trim() || undefined,
+          notes: notes.trim() || undefined,
+          cidade: cidade.trim() || undefined,
+          estado: estado.trim() || undefined,
         }),
       });
 
       const data = await res.json();
 
       if (res.ok || data.success) {
-        // Save to localStorage for next QR scan
         localStorage.setItem('lead_capture_data', JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
           email: email.trim(),
           company: company.trim(),
           cargo: cargo.trim(),
+          cidade: cidade.trim(),
+          estado: estado.trim(),
         }));
 
         setWhatsappVendedor(data.whatsapp_vendedor || linkInfo?.whatsapp_vendedor || null);
@@ -286,50 +283,6 @@ export default function LeadCapturePage() {
         setSubmitted(true);
       } else {
         setFieldErrors({ form: data.error || 'Erro ao enviar dados' });
-      }
-    } catch {
-      setFieldErrors({ form: 'Erro de conexao. Tente novamente.' });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Step 2: PATCH extras
-  const handleSubmitStep2 = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateStep2()) return;
-
-    setSubmitting(true);
-    try {
-      const res = await fetch('/api/lead-capture', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          phone: phone.trim(),
-          email: email.trim() || undefined,
-          company: company.trim() || undefined,
-          cargo: cargo.trim() || undefined,
-          notes: notes.trim() || undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok || data.success) {
-        // Update localStorage
-        localStorage.setItem('lead_capture_data', JSON.stringify({
-          name: name.trim(),
-          phone: phone.trim(),
-          email: email.trim(),
-          company: company.trim(),
-          cargo: cargo.trim(),
-        }));
-
-        setStep(1);
-        setSubmitMessage('Dados complementados com sucesso!');
-      } else {
-        setFieldErrors({ form: data.error || 'Erro ao atualizar dados' });
       }
     } catch {
       setFieldErrors({ form: 'Erro de conexao. Tente novamente.' });
@@ -351,50 +304,28 @@ export default function LeadCapturePage() {
     setFieldErrors({});
 
     try {
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker('por');
-      const { data: { text } } = await worker.recognize(file);
-      await worker.terminate();
+      const formData = new FormData();
+      formData.append('image', file);
 
-      // Extract data from OCR text
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      const res = await fetch('/api/scan-card', { method: 'POST', body: formData });
+      const data = await res.json();
 
-      // Extract phone
-      const phoneMatch = text.match(/\(?\d{2}\)?\s*\d{4,5}[-.\s]?\d{4}/);
-      if (phoneMatch) setPhone(formatPhone(phoneMatch[0]));
-
-      // Extract email
-      const emailMatch = text.match(/[^\s@]+@[^\s@]+\.[^\s@]+/);
-      if (emailMatch) setEmail(emailMatch[0].toLowerCase());
-
-      // Name: first non-empty line that is not phone/email/website
-      for (const line of lines) {
-        if (line.match(/[@\d()+\-./]{5,}/)) continue; // skip phone/email/url lines
-        if (line.match(/^(www\.|http)/i)) continue;
-        if (line.length >= 3 && line.length <= 60) {
-          setName(line);
-          break;
-        }
+      if (!res.ok) {
+        setFieldErrors({ form: data.error || 'Erro ao processar imagem. Preencha manualmente.' });
+        return;
       }
 
-      // Company: try second qualifying line
-      let foundName = false;
-      for (const line of lines) {
-        if (line.match(/[@\d()+\-./]{5,}/)) continue;
-        if (line.match(/^(www\.|http)/i)) continue;
-        if (line.length < 3 || line.length > 60) continue;
-        if (!foundName) {
-          foundName = true;
-          continue;
-        }
-        setCompany(line);
-        break;
-      }
+      if (data.name) setName(data.name);
+      if (data.phone) setPhone(formatPhone(data.phone));
+      if (data.email) setEmail(data.email.toLowerCase());
+      if (data.company) setCompany(data.company);
+      if (data.cargo) setCargo(data.cargo);
+      if (data.cidade) setCidade(data.cidade);
+      if (data.estado) setEstado(data.estado);
     } catch {
       setFieldErrors({ form: 'Erro ao processar imagem. Preencha manualmente.' });
     } finally {
       setScanning(false);
-      // Reset input so same file can be selected again
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
@@ -442,8 +373,8 @@ export default function LeadCapturePage() {
     );
   }
 
-  // Success state (after step 1)
-  if (submitted && step === 1) {
+  // Success state
+  if (submitted) {
     const whatsappNumber = whatsappVendedor?.replace(/\D/g, '');
 
     return (
@@ -476,137 +407,6 @@ export default function LeadCapturePage() {
               Falar no WhatsApp com {linkInfo?.user_name || 'vendedor'}
             </a>
           )}
-
-          {/* Complement button */}
-          <div className="mt-5 space-y-3">
-            <button
-              onClick={() => {
-                setSubmitted(false);
-                setStep(2);
-                setFieldErrors({});
-              }}
-              className="w-full py-3 text-sm font-medium text-emerald-400 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/10 transition-colors active:scale-[0.98]"
-            >
-              Complementar dados (email, empresa, cargo)
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Step 2 form (complement data)
-  if (step === 2) {
-    return (
-      <div className="min-h-screen bg-[#120826] flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-5 text-center">
-          <h1 className="text-lg font-bold text-white">Complementar Dados</h1>
-          <p className="text-sm text-emerald-100/80 mt-1">
-            Dados adicionais (opcional)
-          </p>
-        </div>
-
-        <div className="flex-1 px-4 py-6 max-w-lg mx-auto w-full">
-          {fieldErrors.form && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/15 text-red-400 text-sm border border-red-500/20">
-              {fieldErrors.form}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmitStep2} className="space-y-4">
-            {/* Email */}
-            <div>
-              <label className="block text-xs font-medium text-purple-300/80 mb-1.5">
-                Email
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                autoComplete="email"
-                inputMode="email"
-                className={`w-full px-3.5 py-3 text-sm bg-[#1e0f35] border rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
-                  fieldErrors.email ? 'border-red-500/50' : 'border-purple-700/30'
-                }`}
-              />
-              {fieldErrors.email && (
-                <p className="text-xs text-red-400 mt-1">{fieldErrors.email}</p>
-              )}
-            </div>
-
-            {/* Empresa */}
-            <div>
-              <label className="block text-xs font-medium text-purple-300/80 mb-1.5">
-                Empresa
-              </label>
-              <input
-                type="text"
-                value={company}
-                onChange={(e) => setCompany(e.target.value)}
-                placeholder="Nome da empresa"
-                autoComplete="organization"
-                className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Cargo */}
-            <div>
-              <label className="block text-xs font-medium text-purple-300/80 mb-1.5">
-                Cargo
-              </label>
-              <input
-                type="text"
-                value={cargo}
-                onChange={(e) => setCargo(e.target.value)}
-                placeholder="Seu cargo"
-                autoComplete="organization-title"
-                className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-              />
-            </div>
-
-            {/* Observacoes */}
-            <div>
-              <label className="block text-xs font-medium text-purple-300/80 mb-1.5">
-                Observacoes
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Alguma observacao ou interesse especifico?"
-                rows={3}
-                className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
-              />
-            </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full py-3.5 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 disabled:opacity-50 transition-colors active:scale-[0.98]"
-            >
-              {submitting ? 'Enviando...' : 'Salvar Dados'}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setStep(1);
-                setSubmitted(true);
-              }}
-              className="w-full py-3 text-sm text-purple-300/60 hover:text-purple-300/80 transition-colors"
-            >
-              Pular
-            </button>
-          </form>
-        </div>
-
-        {/* Footer */}
-        <div className="px-4 py-3 text-center border-t border-purple-800/20">
-          <p className="text-[10px] text-purple-300/30">
-            Powered by Controlei
-          </p>
         </div>
       </div>
     );
@@ -741,10 +541,10 @@ export default function LeadCapturePage() {
           )}
         </button>
 
-        <form onSubmit={handleSubmitStep1} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-3">
           {/* Nome */}
           <div>
-            <label className="block text-xs font-medium text-purple-300/80 mb-1.5">
+            <label className="block text-xs font-medium text-purple-300/80 mb-1">
               Nome Completo <span className="text-red-400">*</span>
             </label>
             <input
@@ -753,7 +553,7 @@ export default function LeadCapturePage() {
               onChange={(e) => setName(e.target.value)}
               placeholder="Seu nome"
               autoComplete="name"
-              className={`w-full px-4 py-4 text-base bg-[#1e0f35] border rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+              className={`w-full px-3.5 py-3 text-sm bg-[#1e0f35] border rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
                 fieldErrors.name ? 'border-red-500/50' : 'border-purple-700/30'
               }`}
             />
@@ -764,7 +564,7 @@ export default function LeadCapturePage() {
 
           {/* Telefone/WhatsApp */}
           <div>
-            <label className="block text-xs font-medium text-purple-300/80 mb-1.5">
+            <label className="block text-xs font-medium text-purple-300/80 mb-1">
               Telefone / WhatsApp <span className="text-red-400">*</span>
             </label>
             <input
@@ -775,7 +575,7 @@ export default function LeadCapturePage() {
               placeholder="(00) 00000-0000"
               autoComplete="tel"
               inputMode="numeric"
-              className={`w-full px-4 py-4 text-base bg-[#1e0f35] border rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+              className={`w-full px-3.5 py-3 text-sm bg-[#1e0f35] border rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
                 fieldErrors.phone ? 'border-red-500/50' : 'border-purple-700/30'
               }`}
             />
@@ -784,11 +584,92 @@ export default function LeadCapturePage() {
             )}
           </div>
 
-          {/* Submit - big button */}
+          {/* Email */}
+          <div>
+            <label className="block text-xs font-medium text-purple-300/80 mb-1">Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="seu@email.com"
+              autoComplete="email"
+              inputMode="email"
+              className={`w-full px-3.5 py-3 text-sm bg-[#1e0f35] border rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${
+                fieldErrors.email ? 'border-red-500/50' : 'border-purple-700/30'
+              }`}
+            />
+            {fieldErrors.email && (
+              <p className="text-xs text-red-400 mt-1">{fieldErrors.email}</p>
+            )}
+          </div>
+
+          {/* Empresa */}
+          <div>
+            <label className="block text-xs font-medium text-purple-300/80 mb-1">Empresa</label>
+            <input
+              type="text"
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="Nome da empresa"
+              autoComplete="organization"
+              className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Cargo */}
+          <div>
+            <label className="block text-xs font-medium text-purple-300/80 mb-1">Cargo</label>
+            <input
+              type="text"
+              value={cargo}
+              onChange={(e) => setCargo(e.target.value)}
+              placeholder="Seu cargo"
+              autoComplete="organization-title"
+              className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* Cidade + Estado - side by side */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs font-medium text-purple-300/80 mb-1">Cidade</label>
+              <input
+                type="text"
+                value={cidade}
+                onChange={(e) => setCidade(e.target.value)}
+                placeholder="Sua cidade"
+                className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-purple-300/80 mb-1">Estado</label>
+              <input
+                type="text"
+                value={estado}
+                onChange={(e) => setEstado(e.target.value)}
+                placeholder="UF"
+                className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Observacoes */}
+          <div>
+            <label className="block text-xs font-medium text-purple-300/80 mb-1">Observacoes</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Alguma observacao ou interesse especifico?"
+              rows={2}
+              className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none"
+            />
+          </div>
+
+          {/* Submit */}
           <button
             type="submit"
             disabled={submitting}
-            className="w-full py-4 bg-emerald-600 text-white text-base font-bold rounded-lg hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 disabled:opacity-50 transition-colors active:scale-[0.98]"
+            className="w-full py-3.5 bg-emerald-600 text-white text-base font-bold rounded-lg hover:bg-emerald-500 shadow-lg shadow-emerald-600/25 disabled:opacity-50 transition-colors active:scale-[0.98]"
           >
             {submitting ? 'Enviando...' : 'Enviar Dados'}
           </button>
