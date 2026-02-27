@@ -60,22 +60,61 @@ function computeSegment(
   allProfiles: any[],
   monthContacts: any[],
   monthInteractions: any[],
-  monthRanges: { start: string; end: string; label: string }[]
+  monthRanges: { start: string; end: string; label: string }[],
+  stages?: { id: string; name: string; color: string; is_terminal: boolean; terminal_type: 'won' | 'lost' | null; position: number }[]
 ): SegmentData {
-  const statusMap: Record<string, number> = {};
-  for (const c of contacts) {
-    statusMap[c.status] = (statusMap[c.status] || 0) + 1;
-  }
-  const statusCounts = STATUS_CONFIG.map((s) => ({
-    name: s.label,
-    value: statusMap[s.key] || 0,
-    color: s.color,
-  }));
-
   const totalContacts = contacts.length;
-  const emProspeccao = statusMap['EM_PROSPECCAO'] || 0;
-  const reunioesMarcadas = statusMap['REUNIAO_MARCADA'] || 0;
-  const convertidos = statusMap['CONVERTIDO'] || 0;
+
+  let statusCounts: { name: string; value: number; color: string }[];
+  let emProspeccao = 0;
+  let reunioesMarcadas = 0;
+  let convertidos = 0;
+
+  if (stages && stages.length > 0) {
+    // Pipeline-based: count by stage
+    const stageMap: Record<string, number> = {};
+    for (const c of contacts) {
+      if (c.stage_id) stageMap[c.stage_id] = (stageMap[c.stage_id] || 0) + 1;
+    }
+    statusCounts = stages
+      .sort((a, b) => a.position - b.position)
+      .map((s) => ({
+        name: s.name,
+        value: stageMap[s.id] || 0,
+        color: s.color || '#a3a3a3',
+      }));
+
+    // Map terminal stages to KPI equivalents
+    const nonTerminalStages = stages.filter(s => !s.is_terminal);
+    const wonStages = stages.filter(s => s.terminal_type === 'won');
+    const lostStages = stages.filter(s => s.terminal_type === 'lost');
+
+    convertidos = wonStages.reduce((sum, s) => sum + (stageMap[s.id] || 0), 0);
+    // "Em Prospecção" = contacts not in first or terminal stages (i.e. middle stages)
+    if (nonTerminalStages.length > 1) {
+      const middleStages = nonTerminalStages.slice(1);
+      emProspeccao = middleStages.reduce((sum, s) => sum + (stageMap[s.id] || 0), 0);
+    }
+    // "Reuniões Marcadas" = contacts in stages that have "reunião" or "reuniao" in name, or second-to-last non-terminal
+    const meetingStages = nonTerminalStages.filter(s => /reuni/i.test(s.name));
+    if (meetingStages.length > 0) {
+      reunioesMarcadas = meetingStages.reduce((sum, s) => sum + (stageMap[s.id] || 0), 0);
+    }
+  } else {
+    // Fallback: legacy status-based
+    const statusMap: Record<string, number> = {};
+    for (const c of contacts) {
+      statusMap[c.status] = (statusMap[c.status] || 0) + 1;
+    }
+    statusCounts = STATUS_CONFIG.map((s) => ({
+      name: s.label,
+      value: statusMap[s.key] || 0,
+      color: s.color,
+    }));
+    emProspeccao = statusMap['EM_PROSPECCAO'] || 0;
+    reunioesMarcadas = statusMap['REUNIAO_MARCADA'] || 0;
+    convertidos = statusMap['CONVERTIDO'] || 0;
+  }
 
   const monthlyData = monthRanges.map((range) => {
     const count = contacts.filter(
@@ -131,8 +170,12 @@ function computeSegment(
     };
   });
 
+  const terminalStageIds = stages ? new Set(stages.filter(s => s.is_terminal).map(s => s.id)) : null;
   const totalPipelineValue = contacts
-    .filter((c) => c.status !== 'CONVERTIDO' && c.status !== 'PERDIDO')
+    .filter((c) => {
+      if (terminalStageIds && c.stage_id) return !terminalStageIds.has(c.stage_id);
+      return c.status !== 'CONVERTIDO' && c.status !== 'PERDIDO';
+    })
     .reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
 
   return {
@@ -172,7 +215,8 @@ export default function DashboardWithTabs({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [advSearch, setAdvSearch] = useState({ cpf: '', cnpj: '', telefone: '', whatsapp: '', empresa: '', cidade: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
 
-  const { selectedPipelineId } = usePipeline();
+  const { selectedPipelineId, currentPipeline } = usePipeline();
+  const pipelineStages = currentPipeline?.stages || [];
 
   const selectCls = 'px-2 py-1.5 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
@@ -263,9 +307,11 @@ export default function DashboardWithTabs({
         return contact && (contact.tipo || []).includes(tipo);
       });
 
+    const stagesArg = pipelineStages.length > 0 ? pipelineStages : undefined;
+
     const geral = computeSegment(
       filteredContacts, filteredInteractions, filteredRecent,
-      allProfiles, filteredMonthContacts, filteredMonthInteractions, monthRanges
+      allProfiles, filteredMonthContacts, filteredMonthInteractions, monthRanges, stagesArg
     );
 
     const fornecedor = computeSegment(
@@ -275,7 +321,7 @@ export default function DashboardWithTabs({
       allProfiles,
       filterByTipo(filteredMonthContacts, 'FORNECEDOR'),
       filterInteractionsByTipo(filteredMonthInteractions, 'FORNECEDOR'),
-      monthRanges
+      monthRanges, stagesArg
     );
 
     const comprador = computeSegment(
@@ -285,11 +331,11 @@ export default function DashboardWithTabs({
       allProfiles,
       filterByTipo(filteredMonthContacts, 'COMPRADOR'),
       filterInteractionsByTipo(filteredMonthInteractions, 'COMPRADOR'),
-      monthRanges
+      monthRanges, stagesArg
     );
 
     return { geral, fornecedor, comprador };
-  }, [pipelineContacts, pipelineInteractions, pipelineRecentContacts, allProfiles, pipelineMonthContacts, pipelineMonthInteractions, monthRanges, temperaturaFilter, origemFilter, classeFilter, responsavelFilter, estadoFilter, proximaAcaoFilter, advSearch, contactIdMap]);
+  }, [pipelineContacts, pipelineInteractions, pipelineRecentContacts, allProfiles, pipelineMonthContacts, pipelineMonthInteractions, monthRanges, temperaturaFilter, origemFilter, classeFilter, responsavelFilter, estadoFilter, proximaAcaoFilter, advSearch, contactIdMap, pipelineStages]);
 
   const data = activeTab !== 'funil' ? segments[activeTab as keyof typeof segments] : segments.geral;
 
@@ -481,25 +527,19 @@ export default function DashboardWithTabs({
         </div>
       )}
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+      {/* KPI cards — per-stage from pipeline */}
+      <div className={`grid grid-cols-2 gap-4 mb-8 ${data.statusCounts.length + 2 <= 5 ? 'md:grid-cols-5' : `md:grid-cols-${Math.min(data.statusCounts.length + 2, 6)}`}`}>
         <div className="kpi-card bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 border-l-4 border-l-neutral-400">
           <p className="text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">Total de Contatos</p>
           <p className="text-3xl font-bold text-neutral-100 mt-2 number-animate">{data.totalContacts}</p>
         </div>
-        <div className="kpi-card bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 border-l-4 border-l-amber-400">
-          <p className="text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">Em Prospecção</p>
-          <p className="text-3xl font-bold text-amber-400 mt-2 number-animate">{data.emProspeccao}</p>
-        </div>
-        <div className="kpi-card bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 border-l-4 border-l-green-400">
-          <p className="text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">Reuniões Marcadas</p>
-          <p className="text-3xl font-bold text-green-400 mt-2 number-animate">{data.reunioesMarcadas}</p>
-        </div>
-        <div className="kpi-card bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 border-l-4 border-l-emerald-400">
-          <p className="text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">Convertidos</p>
-          <p className="text-3xl font-bold text-emerald-400 mt-2 number-animate">{data.convertidos}</p>
-        </div>
-        <div className="kpi-card bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 border-l-4 border-l-emerald-500 col-span-2 md:col-span-1">
+        {data.statusCounts.map((stage) => (
+          <div key={stage.name} className="kpi-card bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 border-l-4" style={{ borderLeftColor: stage.color }}>
+            <p className="text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">{stage.name}</p>
+            <p className="text-3xl font-bold mt-2 number-animate" style={{ color: stage.color }}>{stage.value}</p>
+          </div>
+        ))}
+        <div className="kpi-card bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 border-l-4 border-l-emerald-500">
           <p className="text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">Valor no Pipeline</p>
           <p className="text-2xl font-bold text-emerald-400 mt-2 number-animate">
             {data.totalPipelineValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}

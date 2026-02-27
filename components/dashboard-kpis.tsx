@@ -14,20 +14,13 @@ import {
   Legend,
   Cell,
 } from 'recharts';
+import { usePipeline } from '@/lib/pipeline-context';
 
 interface DashboardKPIsProps {
   allContacts: any[];
   allInteractions: any[];
   monthRanges: { start: string; end: string; label: string }[];
 }
-
-const FUNNEL_STAGES = [
-  { key: 'NOVO', label: 'Novo', color: '#a3a3a3' },
-  { key: 'EM_PROSPECCAO', label: 'Em Prospecao', color: '#f59e0b' },
-  { key: 'CONTATADO', label: 'Contatado', color: '#3b82f6' },
-  { key: 'REUNIAO_MARCADA', label: 'Reuniao Marcada', color: '#22c55e' },
-  { key: 'CONVERTIDO', label: 'Convertido', color: '#10b981' },
-];
 
 const TOOLTIP_STYLE = {
   fontSize: '12px',
@@ -52,10 +45,29 @@ export default function DashboardKPIs({
   allInteractions,
   monthRanges,
 }: DashboardKPIsProps) {
+  const { currentPipeline } = usePipeline();
+  const stages = currentPipeline?.stages || [];
+  const wonStageIds = useMemo(() => new Set(stages.filter(s => s.terminal_type === 'won').map(s => s.id)), [stages]);
+  const lostStageIds = useMemo(() => new Set(stages.filter(s => s.terminal_type === 'lost').map(s => s.id)), [stages]);
+  const terminalStageIds = useMemo(() => new Set(stages.filter(s => s.is_terminal).map(s => s.id)), [stages]);
+
+  const isWon = (c: any) => {
+    if (wonStageIds.size > 0 && c.stage_id) return wonStageIds.has(c.stage_id);
+    return c.status === 'CONVERTIDO';
+  };
+  const isLost = (c: any) => {
+    if (lostStageIds.size > 0 && c.stage_id) return lostStageIds.has(c.stage_id);
+    return c.status === 'PERDIDO';
+  };
+  const isTerminal = (c: any) => {
+    if (terminalStageIds.size > 0 && c.stage_id) return terminalStageIds.has(c.stage_id);
+    return c.status === 'CONVERTIDO' || c.status === 'PERDIDO';
+  };
+
   // ── KPI computations ──────────────────────────────────────────────
   const kpis = useMemo(() => {
-    const convertidos = allContacts.filter((c) => c.status === 'CONVERTIDO');
-    const perdidos = allContacts.filter((c) => c.status === 'PERDIDO');
+    const convertidos = allContacts.filter(isWon);
+    const perdidos = allContacts.filter(isLost);
     const totalDecided = convertidos.length + perdidos.length;
     const taxaConversao = totalDecided > 0
       ? Math.round((convertidos.length / totalDecided) * 100)
@@ -77,17 +89,35 @@ export default function DashboardKPIs({
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const sevenDaysAgoISO = sevenDaysAgo.toISOString();
     const esfriando = allContacts.filter(
-      (c) =>
-        c.updated_at < sevenDaysAgoISO &&
-        c.status !== 'CONVERTIDO' &&
-        c.status !== 'PERDIDO',
+      (c) => c.updated_at < sevenDaysAgoISO && !isTerminal(c),
     ).length;
 
     return { taxaConversao, receitaConvertida, cicloMedio, esfriando };
-  }, [allContacts]);
+  }, [allContacts, wonStageIds, lostStageIds, terminalStageIds]);
 
   // ── Funnel data ───────────────────────────────────────────────────
   const funnelData = useMemo(() => {
+    if (stages.length > 0) {
+      const stageMap: Record<string, number> = {};
+      for (const c of allContacts) {
+        if (c.stage_id) stageMap[c.stage_id] = (stageMap[c.stage_id] || 0) + 1;
+      }
+      return [...stages]
+        .sort((a, b) => a.position - b.position)
+        .map((s) => ({
+          name: s.name,
+          value: stageMap[s.id] || 0,
+          color: s.color || '#a3a3a3',
+        }));
+    }
+    // Legacy fallback
+    const FUNNEL_STAGES = [
+      { key: 'NOVO', label: 'Novo', color: '#a3a3a3' },
+      { key: 'EM_PROSPECCAO', label: 'Em Prospecao', color: '#f59e0b' },
+      { key: 'CONTATADO', label: 'Contatado', color: '#3b82f6' },
+      { key: 'REUNIAO_MARCADA', label: 'Reuniao Marcada', color: '#22c55e' },
+      { key: 'CONVERTIDO', label: 'Convertido', color: '#10b981' },
+    ];
     const statusMap: Record<string, number> = {};
     for (const c of allContacts) {
       statusMap[c.status] = (statusMap[c.status] || 0) + 1;
@@ -97,7 +127,7 @@ export default function DashboardKPIs({
       value: statusMap[stage.key] || 0,
       color: stage.color,
     }));
-  }, [allContacts]);
+  }, [allContacts, stages]);
 
   // ── Origem x Conversao data ───────────────────────────────────────
   const origemData = useMemo(() => {
@@ -106,14 +136,14 @@ export default function DashboardKPIs({
       const origem = c.origem || 'Sem origem';
       if (!origemMap[origem]) origemMap[origem] = { total: 0, convertidos: 0 };
       origemMap[origem].total += 1;
-      if (c.status === 'CONVERTIDO') origemMap[origem].convertidos += 1;
+      if (isWon(c)) origemMap[origem].convertidos += 1;
     }
     return Object.entries(origemMap).map(([key, val]) => ({
       name: key,
       total: val.total,
       convertidos: val.convertidos,
     }));
-  }, [allContacts]);
+  }, [allContacts, wonStageIds]);
 
   // ── Win Rate Trend data ───────────────────────────────────────────
   const winRateData = useMemo(() => {
@@ -121,17 +151,13 @@ export default function DashboardKPIs({
       const monthContacts = allContacts.filter(
         (c) => c.updated_at >= range.start && c.updated_at < range.end,
       );
-      const convertidosMonth = monthContacts.filter(
-        (c) => c.status === 'CONVERTIDO',
-      ).length;
-      const perdidosMonth = monthContacts.filter(
-        (c) => c.status === 'PERDIDO',
-      ).length;
+      const convertidosMonth = monthContacts.filter(isWon).length;
+      const perdidosMonth = monthContacts.filter(isLost).length;
       const decided = convertidosMonth + perdidosMonth;
       const winRate = decided > 0 ? Math.round((convertidosMonth / decided) * 100) : 0;
       return { month: range.label, winRate };
     });
-  }, [allContacts, monthRanges]);
+  }, [allContacts, monthRanges, wonStageIds, lostStageIds]);
 
   const hasFunnelData = funnelData.some((d) => d.value > 0);
   const hasOrigemData = origemData.length > 0 && origemData.some((d) => d.total > 0);
