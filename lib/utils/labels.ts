@@ -165,6 +165,33 @@ export function formatMeetingStatus(status: string): string {
   return MEETING_STATUS_LABELS[status] || status;
 }
 
+// Meeting Type
+export const MEETING_TYPE_LABELS: Record<string, string> = {
+  PROSPECCAO: 'Prospeccao',
+  ALINHAMENTO: 'Alinhamento',
+  APRESENTACAO: 'Apresentacao',
+  NEGOCIACAO: 'Negociacao',
+  FOLLOW_UP: 'Follow-up',
+  POS_VENDA: 'Pos-venda',
+  SUPORTE: 'Suporte',
+  OUTRO: 'Outro',
+};
+
+export const MEETING_TYPE_COLORS: Record<string, string> = {
+  PROSPECCAO: 'bg-cyan-500/20 text-cyan-400',
+  ALINHAMENTO: 'bg-purple-500/20 text-purple-400',
+  APRESENTACAO: 'bg-blue-500/20 text-blue-400',
+  NEGOCIACAO: 'bg-amber-500/20 text-amber-400',
+  FOLLOW_UP: 'bg-orange-500/20 text-orange-400',
+  POS_VENDA: 'bg-emerald-500/20 text-emerald-400',
+  SUPORTE: 'bg-pink-500/20 text-pink-400',
+  OUTRO: 'bg-neutral-500/20 text-neutral-400',
+};
+
+export function formatMeetingType(type: string): string {
+  return MEETING_TYPE_LABELS[type] || type;
+}
+
 // Activity Templates (quick interaction templates)
 export const ACTIVITY_TEMPLATES = [
   { label: 'Liguei — não atendeu', type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: 'Liguei — não atendeu' },

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import type { MeetingType } from '@/lib/types';
+import { MEETING_TYPE_LABELS, MEETING_TYPE_COLORS } from '@/lib/utils/labels';
 
 interface MeetingModalProps {
   isOpen: boolean;
@@ -11,6 +13,7 @@ interface MeetingModalProps {
     duration_minutes: number;
     location: string;
     notes: string;
+    meeting_type: MeetingType;
   }) => void;
   contactName: string;
   loading?: boolean;
@@ -36,6 +39,7 @@ export default function MeetingModal({
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [duration, setDuration] = useState(30);
+  const [meetingType, setMeetingType] = useState<MeetingType>('PROSPECCAO');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -49,6 +53,7 @@ export default function MeetingModal({
       setDate(tomorrow.toISOString().split('T')[0]);
       setTime('10:00');
       setDuration(30);
+      setMeetingType('PROSPECCAO');
       setLocation('');
       setNotes('');
       setInitialized(true);
@@ -85,6 +90,7 @@ export default function MeetingModal({
       duration_minutes: duration,
       location: location.trim(),
       notes: notes.trim(),
+      meeting_type: meetingType,
     });
   }
 
@@ -163,6 +169,30 @@ export default function MeetingModal({
                   {opt.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Tipo de Reuniao */}
+          <div>
+            <label className="block text-xs text-purple-300/50 mb-1">Tipo de Reuniao</label>
+            <div className="flex flex-wrap gap-2">
+              {(Object.entries(MEETING_TYPE_LABELS) as [MeetingType, string][]).map(([key, label]) => {
+                const colorCls = MEETING_TYPE_COLORS[key] || '';
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setMeetingType(key)}
+                    className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+                      meetingType === key
+                        ? `${colorCls} border-current font-semibold`
+                        : 'bg-[#2a1245] text-purple-200 border-purple-700/30 hover:bg-purple-800/30'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 

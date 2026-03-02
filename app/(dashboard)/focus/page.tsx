@@ -159,7 +159,7 @@ export default function FocusPage() {
     setActionLoading(false);
   };
 
-  const handleMeetingConfirm = async (data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string }) => {
+  const handleMeetingConfirm = async (data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string; meeting_type: string }) => {
     if (!currentContact) return;
     setMeetingLoading(true);
     try {

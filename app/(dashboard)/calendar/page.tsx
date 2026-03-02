@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Meeting } from '@/lib/types';
+import type { Meeting, MeetingType } from '@/lib/types';
 import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
+import { MEETING_TYPE_LABELS, MEETING_TYPE_COLORS, formatMeetingType } from '@/lib/utils/labels';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 const MONTHS = [
@@ -20,6 +21,17 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; label: string }> 
   SCHEDULED: { bg: 'bg-cyan-500/15', text: 'text-cyan-400', label: 'Agendada' },
   COMPLETED: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: 'Concluida' },
   CANCELLED: { bg: 'bg-red-500/15', text: 'text-red-400', label: 'Cancelada' },
+};
+
+const MEETING_TYPE_STYLE: Record<string, { bg: string; text: string }> = {
+  PROSPECCAO: { bg: 'bg-cyan-500/15', text: 'text-cyan-400' },
+  ALINHAMENTO: { bg: 'bg-purple-500/15', text: 'text-purple-400' },
+  APRESENTACAO: { bg: 'bg-blue-500/15', text: 'text-blue-400' },
+  NEGOCIACAO: { bg: 'bg-amber-500/15', text: 'text-amber-400' },
+  FOLLOW_UP: { bg: 'bg-orange-500/15', text: 'text-orange-400' },
+  POS_VENDA: { bg: 'bg-emerald-500/15', text: 'text-emerald-400' },
+  SUPORTE: { bg: 'bg-pink-500/15', text: 'text-pink-400' },
+  OUTRO: { bg: 'bg-neutral-500/15', text: 'text-neutral-400' },
 };
 
 export default function CalendarPage() {
@@ -336,6 +348,19 @@ export default function CalendarPage() {
             </button>
           </div>
 
+          {/* Meeting type legend */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mb-3">
+            {Object.entries(MEETING_TYPE_LABELS).map(([key, label]) => {
+              const style = MEETING_TYPE_STYLE[key] || MEETING_TYPE_STYLE.OUTRO;
+              return (
+                <div key={key} className="flex items-center gap-1">
+                  <span className={`w-2 h-2 rounded-full ${style.bg} ${style.text} border border-current`} />
+                  <span className="text-[9px] text-purple-300/50">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+
           {/* Weekday headers */}
           <div className="grid grid-cols-7 gap-px mb-1">
             {WEEKDAYS.map((d) => (
@@ -380,11 +405,11 @@ export default function CalendarPage() {
                   {dayMeetings.length > 0 && (
                     <div className="mt-1 space-y-0.5">
                       {dayMeetings.slice(0, 3).map((m) => {
-                        const style = STATUS_STYLE[m.status] || STATUS_STYLE.SCHEDULED;
+                        const typeStyle = MEETING_TYPE_STYLE[m.meeting_type] || MEETING_TYPE_STYLE.OUTRO;
                         return (
                           <div
                             key={m.id}
-                            className={`text-[8px] font-medium truncate rounded px-1 py-0.5 ${style.bg} ${style.text}`}
+                            className={`text-[8px] font-medium truncate rounded px-1 py-0.5 ${typeStyle.bg} ${typeStyle.text}`}
                             title={m.created_by_name ? `Resp: ${m.created_by_name}` : ''}
                           >
                             {formatTime(m.meeting_at)} {m.contact_name}
@@ -478,7 +503,15 @@ export default function CalendarPage() {
                   </div>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  {(() => {
+                    const typeStyle = MEETING_TYPE_STYLE[selectedMeeting.meeting_type] || MEETING_TYPE_STYLE.OUTRO;
+                    return (
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${typeStyle.bg} ${typeStyle.text}`}>
+                        {formatMeetingType(selectedMeeting.meeting_type)}
+                      </span>
+                    );
+                  })()}
                   {(() => {
                     const style = STATUS_STYLE[selectedMeeting.status] || STATUS_STYLE.SCHEDULED;
                     return (
@@ -549,9 +582,19 @@ export default function CalendarPage() {
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs font-bold text-cyan-400">{formatTime(m.meeting_at)}</span>
-                          <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${style.bg} ${style.text}`}>
-                            {style.label}
-                          </span>
+                          <div className="flex items-center gap-1">
+                            {(() => {
+                              const typeStyle = MEETING_TYPE_STYLE[m.meeting_type] || MEETING_TYPE_STYLE.OUTRO;
+                              return (
+                                <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${typeStyle.bg} ${typeStyle.text}`}>
+                                  {formatMeetingType(m.meeting_type)}
+                                </span>
+                              );
+                            })()}
+                            <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-full ${style.bg} ${style.text}`}>
+                              {style.label}
+                            </span>
+                          </div>
                         </div>
                         <p className="text-sm font-medium text-neutral-100 truncate">{m.title}</p>
                         <p className="text-xs text-purple-300/50 truncate">{m.contact_name}</p>

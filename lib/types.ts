@@ -234,6 +234,16 @@ export interface LeaderboardEntry {
 
 export type MeetingStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
 
+export type MeetingType =
+  | 'PROSPECCAO'
+  | 'ALINHAMENTO'
+  | 'APRESENTACAO'
+  | 'NEGOCIACAO'
+  | 'FOLLOW_UP'
+  | 'POS_VENDA'
+  | 'SUPORTE'
+  | 'OUTRO';
+
 export interface Meeting {
   id: string;
   organization_id: string;
@@ -245,6 +255,7 @@ export interface Meeting {
   meeting_at: string;
   duration_minutes: number;
   status: MeetingStatus;
+  meeting_type: MeetingType;
   notifications_generated: boolean;
   created_at: string;
   updated_at: string;

@@ -725,7 +725,7 @@ export default function KanbanPage() {
     setShowMeetingModal(true);
   }
 
-  async function handleMeetingConfirm(data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string }) {
+  async function handleMeetingConfirm(data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string; meeting_type: string }) {
     if (!meetingContact) return;
     setMeetingLoading(true);
 

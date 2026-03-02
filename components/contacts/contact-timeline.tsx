@@ -11,7 +11,9 @@ import {
   INTERACTION_OUTCOME_LABELS,
   ACTIVITY_TEMPLATES,
   MEETING_STATUS_COLORS,
+  MEETING_TYPE_COLORS,
   formatMeetingStatus,
+  formatMeetingType,
 } from '@/lib/utils/labels';
 import ConfirmModal from '@/components/ui/confirm-modal';
 import { useToast } from '@/lib/toast-context';
@@ -657,6 +659,11 @@ function MeetingCard({
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className="text-sm font-medium text-neutral-200">{meeting.title}</span>
+            {meeting.meeting_type && (
+              <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${MEETING_TYPE_COLORS[meeting.meeting_type] || 'bg-neutral-500/20 text-neutral-400'}`}>
+                {formatMeetingType(meeting.meeting_type)}
+              </span>
+            )}
             <span className={`px-1.5 py-0.5 text-[10px] font-semibold rounded ${statusColor}`}>
               {formatMeetingStatus(meeting.status)}
             </span>

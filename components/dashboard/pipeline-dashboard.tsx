@@ -2,15 +2,6 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  Cell,
-} from 'recharts';
 import { usePipeline } from '@/lib/pipeline-context';
 import { INTERACTION_TYPE_LABELS } from '@/lib/utils/labels';
 
@@ -21,19 +12,13 @@ interface PipelineDashboardProps {
   profiles: any[];
 }
 
-const TOOLTIP_STYLE = {
-  fontSize: '12px',
-  borderRadius: '8px',
-  border: '1px solid rgba(139,92,246,0.3)',
-  backgroundColor: '#1e0f35',
-  color: '#e9d5ff',
-};
-
 function formatBRL(value: number): string {
   if (value >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1).replace('.', ',')}M`;
   if (value >= 1_000) return `R$ ${(value / 1_000).toFixed(1).replace('.', ',')}k`;
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
+
+const BAR_COLORS = ['#8b5cf6', '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#a855f7', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#e879f9', '#22d3ee'];
 
 export default function PipelineDashboard({
   contacts,
@@ -116,15 +101,15 @@ export default function PipelineDashboard({
 
   // ── Stage distribution ──────────────────────────────────────────
   const stageDistribution = useMemo(() => {
-    const stageMap: Record<string, number> = {};
+    const countMap: Record<string, number> = {};
     for (const c of pipelineContacts) {
-      if (c.stage_id) stageMap[c.stage_id] = (stageMap[c.stage_id] || 0) + 1;
+      if (c.stage_id) countMap[c.stage_id] = (countMap[c.stage_id] || 0) + 1;
     }
     const sorted = [...stages].sort((a, b) => a.position - b.position);
     const nonTerminal = sorted.filter((s) => !s.is_terminal);
     const terminal = sorted.filter((s) => s.is_terminal);
-    const maxCount = Math.max(...sorted.map((s) => stageMap[s.id] || 0), 1);
-    return { nonTerminal, terminal, stageMap, maxCount, total: pipelineContacts.length };
+    const maxCount = Math.max(...sorted.map((s) => countMap[s.id] || 0), 1);
+    return { nonTerminal, terminal, countMap, maxCount, total: pipelineContacts.length };
   }, [pipelineContacts, stages]);
 
   // ── Interactions this month ─────────────────────────────────────
@@ -144,7 +129,8 @@ export default function PipelineDashboard({
       .filter((d) => d.count > 0)
       .sort((a, b) => b.count - a.count);
     const total = filtered.length;
-    return { data, total };
+    const maxCount = data.length > 0 ? Math.max(...data.map((d) => d.count)) : 1;
+    return { data, total, maxCount };
   }, [pipelineInteractions, monthStart, monthEnd]);
 
   // ── Meetings ────────────────────────────────────────────────────
@@ -157,48 +143,43 @@ export default function PipelineDashboard({
 
   // ── Team activity this month ────────────────────────────────────
   const teamActivity = useMemo(() => {
-    const monthContacts = pipelineContacts.filter(
+    const mContacts = pipelineContacts.filter(
       (c) => c.created_at >= monthStart && c.created_at < monthEnd,
     );
-    const monthInts = pipelineInteractions.filter(
+    const mInts = pipelineInteractions.filter(
       (i) => i.created_at >= monthStart && i.created_at < monthEnd,
     );
-    const monthMtgs = pipelineMeetings.filter((m) => {
+    const mMtgs = pipelineMeetings.filter((m) => {
       const d = m.meeting_at || m.created_at;
       return d >= monthStart && d < monthEnd;
     });
 
     return profiles
-      .map((p) => {
-        const contactCount = monthContacts.filter((c) => c.created_by_user_id === p.user_id).length;
-        const intCount = monthInts.filter((i) => i.created_by_user_id === p.user_id).length;
-        const mtgCount = monthMtgs.filter((m) => m.created_by_user_id === p.user_id).length;
-        return {
-          name: p.name?.split(' ').slice(0, 2).join(' ') || 'Sem nome',
-          contacts: contactCount,
-          interactions: intCount,
-          meetings: mtgCount,
-        };
-      })
+      .map((p) => ({
+        name: p.name?.split(' ').slice(0, 2).join(' ') || 'Sem nome',
+        contacts: mContacts.filter((c) => c.created_by_user_id === p.user_id).length,
+        interactions: mInts.filter((i) => i.created_by_user_id === p.user_id).length,
+        meetings: mMtgs.filter((m) => m.created_by_user_id === p.user_id).length,
+      }))
       .filter((t) => t.contacts > 0 || t.interactions > 0 || t.meetings > 0)
       .sort((a, b) => (b.contacts + b.interactions + b.meetings) - (a.contacts + a.interactions + a.meetings));
   }, [pipelineContacts, pipelineInteractions, pipelineMeetings, profiles, monthStart, monthEnd]);
 
-  // ── Contact-name map for meetings ──────────────────────────────
+  // ── Contact-name map ───────────────────────────────────────────
   const contactMap = useMemo(() => {
     const map = new Map<string, any>();
     for (const c of contacts) map.set(c.id, c);
     return map;
   }, [contacts]);
 
-  // ── Stage map for badges ────────────────────────────────────────
-  const stageMap = useMemo(() => {
+  // ── Stage map for badges ───────────────────────────────────────
+  const stageNameMap = useMemo(() => {
     const map = new Map<string, { name: string; color: string }>();
     for (const s of stages) map.set(s.id, { name: s.name, color: s.color });
     return map;
   }, [stages]);
 
-  // ── Recent contacts ─────────────────────────────────────────────
+  // ── Recent contacts ────────────────────────────────────────────
   const recentContacts = useMemo(
     () =>
       [...pipelineContacts]
@@ -207,7 +188,7 @@ export default function PipelineDashboard({
     [pipelineContacts],
   );
 
-  // ── Upcoming meetings ──────────────────────────────────────────
+  // ── Upcoming meetings ─────────────────────────────────────────
   const upcomingMeetings = useMemo(() => {
     const nowISO = new Date().toISOString();
     return pipelineMeetings
@@ -216,96 +197,45 @@ export default function PipelineDashboard({
       .slice(0, 5);
   }, [pipelineMeetings]);
 
-  // ── Interaction chart colors ────────────────────────────────────
-  const CHART_COLORS = ['#8b5cf6', '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899', '#a855f7', '#14b8a6', '#f97316', '#6366f1', '#84cc16', '#e879f9', '#22d3ee'];
-
   return (
-    <div className="space-y-6">
-      {/* ── Linha 1: KPI Cards ──────────────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard
-          label="Contatos Ativos"
-          value={kpis.contatosAtivos.toString()}
-          accentColor="emerald"
-        />
-        <KpiCard
-          label="Valor no Pipeline"
-          value={formatBRL(kpis.valorPipeline)}
-          accentColor="green"
-          small
-        />
-        <KpiCard
-          label="Taxa de Conversao"
-          value={`${kpis.taxaConversao}%`}
-          accentColor="blue"
-        />
-        <KpiCard
-          label="Novos este Mes"
-          value={kpis.novosEsteMes.toString()}
-          accentColor="cyan"
-        />
+    <div className="space-y-4 sm:space-y-6 overflow-hidden">
+      {/* ── KPI Cards ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+        <KpiCard label="Contatos Ativos" value={kpis.contatosAtivos.toString()} accentColor="emerald" />
+        <KpiCard label="Valor Pipeline" value={formatBRL(kpis.valorPipeline)} accentColor="green" small />
+        <KpiCard label="Conversao" value={`${kpis.taxaConversao}%`} accentColor="blue" />
+        <KpiCard label="Novos no Mes" value={kpis.novosEsteMes.toString()} accentColor="cyan" />
       </div>
 
-      {/* ── Linha 2: Distribuicao por Etapa ─────────────────────── */}
+      {/* ── Distribuicao por Etapa ──────────────────────────────── */}
       {stages.length > 0 && (
-        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-4 sm:p-5">
-          <h3 className="text-sm font-semibold text-white mb-3 sm:mb-4 flex items-center gap-2">
-            <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-            </svg>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3.5 sm:p-5">
+          <h3 className="text-xs sm:text-sm font-semibold text-white mb-3 sm:mb-4">
             Distribuicao por Etapa
           </h3>
-
-          {/* Non-terminal stages */}
-          <div className="space-y-2.5">
+          <div className="space-y-2">
             {stageDistribution.nonTerminal.map((stage) => {
-              const count = stageDistribution.stageMap[stage.id] || 0;
+              const count = stageDistribution.countMap[stage.id] || 0;
               const pct = stageDistribution.maxCount > 0 ? (count / stageDistribution.maxCount) * 100 : 0;
               return (
-                <div key={stage.id} className="flex items-center gap-3">
-                  <span className="text-xs text-neutral-300 w-20 sm:w-28 truncate shrink-0">{stage.name}</span>
-                  <div className="flex-1 h-6 bg-purple-900/20 rounded-md overflow-hidden relative">
-                    <div
-                      className="h-full rounded-md transition-all duration-700 ease-out"
-                      style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: stage.color }}
-                    />
-                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-white/80">
-                      {count}
-                    </span>
-                  </div>
-                </div>
+                <StageBar key={stage.id} name={stage.name} count={count} pct={pct} color={stage.color} />
               );
             })}
           </div>
-
-          {/* Divider */}
           {stageDistribution.terminal.length > 0 && (
-            <div className="border-t border-purple-800/20 my-3 pt-3">
-              <div className="space-y-2.5">
+            <div className="border-t border-purple-800/20 mt-3 pt-3">
+              <div className="space-y-2">
                 {stageDistribution.terminal.map((stage) => {
-                  const count = stageDistribution.stageMap[stage.id] || 0;
+                  const count = stageDistribution.countMap[stage.id] || 0;
                   const pct = stageDistribution.maxCount > 0 ? (count / stageDistribution.maxCount) * 100 : 0;
                   return (
-                    <div key={stage.id} className="flex items-center gap-3">
-                      <span className="text-xs text-neutral-400 w-20 sm:w-28 truncate shrink-0">{stage.name}</span>
-                      <div className="flex-1 h-6 bg-purple-900/20 rounded-md overflow-hidden relative">
-                        <div
-                          className="h-full rounded-md transition-all duration-700 ease-out opacity-70"
-                          style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: stage.color }}
-                        />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-white/60">
-                          {count}
-                        </span>
-                      </div>
-                    </div>
+                    <StageBar key={stage.id} name={stage.name} count={count} pct={pct} color={stage.color} dim />
                   );
                 })}
               </div>
             </div>
           )}
-
-          {/* Footer */}
-          <div className="flex items-center gap-3 mt-3 text-[11px] text-neutral-500">
+          <div className="flex items-center gap-2 sm:gap-3 mt-3 text-[10px] sm:text-[11px] text-neutral-500">
             <span className="text-emerald-400 font-semibold">{kpis.won} ganhos</span>
             <span>|</span>
             <span className="text-red-400 font-semibold">{kpis.lost} perdidos</span>
@@ -315,55 +245,39 @@ export default function PipelineDashboard({
         </div>
       )}
 
-      {/* ── Linha 3: Interacoes + Reunioes/Equipe ──────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Interacoes do Mes */}
-        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Interacoes do Mes</h3>
-            <span className="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+      {/* ── Interacoes + Reunioes/Equipe ───────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        {/* Interacoes do Mes - barras CSS puras */}
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden min-w-0">
+          <div className="px-3.5 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold text-white">Interacoes do Mes</h3>
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
               {monthInteractions.total}
             </span>
           </div>
-          <div className="p-4 sm:p-5">
+          <div className="p-3.5 sm:p-5">
             {monthInteractions.data.length > 0 ? (
-              <div className="h-48 sm:h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={monthInteractions.data}
-                    layout="vertical"
-                    margin={{ top: 0, right: 20, left: 0, bottom: 0 }}
-                  >
-                    <XAxis
-                      type="number"
-                      tick={{ fontSize: 10, fill: '#c4b5fd' }}
-                      axisLine={false}
-                      tickLine={false}
-                      allowDecimals={false}
-                    />
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      tick={{ fontSize: 10, fill: '#c4b5fd' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={85}
-                    />
-                    <Tooltip
-                      contentStyle={TOOLTIP_STYLE}
-                      formatter={(value: any) => [value, 'Interacoes']}
-                      cursor={{ fill: 'rgba(139,92,246,0.05)' }}
-                    />
-                    <Bar dataKey="count" radius={[0, 4, 4, 0]}>
-                      {monthInteractions.data.map((_, idx) => (
-                        <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="space-y-2">
+                {monthInteractions.data.map((item, idx) => {
+                  const pct = monthInteractions.maxCount > 0 ? (item.count / monthInteractions.maxCount) * 100 : 0;
+                  return (
+                    <div key={item.name} className="flex items-center gap-2 sm:gap-3">
+                      <span className="text-[10px] sm:text-xs text-neutral-400 w-16 sm:w-24 truncate shrink-0">{item.name}</span>
+                      <div className="flex-1 h-5 sm:h-6 bg-purple-900/20 rounded overflow-hidden relative min-w-0">
+                        <div
+                          className="h-full rounded transition-all duration-700 ease-out"
+                          style={{ width: `${Math.max(pct, 3)}%`, backgroundColor: BAR_COLORS[idx % BAR_COLORS.length] }}
+                        />
+                        <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/80">
+                          {item.count}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-sm text-purple-300/40 py-10 text-center">
+              <p className="text-xs sm:text-sm text-purple-300/40 py-8 text-center">
                 Nenhuma interacao este mes
               </p>
             )}
@@ -371,128 +285,107 @@ export default function PipelineDashboard({
         </div>
 
         {/* Reunioes + Equipe */}
-        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20">
-            <h3 className="text-sm font-semibold text-white">Reunioes & Equipe</h3>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden min-w-0">
+          <div className="px-3.5 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20">
+            <h3 className="text-xs sm:text-sm font-semibold text-white">Reunioes & Equipe</h3>
           </div>
-          <div className="p-4 sm:p-5">
-            {/* Meeting numbers */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-5">
+          <div className="p-3.5 sm:p-5">
+            <div className="grid grid-cols-3 gap-2 mb-4">
               <div className="text-center">
-                <p className="text-xl sm:text-2xl font-bold text-blue-400">{meetingStats.agendadas}</p>
-                <p className="text-[10px] text-neutral-500 mt-0.5">Agendadas</p>
+                <p className="text-lg sm:text-2xl font-bold text-blue-400">{meetingStats.agendadas}</p>
+                <p className="text-[9px] sm:text-[10px] text-neutral-500">Agendadas</p>
               </div>
               <div className="text-center">
-                <p className="text-xl sm:text-2xl font-bold text-emerald-400">{meetingStats.realizadas}</p>
-                <p className="text-[10px] text-neutral-500 mt-0.5">Realizadas</p>
+                <p className="text-lg sm:text-2xl font-bold text-emerald-400">{meetingStats.realizadas}</p>
+                <p className="text-[9px] sm:text-[10px] text-neutral-500">Realizadas</p>
               </div>
               <div className="text-center">
-                <p className="text-xl sm:text-2xl font-bold text-red-400">{meetingStats.canceladas}</p>
-                <p className="text-[10px] text-neutral-500 mt-0.5">Canceladas</p>
+                <p className="text-lg sm:text-2xl font-bold text-red-400">{meetingStats.canceladas}</p>
+                <p className="text-[9px] sm:text-[10px] text-neutral-500">Canceladas</p>
               </div>
             </div>
 
-            {/* Team table */}
-            {teamActivity.length > 0 && (
+            {teamActivity.length > 0 ? (
               <div>
-                <p className="text-[10px] text-purple-300/50 uppercase tracking-widest font-semibold mb-2">
-                  Atividade da equipe no mes
+                <p className="text-[9px] sm:text-[10px] text-purple-300/50 uppercase tracking-widest font-semibold mb-2">
+                  Equipe no mes
                 </p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="text-purple-300/50 border-b border-purple-800/20">
-                        <th className="text-left py-1.5 font-medium">Membro</th>
-                        <th className="text-center py-1.5 font-medium"><span className="hidden sm:inline">Contatos</span><span className="sm:hidden">Cont.</span></th>
-                        <th className="text-center py-1.5 font-medium"><span className="hidden sm:inline">Interacoes</span><span className="sm:hidden">Inter.</span></th>
-                        <th className="text-center py-1.5 font-medium"><span className="hidden sm:inline">Reunioes</span><span className="sm:hidden">Reun.</span></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {teamActivity.map((member) => (
-                        <tr key={member.name} className="border-b border-purple-800/10">
-                          <td className="py-1.5 text-neutral-300 truncate max-w-[120px]">{member.name}</td>
-                          <td className="py-1.5 text-center text-neutral-400">{member.contacts}</td>
-                          <td className="py-1.5 text-center text-neutral-400">{member.interactions}</td>
-                          <td className="py-1.5 text-center text-neutral-400">{member.meetings}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="space-y-1.5">
+                  {teamActivity.map((member) => (
+                    <div key={member.name} className="flex items-center justify-between text-[11px] py-1 border-b border-purple-800/10 last:border-0">
+                      <span className="text-neutral-300 truncate mr-2">{member.name}</span>
+                      <div className="flex items-center gap-3 shrink-0 text-neutral-500">
+                        <span title="Contatos">{member.contacts}c</span>
+                        <span title="Interacoes">{member.interactions}i</span>
+                        <span title="Reunioes">{member.meetings}r</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            )}
-            {teamActivity.length === 0 && (
-              <p className="text-sm text-purple-300/40 text-center py-3">Sem atividade este mes</p>
+            ) : (
+              <p className="text-xs text-purple-300/40 text-center py-2">Sem atividade este mes</p>
             )}
           </div>
         </div>
       </div>
 
-      {/* ── Linha 4: Contatos Recentes + Proximas Reunioes ──────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* ── Contatos Recentes + Proximas Reunioes ──────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         {/* Recent contacts */}
-        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Contatos Recentes</h3>
-            <Link href="/contacts" className="text-xs text-purple-300/50 hover:text-emerald-400 transition-colors">
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden min-w-0">
+          <div className="px-3.5 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold text-white">Contatos Recentes</h3>
+            <Link href="/contacts" className="text-[10px] sm:text-xs text-purple-300/50 hover:text-emerald-400 transition-colors">
               Ver todos
             </Link>
           </div>
           <div className="divide-y divide-purple-800/15">
             {recentContacts.length > 0 ? (
               recentContacts.map((contact) => {
-                const stage = contact.stage_id ? stageMap.get(contact.stage_id) : null;
+                const stage = contact.stage_id ? stageNameMap.get(contact.stage_id) : null;
                 return (
                   <Link
                     key={contact.id}
                     href={`/contacts/${contact.id}`}
-                    className="px-4 py-2.5 sm:px-5 sm:py-3 hover:bg-purple-800/15 flex items-center justify-between transition-colors"
+                    className="block px-3.5 py-2.5 sm:px-5 sm:py-3 hover:bg-purple-800/15 transition-colors"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] sm:text-sm font-medium text-neutral-100 truncate">{contact.name}</p>
-                      <p className="text-[10px] sm:text-[11px] text-purple-300/50 mt-0.5 truncate">
-                        {contact.company || contact.email || contact.phone || '-'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 ml-2 sm:ml-3">
-                      {stage && (
-                        <span
-                          className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded-full hidden sm:inline"
-                          style={{
-                            backgroundColor: `${stage.color}20`,
-                            color: stage.color,
-                          }}
-                        >
-                          {stage.name}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] sm:text-sm font-medium text-neutral-100 truncate">{contact.name}</p>
+                        <p className="text-[10px] text-purple-300/50 truncate">
+                          {contact.company || contact.phone || '-'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {stage && (
+                          <span
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: stage.color }}
+                            title={stage.name}
+                          />
+                        )}
+                        <span className="text-[9px] text-purple-300/40">
+                          {new Date(contact.created_at).toLocaleDateString('pt-BR')}
                         </span>
-                      )}
-                      {stage && (
-                        <span
-                          className="w-2 h-2 rounded-full sm:hidden shrink-0"
-                          style={{ backgroundColor: stage.color }}
-                        />
-                      )}
-                      <span className="text-[9px] sm:text-[10px] text-purple-300/40">
-                        {new Date(contact.created_at).toLocaleDateString('pt-BR')}
-                      </span>
+                      </div>
                     </div>
                   </Link>
                 );
               })
             ) : (
-              <div className="px-5 py-10 text-center">
-                <p className="text-sm text-purple-300/40">Nenhum contato no pipeline</p>
+              <div className="px-4 py-8 text-center">
+                <p className="text-xs text-purple-300/40">Nenhum contato no pipeline</p>
               </div>
             )}
           </div>
         </div>
 
         {/* Upcoming meetings */}
-        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden">
-          <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white">Proximas Reunioes</h3>
-            <span className="text-xs text-purple-300/50">{upcomingMeetings.length} agendadas</span>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl overflow-hidden min-w-0">
+          <div className="px-3.5 py-3 sm:px-5 sm:py-4 border-b border-purple-800/20 flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold text-white">Proximas Reunioes</h3>
+            <span className="text-[10px] sm:text-xs text-purple-300/50">{upcomingMeetings.length}</span>
           </div>
           <div className="divide-y divide-purple-800/15">
             {upcomingMeetings.length > 0 ? (
@@ -501,23 +394,23 @@ export default function PipelineDashboard({
                 const meetingDate = new Date(meeting.meeting_at);
                 const isToday = meetingDate.toDateString() === new Date().toDateString();
                 return (
-                  <div key={meeting.id} className="px-4 py-2.5 sm:px-5 sm:py-3 hover:bg-purple-800/15 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[13px] sm:text-sm font-medium text-neutral-100 truncate flex-1">{meeting.title}</p>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ml-2 ${
+                  <div key={meeting.id} className="px-3.5 py-2.5 sm:px-5 sm:py-3 hover:bg-purple-800/15 transition-colors">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[13px] sm:text-sm font-medium text-neutral-100 truncate">{meeting.title}</p>
+                      <span className={`text-[9px] sm:text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
                         isToday ? 'text-amber-400 bg-amber-500/15' : 'text-purple-300/50'
                       }`}>
                         {isToday ? 'Hoje' : meetingDate.toLocaleDateString('pt-BR')}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] text-purple-300/50">
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-purple-300/50">
                         {meetingDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                       </span>
                       {contact && (
                         <Link
                           href={`/contacts/${contact.id}`}
-                          className="text-[11px] text-emerald-400/70 hover:text-emerald-400 truncate"
+                          className="text-[10px] text-emerald-400/70 hover:text-emerald-400 truncate"
                         >
                           {contact.name}
                         </Link>
@@ -527,8 +420,8 @@ export default function PipelineDashboard({
                 );
               })
             ) : (
-              <div className="px-5 py-10 text-center">
-                <p className="text-sm text-purple-300/40">Nenhuma reuniao agendada</p>
+              <div className="px-4 py-8 text-center">
+                <p className="text-xs text-purple-300/40">Nenhuma reuniao agendada</p>
               </div>
             )}
           </div>
@@ -538,32 +431,45 @@ export default function PipelineDashboard({
   );
 }
 
-// ── KPI Card sub-component ──────────────────────────────────────
-function KpiCard({
-  label,
-  value,
-  accentColor,
-  small,
-}: {
-  label: string;
-  value: string;
-  accentColor: 'emerald' | 'green' | 'blue' | 'cyan';
-  small?: boolean;
+// ── Sub-components ───────────────────────────────────────────────
+
+function StageBar({ name, count, pct, color, dim }: {
+  name: string; count: number; pct: number; color: string; dim?: boolean;
 }) {
-  const colorMap = {
+  return (
+    <div className="flex items-center gap-2 sm:gap-3">
+      <span className={`text-[10px] sm:text-xs w-16 sm:w-28 truncate shrink-0 ${dim ? 'text-neutral-500' : 'text-neutral-300'}`}>
+        {name}
+      </span>
+      <div className="flex-1 h-5 sm:h-6 bg-purple-900/20 rounded overflow-hidden relative min-w-0">
+        <div
+          className={`h-full rounded transition-all duration-700 ease-out ${dim ? 'opacity-60' : ''}`}
+          style={{ width: `${Math.max(pct, 2)}%`, backgroundColor: color }}
+        />
+        <span className={`absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold ${dim ? 'text-white/50' : 'text-white/80'}`}>
+          {count}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({ label, value, accentColor, small }: {
+  label: string; value: string; accentColor: 'emerald' | 'green' | 'blue' | 'cyan'; small?: boolean;
+}) {
+  const colors = {
     emerald: { border: 'border-l-emerald-400', text: 'text-emerald-400' },
     green: { border: 'border-l-green-400', text: 'text-green-400' },
     blue: { border: 'border-l-blue-400', text: 'text-blue-400' },
     cyan: { border: 'border-l-cyan-400', text: 'text-cyan-400' },
-  };
-  const colors = colorMap[accentColor];
+  }[accentColor];
 
   return (
-    <div className={`bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3 sm:p-5 border-l-4 ${colors.border}`}>
-      <p className="text-[9px] sm:text-[10px] text-purple-300/60 uppercase tracking-widest font-semibold">
+    <div className={`bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3 sm:p-5 border-l-4 ${colors.border} min-w-0`}>
+      <p className="text-[8px] sm:text-[10px] text-purple-300/60 uppercase tracking-wider sm:tracking-widest font-semibold truncate">
         {label}
       </p>
-      <p className={`${small ? 'text-xl sm:text-2xl' : 'text-2xl sm:text-3xl'} font-bold ${colors.text} mt-2`}>
+      <p className={`${small ? 'text-base sm:text-2xl' : 'text-xl sm:text-3xl'} font-bold ${colors.text} mt-1 sm:mt-2 truncate`}>
         {value}
       </p>
     </div>

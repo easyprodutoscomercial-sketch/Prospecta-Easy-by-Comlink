@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
     if (!profile) return NextResponse.json({ error: 'Profile nao encontrado' }, { status: 404 });
 
     const body = await request.json();
-    const { contact_id, title, notes, location, meeting_at, duration_minutes } = body;
+    const { contact_id, title, notes, location, meeting_at, duration_minutes, meeting_type } = body;
 
     if (!contact_id || !title || !meeting_at) {
       return NextResponse.json({ error: 'contact_id, title e meeting_at sao obrigatorios' }, { status: 400 });
@@ -182,6 +182,7 @@ export async function POST(request: NextRequest) {
         meeting_at,
         duration_minutes: duration_minutes || 30,
         status: 'SCHEDULED',
+        meeting_type: meeting_type || 'OUTRO',
         notifications_generated: true,
       })
       .select()

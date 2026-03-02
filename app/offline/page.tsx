@@ -2,7 +2,7 @@
 
 export default function OfflinePage() {
   return (
-    <div className="min-h-screen bg-[#1a0a2e] flex items-center justify-center p-4">
+    <div className="min-h-screen bg-[#120826] flex items-center justify-center p-4">
       <div className="text-center max-w-sm">
         <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-purple-500/15 flex items-center justify-center">
           <svg
@@ -41,7 +41,7 @@ export default function OfflinePage() {
           Tentar novamente
         </button>
 
-        <p className="text-[10px] text-purple-300/30 mt-8">Controlei</p>
+        <p className="text-[10px] text-purple-300/30 mt-8">Prospecta Easy</p>
       </div>
     </div>
   );

@@ -70,7 +70,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Apenas quem criou a reuniao ou um admin pode edita-la' }, { status: 403 });
     }
 
-    const allowedFields = ['title', 'notes', 'location', 'meeting_at', 'duration_minutes', 'status'];
+    const allowedFields = ['title', 'notes', 'location', 'meeting_at', 'duration_minutes', 'status', 'meeting_type'];
     const updates: Record<string, any> = { updated_at: new Date().toISOString() };
     for (const field of allowedFields) {
       if (body[field] !== undefined) updates[field] = body[field];
