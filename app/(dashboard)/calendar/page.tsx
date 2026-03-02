@@ -587,30 +587,42 @@ export default function CalendarPage() {
               </div>
 
               {/* Actions — only for the creator */}
-              {(selectedMeeting.created_by_user_id === currentUserId || currentUserRole === 'admin') && selectedMeeting.status === 'SCHEDULED' && (
+              {(selectedMeeting.created_by_user_id === currentUserId || currentUserRole === 'admin') && (
                 <div className="mt-5 pt-4 border-t border-purple-800/20 space-y-2">
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleUpdateStatus(selectedMeeting.id, 'COMPLETED')}
-                      disabled={updatingStatus}
-                      className="flex-1 px-3 py-2 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
-                    >
-                      Marcar como Concluida
-                    </button>
+                  {selectedMeeting.status === 'SCHEDULED' && (
+                    <>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleUpdateStatus(selectedMeeting.id, 'COMPLETED')}
+                          disabled={updatingStatus}
+                          className="flex-1 px-3 py-2 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                        >
+                          Marcar como Concluida
+                        </button>
+                        <button
+                          onClick={() => setEditingMeeting(selectedMeeting)}
+                          className="px-3 py-2 text-xs font-medium text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => handleUpdateStatus(selectedMeeting.id, 'CANCELLED')}
+                        disabled={updatingStatus}
+                        className="w-full px-3 py-2 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                      >
+                        Cancelar Reuniao
+                      </button>
+                    </>
+                  )}
+                  {selectedMeeting.status !== 'SCHEDULED' && (
                     <button
                       onClick={() => setEditingMeeting(selectedMeeting)}
-                      className="px-3 py-2 text-xs font-medium text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"
+                      className="w-full px-3 py-2 text-xs font-medium text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"
                     >
-                      Editar
+                      Editar Reuniao
                     </button>
-                  </div>
-                  <button
-                    onClick={() => handleUpdateStatus(selectedMeeting.id, 'CANCELLED')}
-                    disabled={updatingStatus}
-                    className="w-full px-3 py-2 text-xs font-medium text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                  >
-                    Cancelar Reuniao
-                  </button>
+                  )}
                 </div>
               )}
 
