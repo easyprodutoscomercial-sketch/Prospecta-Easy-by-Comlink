@@ -84,7 +84,9 @@ export async function PATCH(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error('PATCH /api/meetings/[id] update error:', JSON.stringify(error, null, 2));
+      console.error('Update payload was:', JSON.stringify(updates, null, 2));
+      return NextResponse.json({ error: error.message, details: error }, { status: 500 });
     }
 
     // Se cancelou, dispensar notificacoes pendentes

@@ -189,8 +189,20 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (meetingError) {
-      console.error('Error creating meeting:', meetingError);
-      return NextResponse.json({ error: meetingError.message }, { status: 500 });
+      console.error('Error creating meeting:', JSON.stringify(meetingError, null, 2));
+      console.error('Insert payload was:', JSON.stringify({
+        organization_id: profile.organization_id,
+        contact_id,
+        created_by_user_id: user.id,
+        title,
+        notes: notes || null,
+        location: location || null,
+        meeting_at,
+        duration_minutes: duration_minutes || 30,
+        status: 'SCHEDULED',
+        meeting_type: meeting_type || 'OUTRO',
+      }, null, 2));
+      return NextResponse.json({ error: meetingError.message, details: meetingError }, { status: 500 });
     }
 
     // Gerar notificacoes escalonadas
@@ -207,13 +219,14 @@ export async function POST(request: NextRequest) {
         .insert(notifications);
 
       if (notifError) {
-        console.error('Error creating meeting notifications:', notifError);
+        console.error('Error creating meeting notifications:', JSON.stringify(notifError, null, 2));
+        console.error('Notifications payload was:', JSON.stringify(notifications, null, 2));
       }
     }
 
     return NextResponse.json({ meeting, notifications_created: notifications.length }, { status: 201 });
   } catch (error: any) {
-    console.error('Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('POST /api/meetings uncaught error:', error?.message, error?.stack || error);
+    return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });
   }
 }
