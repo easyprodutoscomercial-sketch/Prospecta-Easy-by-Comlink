@@ -505,6 +505,8 @@ export default function ContactTimeline({
                           onCancel={() => handleMeetingStatus(event.id, 'CANCELLED')}
                           canModify={canModify}
                           loading={meetingActionLoading === event.id}
+                          contactId={contactId}
+                          onInteractionAdded={(interaction) => setInteractions((p) => [interaction, ...p])}
                         />
                       )}
                       {event.kind === 'attachment' && (
@@ -643,15 +645,54 @@ function MeetingCard({
   onCancel,
   canModify,
   loading,
+  contactId,
+  onInteractionAdded,
 }: {
   meeting: Meeting;
   onMarkCompleted: () => void;
   onCancel: () => void;
   canModify: boolean;
   loading: boolean;
+  contactId: string;
+  onInteractionAdded: (interaction: Interaction) => void;
 }) {
+  const toast = useToast();
   const statusColor = MEETING_STATUS_COLORS[meeting.status] || 'bg-neutral-500/20 text-neutral-400';
   const meetingDate = new Date(meeting.meeting_at);
+
+  const [showQuickInteraction, setShowQuickInteraction] = useState(false);
+  const [quickData, setQuickData] = useState({ type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: '' });
+  const [quickLoading, setQuickLoading] = useState(false);
+
+  async function handleQuickInteraction() {
+    setQuickLoading(true);
+    try {
+      const r = await fetch('/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: contactId,
+          type: quickData.type,
+          outcome: quickData.outcome,
+          note: quickData.note || null,
+        }),
+      });
+      if (r.ok) {
+        const created = await r.json();
+        onInteractionAdded(created);
+        toast.success('Interacao registrada');
+        setQuickData({ type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: '' });
+        setShowQuickInteraction(false);
+      } else {
+        const d = await r.json();
+        toast.error(d.error || 'Erro ao registrar interacao');
+      }
+    } catch {
+      toast.error('Erro ao registrar interacao');
+    } finally {
+      setQuickLoading(false);
+    }
+  }
 
   return (
     <div className="bg-cyan-500/5 rounded-lg p-3 border border-cyan-500/15 hover:border-cyan-500/30 transition-colors">
@@ -687,7 +728,7 @@ function MeetingCard({
 
       {/* Meeting actions */}
       {canModify && meeting.status === 'SCHEDULED' && (
-        <div className="flex items-center gap-2 mt-2.5">
+        <div className="flex items-center gap-2 mt-2.5 flex-wrap">
           <button
             onClick={onMarkCompleted}
             disabled={loading}
@@ -707,6 +748,81 @@ function MeetingCard({
           >
             Cancelar
           </button>
+          <button
+            onClick={() => setShowQuickInteraction(!showQuickInteraction)}
+            className="px-2.5 py-1 text-[11px] font-medium text-purple-300 border border-purple-500/30 rounded-lg hover:bg-purple-500/10 transition-colors"
+          >
+            + Interacao
+          </button>
+        </div>
+      )}
+
+      {/* Also show interaction button for non-scheduled meetings if canModify */}
+      {canModify && meeting.status !== 'SCHEDULED' && (
+        <div className="flex items-center gap-2 mt-2.5">
+          <button
+            onClick={() => setShowQuickInteraction(!showQuickInteraction)}
+            className="px-2.5 py-1 text-[11px] font-medium text-purple-300 border border-purple-500/30 rounded-lg hover:bg-purple-500/10 transition-colors"
+          >
+            + Interacao
+          </button>
+        </div>
+      )}
+
+      {/* Quick interaction form */}
+      {showQuickInteraction && (
+        <div className="mt-3 p-3 bg-[#2a1245]/50 rounded-xl border border-purple-700/30 space-y-2">
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[10px] text-neutral-500 mb-0.5">Tipo</label>
+              <select
+                value={quickData.type}
+                onChange={(e) => setQuickData({ ...quickData, type: e.target.value })}
+                className={inputCls + ' text-xs !py-1.5'}
+              >
+                {Object.entries(INTERACTION_TYPE_LABELS).map(([k, l]) => (
+                  <option key={k} value={k}>{l}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-neutral-500 mb-0.5">Resultado</label>
+              <select
+                value={quickData.outcome}
+                onChange={(e) => setQuickData({ ...quickData, outcome: e.target.value })}
+                className={inputCls + ' text-xs !py-1.5'}
+              >
+                {Object.entries(INTERACTION_OUTCOME_LABELS).map(([k, l]) => (
+                  <option key={k} value={k}>{l}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] text-neutral-500 mb-0.5">Notas</label>
+            <textarea
+              rows={2}
+              value={quickData.note}
+              onChange={(e) => setQuickData({ ...quickData, note: e.target.value })}
+              placeholder="Observacoes..."
+              className={inputCls + ' text-xs !py-1.5'}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => { setShowQuickInteraction(false); setQuickData({ type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: '' }); }}
+              className="px-2.5 py-1 text-[10px] text-neutral-400 border border-purple-700/30 rounded-lg hover:bg-purple-800/30 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleQuickInteraction}
+              disabled={quickLoading}
+              className="px-2.5 py-1 text-[10px] font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+            >
+              {quickLoading ? 'Salvando...' : 'Salvar'}
+            </button>
+          </div>
         </div>
       )}
     </div>

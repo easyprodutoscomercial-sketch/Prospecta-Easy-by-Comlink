@@ -4,7 +4,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import type { Meeting, MeetingType } from '@/lib/types';
 import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
-import { MEETING_TYPE_LABELS, MEETING_TYPE_COLORS, formatMeetingType } from '@/lib/utils/labels';
+import { MEETING_TYPE_LABELS, MEETING_TYPE_COLORS, formatMeetingType, INTERACTION_TYPE_LABELS, INTERACTION_OUTCOME_LABELS } from '@/lib/utils/labels';
+import MeetingModal from '@/components/meetings/meeting-modal';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 const MONTHS = [
@@ -48,6 +49,15 @@ export default function CalendarPage() {
   const [currentUserId, setCurrentUserId] = useState('');
   const [currentUserRole, setCurrentUserRole] = useState('user');
   const [showTeamView, setShowTeamView] = useState(false);
+
+  // Edit meeting
+  const [editingMeeting, setEditingMeeting] = useState<MeetingWithContact | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Register interaction from meeting
+  const [showInteractionForm, setShowInteractionForm] = useState(false);
+  const [interactionData, setInteractionData] = useState({ type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: '' });
+  const [interactionLoading, setInteractionLoading] = useState(false);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -241,6 +251,59 @@ export default function CalendarPage() {
       fetchData();
     } catch {
       toast.error('Erro ao excluir reuniao');
+    }
+  }
+
+  async function handleEditConfirm(data: {
+    title: string;
+    meeting_at: string;
+    duration_minutes: number;
+    location: string;
+    notes: string;
+    meeting_type: string;
+  }) {
+    if (!editingMeeting) return;
+    setEditLoading(true);
+    try {
+      const res = await fetch(`/api/meetings/${editingMeeting.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Reuniao atualizada!');
+      setEditingMeeting(null);
+      setSelectedMeeting(null);
+      fetchData();
+    } catch {
+      toast.error('Erro ao atualizar reuniao');
+    } finally {
+      setEditLoading(false);
+    }
+  }
+
+  async function handleAddInteraction() {
+    if (!selectedMeeting) return;
+    setInteractionLoading(true);
+    try {
+      const res = await fetch('/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contact_id: selectedMeeting.contact_id,
+          type: interactionData.type,
+          outcome: interactionData.outcome,
+          note: interactionData.note || null,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success('Interacao registrada!');
+      setInteractionData({ type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: '' });
+      setShowInteractionForm(false);
+    } catch {
+      toast.error('Erro ao registrar interacao');
+    } finally {
+      setInteractionLoading(false);
     }
   }
 
@@ -526,13 +589,21 @@ export default function CalendarPage() {
               {/* Actions — only for the creator */}
               {(selectedMeeting.created_by_user_id === currentUserId || currentUserRole === 'admin') && selectedMeeting.status === 'SCHEDULED' && (
                 <div className="mt-5 pt-4 border-t border-purple-800/20 space-y-2">
-                  <button
-                    onClick={() => handleUpdateStatus(selectedMeeting.id, 'COMPLETED')}
-                    disabled={updatingStatus}
-                    className="w-full px-3 py-2 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
-                  >
-                    Marcar como Concluida
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleUpdateStatus(selectedMeeting.id, 'COMPLETED')}
+                      disabled={updatingStatus}
+                      className="flex-1 px-3 py-2 text-xs font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
+                    >
+                      Marcar como Concluida
+                    </button>
+                    <button
+                      onClick={() => setEditingMeeting(selectedMeeting)}
+                      className="px-3 py-2 text-xs font-medium text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 rounded-lg hover:bg-cyan-500/20 transition-colors"
+                    >
+                      Editar
+                    </button>
+                  </div>
                   <button
                     onClick={() => handleUpdateStatus(selectedMeeting.id, 'CANCELLED')}
                     disabled={updatingStatus}
@@ -540,6 +611,76 @@ export default function CalendarPage() {
                   >
                     Cancelar Reuniao
                   </button>
+                </div>
+              )}
+
+              {/* Register Interaction */}
+              {selectedMeeting.contact_id && (
+                <div className="mt-4 pt-4 border-t border-purple-800/20">
+                  {!showInteractionForm ? (
+                    <button
+                      onClick={() => setShowInteractionForm(true)}
+                      className="w-full px-3 py-2 text-xs font-medium text-purple-300 bg-[#2a1245] border border-purple-700/30 rounded-lg hover:bg-purple-800/30 hover:text-white transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Registrar Interacao
+                    </button>
+                  ) : (
+                    <div className="p-3 bg-[#2a1245]/50 rounded-xl border border-purple-700/30 space-y-3">
+                      <p className="text-xs font-semibold text-purple-300/80">Nova Interacao — {selectedMeeting.contact_name}</p>
+                      <div>
+                        <label className="block text-[10px] text-purple-300/50 mb-1">Tipo</label>
+                        <select
+                          value={interactionData.type}
+                          onChange={(e) => setInteractionData({ ...interactionData, type: e.target.value })}
+                          className="w-full px-2 py-1.5 text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        >
+                          {Object.entries(INTERACTION_TYPE_LABELS).map(([k, l]) => (
+                            <option key={k} value={k}>{l}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-purple-300/50 mb-1">Resultado</label>
+                        <select
+                          value={interactionData.outcome}
+                          onChange={(e) => setInteractionData({ ...interactionData, outcome: e.target.value })}
+                          className="w-full px-2 py-1.5 text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-200 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        >
+                          {Object.entries(INTERACTION_OUTCOME_LABELS).map(([k, l]) => (
+                            <option key={k} value={k}>{l}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-purple-300/50 mb-1">Notas</label>
+                        <textarea
+                          rows={2}
+                          value={interactionData.note}
+                          onChange={(e) => setInteractionData({ ...interactionData, note: e.target.value })}
+                          placeholder="Observacoes..."
+                          className="w-full px-2 py-1.5 text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+                      </div>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => { setShowInteractionForm(false); setInteractionData({ type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: '' }); }}
+                          className="px-3 py-1.5 text-[11px] text-purple-300/60 border border-purple-700/30 rounded-lg hover:bg-purple-800/30 transition-colors"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          onClick={handleAddInteraction}
+                          disabled={interactionLoading}
+                          className="px-3 py-1.5 text-[11px] font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+                        >
+                          {interactionLoading ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -630,6 +771,24 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      {/* Edit Meeting Modal */}
+      {editingMeeting && (
+        <MeetingModal
+          isOpen={!!editingMeeting}
+          onClose={() => setEditingMeeting(null)}
+          onConfirm={handleEditConfirm}
+          contactName={editingMeeting.contact_name || 'Contato'}
+          loading={editLoading}
+          initialData={{
+            title: editingMeeting.title,
+            meeting_at: editingMeeting.meeting_at,
+            duration_minutes: editingMeeting.duration_minutes,
+            location: editingMeeting.location,
+            notes: editingMeeting.notes,
+            meeting_type: editingMeeting.meeting_type,
+          }}
+        />
+      )}
     </div>
   );
 }
