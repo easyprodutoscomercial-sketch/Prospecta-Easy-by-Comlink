@@ -1,8 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { MeetingType } from '@/lib/types';
+import type { MeetingType, MeetingParticipant } from '@/lib/types';
 import { MEETING_TYPE_LABELS, MEETING_TYPE_COLORS } from '@/lib/utils/labels';
+
+interface OrgUser {
+  user_id: string;
+  name: string;
+  email: string;
+  avatar_url?: string | null;
+}
+
+interface ExternalParticipant {
+  name: string;
+  email: string;
+}
 
 interface MeetingFormData {
   title: string;
@@ -11,6 +23,8 @@ interface MeetingFormData {
   location: string;
   notes: string;
   meeting_type: MeetingType;
+  participant_ids: string[];
+  external_participants: ExternalParticipant[];
 }
 
 interface MeetingModalProps {
@@ -19,6 +33,7 @@ interface MeetingModalProps {
   onConfirm: (data: MeetingFormData) => void;
   contactName: string;
   loading?: boolean;
+  currentUserId?: string;
   initialData?: {
     title: string;
     meeting_at: string;
@@ -26,6 +41,8 @@ interface MeetingModalProps {
     location: string | null;
     notes: string | null;
     meeting_type: MeetingType;
+    participants?: MeetingParticipant[];
+    created_by_user_id?: string;
   };
 }
 
@@ -44,6 +61,7 @@ export default function MeetingModal({
   onConfirm,
   contactName,
   loading = false,
+  currentUserId,
   initialData,
 }: MeetingModalProps) {
   const isEditMode = !!initialData;
@@ -54,6 +72,14 @@ export default function MeetingModal({
   const [meetingType, setMeetingType] = useState<MeetingType>('PROSPECCAO');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Participantes
+  const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [externalParticipants, setExternalParticipants] = useState<ExternalParticipant[]>([]);
+  const [extName, setExtName] = useState('');
+  const [extEmail, setExtEmail] = useState('');
+  const [userSearch, setUserSearch] = useState('');
 
   // Inicializar campos apenas quando o modal abre
   const [initialized, setInitialized] = useState(false);
@@ -69,6 +95,24 @@ export default function MeetingModal({
         setMeetingType(initialData.meeting_type);
         setLocation(initialData.location || '');
         setNotes(initialData.notes || '');
+
+        // Pre-fill participantes do initialData
+        if (initialData.participants) {
+          const internalIds = new Set(
+            initialData.participants
+              .filter(p => !p.is_external && p.user_id)
+              .map(p => p.user_id!)
+          );
+          setSelectedUserIds(internalIds);
+          setExternalParticipants(
+            initialData.participants
+              .filter(p => p.is_external)
+              .map(p => ({ name: p.name, email: p.email }))
+          );
+        } else {
+          setSelectedUserIds(new Set());
+          setExternalParticipants([]);
+        }
       } else {
         // Create mode: defaults
         setTitle(`Reuniao com ${contactName}`);
@@ -80,13 +124,29 @@ export default function MeetingModal({
         setMeetingType('PROSPECCAO');
         setLocation('');
         setNotes('');
+        // Criador ja vem pre-selecionado
+        setSelectedUserIds(currentUserId ? new Set([currentUserId]) : new Set());
+        setExternalParticipants([]);
       }
+      setExtName('');
+      setExtEmail('');
+      setUserSearch('');
       setInitialized(true);
     }
     if (!isOpen) {
       setInitialized(false);
     }
-  }, [isOpen, contactName, initialized, initialData]);
+  }, [isOpen, contactName, initialized, initialData, currentUserId]);
+
+  // Buscar usuarios da org quando o modal abre
+  useEffect(() => {
+    if (isOpen) {
+      fetch('/api/users')
+        .then(res => res.ok ? res.json() : Promise.reject())
+        .then(data => setOrgUsers(data.users || []))
+        .catch(() => setOrgUsers([]));
+    }
+  }, [isOpen]);
 
   // Listener de teclado separado — nao reseta campos
   useEffect(() => {
@@ -105,6 +165,31 @@ export default function MeetingModal({
   if (!isOpen) return null;
 
   const canSubmit = title.trim() && date && time;
+  const creatorId = initialData?.created_by_user_id || currentUserId;
+
+  function toggleUser(userId: string) {
+    // Nao pode desmarcar o criador
+    if (userId === creatorId) return;
+    setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }
+
+  function addExternal() {
+    const email = extEmail.trim();
+    if (!email) return;
+    if (externalParticipants.some(p => p.email === email)) return;
+    setExternalParticipants(prev => [...prev, { name: extName.trim(), email }]);
+    setExtName('');
+    setExtEmail('');
+  }
+
+  function removeExternal(email: string) {
+    setExternalParticipants(prev => prev.filter(p => p.email !== email));
+  }
 
   function handleSubmit() {
     if (!canSubmit) return;
@@ -116,7 +201,20 @@ export default function MeetingModal({
       location: location.trim(),
       notes: notes.trim(),
       meeting_type: meetingType,
+      participant_ids: Array.from(selectedUserIds),
+      external_participants: externalParticipants,
     });
+  }
+
+  const filteredUsers = userSearch
+    ? orgUsers.filter(u =>
+        u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
+        u.email.toLowerCase().includes(userSearch.toLowerCase())
+      )
+    : orgUsers;
+
+  function getInitials(name: string) {
+    return name.split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
   }
 
   const inputClass =
@@ -125,7 +223,7 @@ export default function MeetingModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#1e0f35] border border-purple-800/30 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 animate-fade-in">
+      <div className="relative bg-[#1e0f35] border border-purple-800/30 rounded-lg shadow-xl max-w-lg w-full mx-4 p-6 animate-fade-in max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-lg bg-cyan-500/15 border border-cyan-500/25 flex items-center justify-center">
@@ -244,12 +342,158 @@ export default function MeetingModal({
               className={inputClass}
             />
           </div>
+
+          {/* ====== PARTICIPANTES ====== */}
+          <div className="pt-2 border-t border-purple-800/20">
+            <label className="block text-xs text-purple-300/50 mb-2 font-semibold uppercase tracking-wider">
+              Participantes
+            </label>
+
+            {/* Chips dos selecionados */}
+            {(selectedUserIds.size > 0 || externalParticipants.length > 0) && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {Array.from(selectedUserIds).map(uid => {
+                  const u = orgUsers.find(o => o.user_id === uid);
+                  const isCreator = uid === creatorId;
+                  return (
+                    <span
+                      key={uid}
+                      className={`inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-full ${
+                        isCreator
+                          ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/25'
+                          : 'bg-purple-500/15 text-purple-300 border border-purple-500/25'
+                      }`}
+                    >
+                      <span className="w-4 h-4 rounded-full bg-purple-800/50 flex items-center justify-center text-[8px] font-bold">
+                        {getInitials(u?.name || '?')}
+                      </span>
+                      {u?.name || uid.slice(0, 8)}
+                      {isCreator && <span className="text-[9px] text-cyan-400/60 ml-0.5">(criador)</span>}
+                      {!isCreator && (
+                        <button
+                          type="button"
+                          onClick={() => toggleUser(uid)}
+                          className="ml-0.5 text-purple-400/50 hover:text-red-400 transition-colors"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
+                {externalParticipants.map(ext => (
+                  <span
+                    key={ext.email}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-[11px] rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25"
+                  >
+                    <span className="w-4 h-4 rounded-full bg-amber-800/50 flex items-center justify-center text-[8px] font-bold">
+                      {getInitials(ext.name || ext.email)}
+                    </span>
+                    {ext.name || ext.email}
+                    <span className="text-[9px] text-amber-400/60 ml-0.5">(externo)</span>
+                    <button
+                      type="button"
+                      onClick={() => removeExternal(ext.email)}
+                      className="ml-0.5 text-amber-400/50 hover:text-red-400 transition-colors"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Usuarios da org */}
+            <div className="mb-2">
+              <p className="text-[10px] text-purple-300/40 mb-1">Usuarios da organizacao</p>
+              <input
+                type="text"
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                placeholder="Buscar por nome ou email..."
+                className="w-full px-2 py-1.5 text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/30 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent mb-1.5"
+              />
+              <div className="max-h-32 overflow-y-auto space-y-0.5 rounded-lg border border-purple-700/20 bg-[#2a1245]/50 p-1">
+                {filteredUsers.length === 0 && (
+                  <p className="text-[10px] text-purple-300/30 text-center py-2">Nenhum usuario encontrado</p>
+                )}
+                {filteredUsers.map(u => {
+                  const isSelected = selectedUserIds.has(u.user_id);
+                  const isCreator = u.user_id === creatorId;
+                  return (
+                    <button
+                      key={u.user_id}
+                      type="button"
+                      onClick={() => toggleUser(u.user_id)}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors ${
+                        isSelected
+                          ? 'bg-cyan-500/10 border border-cyan-500/20'
+                          : 'hover:bg-purple-800/30 border border-transparent'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                        isSelected ? 'bg-cyan-500/20 text-cyan-400' : 'bg-purple-800/50 text-purple-300/60'
+                      }`}>
+                        {getInitials(u.name)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-xs truncate ${isSelected ? 'text-cyan-300' : 'text-neutral-200'}`}>
+                          {u.name}
+                          {isCreator && <span className="text-[9px] text-cyan-400/60 ml-1">(criador)</span>}
+                        </p>
+                        <p className="text-[10px] text-purple-300/40 truncate">{u.email}</p>
+                      </div>
+                      {isSelected && (
+                        <svg className="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Participantes externos */}
+            <div>
+              <p className="text-[10px] text-purple-300/40 mb-1">Participantes externos</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={extName}
+                  onChange={e => setExtName(e.target.value)}
+                  placeholder="Nome"
+                  className="flex-1 px-2 py-1.5 text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/30 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                />
+                <input
+                  type="email"
+                  value={extEmail}
+                  onChange={e => setExtEmail(e.target.value)}
+                  placeholder="Email *"
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addExternal(); } }}
+                  className="flex-1 px-2 py-1.5 text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/30 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent"
+                />
+                <button
+                  type="button"
+                  onClick={addExternal}
+                  disabled={!extEmail.trim()}
+                  className="px-2.5 py-1.5 text-xs font-medium text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg hover:bg-amber-500/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  + Adicionar
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Info about notifications */}
         <div className="mt-4 px-3 py-2 bg-cyan-500/5 border border-cyan-500/15 rounded-lg">
           <p className="text-[11px] text-cyan-300/70">
-            <span className="font-semibold">Notificacoes automaticas:</span> voce sera lembrado 24h, 8h, 4h, 2h, 1h e 15min antes da reuniao.
+            <span className="font-semibold">Notificacoes automaticas:</span> todos os participantes internos serao lembrados 24h, 8h, 4h, 2h, 1h e 15min antes da reuniao.
           </p>
         </div>
 

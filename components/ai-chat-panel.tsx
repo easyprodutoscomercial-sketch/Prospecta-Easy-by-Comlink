@@ -1,6 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import dynamic from 'next/dynamic';
+import type { ChartBlock } from './ai-chat-chart';
+
+const ChatChart = dynamic(() => import('./ai-chat-chart'), { ssr: false });
 
 interface Message {
   role: 'user' | 'assistant';
@@ -8,7 +12,67 @@ interface Message {
   actions?: {
     notificationsSent: number;
     searchesPerformed: number;
+    chartsGenerated: number;
   };
+}
+
+type MessagePart = { type: 'text'; content: string } | { type: 'chart'; data: ChartBlock };
+
+function parseMessageContent(content: string): MessagePart[] {
+  const parts: MessagePart[] = [];
+  const regex = /CHART_DATA:([\s\S]*?):END_CHART_DATA/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(content)) !== null) {
+    // Text before the chart
+    if (match.index > lastIndex) {
+      const text = content.slice(lastIndex, match.index).trim();
+      if (text) parts.push({ type: 'text', content: text });
+    }
+
+    // Parse chart data
+    try {
+      const chartData = JSON.parse(match[1]) as ChartBlock;
+      parts.push({ type: 'chart', data: chartData });
+    } catch {
+      // If parsing fails, show raw text
+      parts.push({ type: 'text', content: match[0] });
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Remaining text after last chart
+  if (lastIndex < content.length) {
+    const text = content.slice(lastIndex).trim();
+    if (text) parts.push({ type: 'text', content: text });
+  }
+
+  if (parts.length === 0) {
+    parts.push({ type: 'text', content });
+  }
+
+  return parts;
+}
+
+function MessageContent({ content }: { content: string }) {
+  const parts = parseMessageContent(content);
+
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.type === 'chart') {
+          return <ChatChart key={i} chart={part.data} />;
+        }
+        return (
+          <span key={i} className="whitespace-pre-wrap">
+            {part.content}
+          </span>
+        );
+      })}
+    </>
+  );
 }
 
 interface AiChatPanelProps {
@@ -90,6 +154,7 @@ export default function AiChatPanel({ isOpen, onClose }: AiChatPanelProps) {
         actions: data.actions ? {
           notificationsSent: data.actions.notificationsSent || 0,
           searchesPerformed: data.actions.searchesPerformed || 0,
+          chartsGenerated: data.actions.chartsGenerated || 0,
         } : undefined,
       };
       setMessages(prev => [...prev, assistantMsg]);
@@ -147,7 +212,7 @@ export default function AiChatPanel({ isOpen, onClose }: AiChatPanelProps) {
             </div>
             <div>
               <h2 className="text-sm font-semibold text-white">Assistente IA</h2>
-              <p className="text-[10px] text-purple-300/40">Pipeline · Notificacoes · Pesquisa</p>
+              <p className="text-[10px] text-purple-300/40">Pipeline · Graficos · Pesquisa</p>
             </div>
           </div>
           <button
@@ -166,7 +231,7 @@ export default function AiChatPanel({ isOpen, onClose }: AiChatPanelProps) {
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[90%] ${msg.role === 'user' ? '' : 'flex flex-col gap-1.5'}`}>
                 {/* Action badges */}
-                {msg.role === 'assistant' && msg.actions && (msg.actions.notificationsSent > 0 || msg.actions.searchesPerformed > 0) && (
+                {msg.role === 'assistant' && msg.actions && (msg.actions.notificationsSent > 0 || msg.actions.searchesPerformed > 0 || msg.actions.chartsGenerated > 0) && (
                   <div className="flex flex-wrap gap-1 mb-0.5">
                     {msg.actions.notificationsSent > 0 && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full">
@@ -184,17 +249,29 @@ export default function AiChatPanel({ isOpen, onClose }: AiChatPanelProps) {
                         Pesquisa web
                       </span>
                     )}
+                    {msg.actions.chartsGenerated > 0 && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full">
+                        <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        {msg.actions.chartsGenerated} grafico{msg.actions.chartsGenerated > 1 ? 's' : ''} gerado{msg.actions.chartsGenerated > 1 ? 's' : ''}
+                      </span>
+                    )}
                   </div>
                 )}
 
                 <div
-                  className={`px-3 py-2.5 rounded-2xl text-[13px] leading-relaxed whitespace-pre-wrap ${
+                  className={`px-3 py-2.5 rounded-2xl text-[13px] leading-relaxed ${
                     msg.role === 'user'
-                      ? 'bg-emerald-600/90 text-white rounded-br-md'
+                      ? 'bg-emerald-600/90 text-white rounded-br-md whitespace-pre-wrap'
                       : 'bg-purple-900/40 text-purple-100 border border-purple-500/15 rounded-bl-md'
                   }`}
                 >
-                  {msg.content}
+                  {msg.role === 'assistant' ? (
+                    <MessageContent content={msg.content} />
+                  ) : (
+                    msg.content
+                  )}
                 </div>
               </div>
             </div>
@@ -226,6 +303,8 @@ export default function AiChatPanel({ isOpen, onClose }: AiChatPanelProps) {
             <div className="flex flex-wrap gap-1.5">
               {[
                 'Contatos parados?',
+                'Grafico por status',
+                'Desempenho da equipe',
                 'Notificar responsaveis',
                 'Sem responsavel?',
                 'Priorizar hoje?',

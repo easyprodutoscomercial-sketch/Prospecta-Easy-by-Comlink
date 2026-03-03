@@ -69,6 +69,93 @@ function generateMeetingNotifications(
   return notifications;
 }
 
+// Buscar participantes de uma lista de reunioes e anexar ao resultado
+async function fetchParticipantsForMeetings(admin: any, meetingIds: string[]) {
+  if (meetingIds.length === 0) return {};
+
+  const { data: participants } = await admin
+    .from('meeting_participants')
+    .select('*')
+    .in('meeting_id', meetingIds);
+
+  if (!participants || participants.length === 0) return {};
+
+  // Buscar perfis dos participantes internos para enriquecer com nome/avatar
+  const internalUserIds = participants
+    .filter((p: any) => p.user_id)
+    .map((p: any) => p.user_id);
+
+  let profileMap: Record<string, { name: string; email: string; avatar_url: string | null }> = {};
+  if (internalUserIds.length > 0) {
+    const { data: profiles } = await admin
+      .from('profiles')
+      .select('user_id, name, email, avatar_url')
+      .in('user_id', internalUserIds);
+
+    for (const p of profiles || []) {
+      profileMap[p.user_id] = { name: p.name, email: p.email, avatar_url: p.avatar_url };
+    }
+  }
+
+  // Agrupar por meeting_id
+  const map: Record<string, any[]> = {};
+  for (const p of participants) {
+    if (!map[p.meeting_id]) map[p.meeting_id] = [];
+    const prof = p.user_id ? profileMap[p.user_id] : null;
+    map[p.meeting_id].push({
+      id: p.id,
+      user_id: p.user_id,
+      name: prof?.name || p.name || '',
+      email: prof?.email || p.email || '',
+      avatar_url: prof?.avatar_url || null,
+      is_external: p.is_external,
+    });
+  }
+  return map;
+}
+
+// Inserir participantes para uma reuniao
+async function insertParticipants(
+  admin: any,
+  meetingId: string,
+  creatorUserId: string,
+  participantIds: string[],
+  externalParticipants: { name: string; email: string }[]
+) {
+  const rows: any[] = [];
+
+  // Criador sempre participa
+  const allUserIds = new Set([creatorUserId, ...participantIds]);
+
+  for (const userId of allUserIds) {
+    rows.push({
+      meeting_id: meetingId,
+      user_id: userId,
+      is_external: false,
+    });
+  }
+
+  for (const ext of externalParticipants) {
+    if (ext.email) {
+      rows.push({
+        meeting_id: meetingId,
+        name: ext.name || null,
+        email: ext.email,
+        is_external: true,
+      });
+    }
+  }
+
+  if (rows.length > 0) {
+    const { error } = await admin.from('meeting_participants').insert(rows);
+    if (error) {
+      console.error('Error inserting meeting participants:', JSON.stringify(error, null, 2));
+    }
+  }
+
+  return allUserIds;
+}
+
 // GET /api/meetings - Lista reunioes
 export async function GET(request: NextRequest) {
   try {
@@ -113,9 +200,25 @@ export async function GET(request: NextRequest) {
       .order('meeting_at', { ascending: true });
 
     // Filtrar por contatos de pipelines permitidos (non-admin)
+    // Tambem incluir reunioes onde o usuario e participante
     if (allowedContactIds !== null) {
-      if (allowedContactIds.length > 0) {
-        query = query.in('contact_id', allowedContactIds);
+      // Buscar reunioes onde e participante
+      const { data: myParticipations } = await admin
+        .from('meeting_participants')
+        .select('meeting_id')
+        .eq('user_id', user.id);
+
+      const myMeetingIds = (myParticipations || []).map((p: any) => p.meeting_id);
+
+      if (allowedContactIds.length > 0 || myMeetingIds.length > 0) {
+        // Usar or para combinar: contatos permitidos OU reunioes onde participa
+        if (myMeetingIds.length > 0 && allowedContactIds.length > 0) {
+          query = query.or(`contact_id.in.(${allowedContactIds.join(',')}),id.in.(${myMeetingIds.join(',')})`);
+        } else if (allowedContactIds.length > 0) {
+          query = query.in('contact_id', allowedContactIds);
+        } else {
+          query = query.in('id', myMeetingIds);
+        }
       } else {
         return NextResponse.json({ meetings: [] });
       }
@@ -131,7 +234,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ meetings: data || [] });
+    const meetings = data || [];
+
+    // Buscar participantes de todas as reunioes
+    const meetingIds = meetings.map((m: any) => m.id);
+    const participantsMap = await fetchParticipantsForMeetings(admin, meetingIds);
+
+    const meetingsWithParticipants = meetings.map((m: any) => ({
+      ...m,
+      participants: participantsMap[m.id] || [],
+    }));
+
+    return NextResponse.json({ meetings: meetingsWithParticipants });
   } catch (error: any) {
     console.error('Error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -149,7 +263,7 @@ export async function POST(request: NextRequest) {
     if (!profile) return NextResponse.json({ error: 'Profile nao encontrado' }, { status: 404 });
 
     const body = await request.json();
-    const { contact_id, title, notes, location, meeting_at, duration_minutes, meeting_type } = body;
+    const { contact_id, title, notes, location, meeting_at, duration_minutes, meeting_type, participant_ids, external_participants } = body;
 
     if (!contact_id || !title || !meeting_at) {
       return NextResponse.json({ error: 'contact_id, title e meeting_at sao obrigatorios' }, { status: 400 });
@@ -205,26 +319,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: meetingError.message, details: meetingError }, { status: 500 });
     }
 
-    // Gerar notificacoes escalonadas
-    const notifications = generateMeetingNotifications(
-      meeting,
-      contact.name,
+    // Inserir participantes (criador + selecionados + externos)
+    const allInternalUserIds = await insertParticipants(
+      admin,
+      meeting.id,
       user.id,
-      profile.organization_id
+      participant_ids || [],
+      external_participants || []
     );
 
-    if (notifications.length > 0) {
-      const { error: notifError } = await admin
-        .from('notifications')
-        .insert(notifications);
+    // Gerar notificacoes escalonadas para TODOS os participantes internos
+    let totalNotifications = 0;
+    for (const participantUserId of allInternalUserIds) {
+      const notifications = generateMeetingNotifications(
+        meeting,
+        contact.name,
+        participantUserId,
+        profile.organization_id
+      );
 
-      if (notifError) {
-        console.error('Error creating meeting notifications:', JSON.stringify(notifError, null, 2));
-        console.error('Notifications payload was:', JSON.stringify(notifications, null, 2));
+      if (notifications.length > 0) {
+        const { error: notifError } = await admin
+          .from('notifications')
+          .insert(notifications);
+
+        if (notifError) {
+          console.error('Error creating meeting notifications:', JSON.stringify(notifError, null, 2));
+        }
+        totalNotifications += notifications.length;
       }
     }
 
-    return NextResponse.json({ meeting, notifications_created: notifications.length }, { status: 201 });
+    return NextResponse.json({ meeting, notifications_created: totalNotifications }, { status: 201 });
   } catch (error: any) {
     console.error('POST /api/meetings uncaught error:', error?.message, error?.stack || error);
     return NextResponse.json({ error: error.message, stack: error.stack }, { status: 500 });

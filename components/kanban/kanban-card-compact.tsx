@@ -6,6 +6,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { Contact } from '@/lib/types';
 import type { UserInfo } from './kanban-card';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
+import { SEGMENTO_COLORS } from '@/lib/utils/labels';
 
 interface KanbanCardCompactProps {
   contact: Contact;
@@ -56,7 +57,7 @@ export const KanbanCardCompact = memo(function KanbanCardCompact({ contact, over
       {...(overlay ? {} : attributes)}
       {...(overlay ? {} : listeners)}
       onClick={handleClick}
-      className={`bg-[#1e0f35] rounded-lg px-2 py-1.5 border cursor-grab select-none transition-[transform,box-shadow,opacity] duration-150 hover:-translate-y-0.5 hover:bg-[#241540] ${
+      className={`bg-[#1e0f35] rounded-lg px-2 py-1.5 border cursor-grab select-none overflow-hidden transition-[transform,box-shadow,opacity] duration-150 hover:-translate-y-0.5 hover:bg-[#241540] ${
         bulkSelected ? 'ring-2 ring-amber-500/50 bg-amber-500/5' : 'border-purple-800/15 hover:border-purple-600/30'
       } ${
         overlay ? 'shadow-2xl ring-2 ring-emerald-500/30 opacity-80' : ''
@@ -64,6 +65,19 @@ export const KanbanCardCompact = memo(function KanbanCardCompact({ contact, over
         isDimmed ? 'opacity-30' : ''
       }`}
     >
+      {/* Segment stripe */}
+      {contact.segmento && (
+        <div
+          className="-mx-3 -mt-2 mb-1 px-2 py-0.5 flex items-center gap-1"
+          style={{ backgroundColor: SEGMENTO_COLORS[contact.segmento].stripe + '25' }}
+        >
+          <div className="w-1 h-1 rounded-full shrink-0" style={{ backgroundColor: SEGMENTO_COLORS[contact.segmento].stripe }} />
+          <span style={{ color: SEGMENTO_COLORS[contact.segmento].stripe }} className="text-[8px] font-bold truncate">
+            {contact.segmento}
+          </span>
+        </div>
+      )}
+
       <div className="flex items-center gap-1.5">
         {/* Bulk checkbox */}
         {bulkMode && (
@@ -91,7 +105,7 @@ export const KanbanCardCompact = memo(function KanbanCardCompact({ contact, over
         </div>
 
         {/* Name */}
-        <span className="text-[11px] font-medium text-neutral-200 truncate flex-1">{contact.name}</span>
+        <span className="text-[11px] font-bold text-white truncate flex-1">{contact.name}</span>
 
         {/* Value badge */}
         {contact.valor_estimado != null && contact.valor_estimado > 0 && (

@@ -54,7 +54,7 @@ export async function chatCompletion({
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages,
       max_tokens: maxTokens,
       temperature,
@@ -90,7 +90,7 @@ export async function chatCompletionWithTools({
   messages,
   tools,
   executeToolCall,
-  maxTokens = 1200,
+  maxTokens = 2500,
   temperature = 0.7,
   maxToolRounds = 3,
 }: ChatCompletionWithToolsOptions): Promise<{ content: string; toolResults: { tool: string; result: string }[] }> {
@@ -108,7 +108,7 @@ export async function chatCompletionWithTools({
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: conversationMessages,
         tools,
         max_tokens: maxTokens,
@@ -165,7 +165,7 @@ export async function chatCompletionWithTools({
       Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: conversationMessages,
       max_tokens: maxTokens,
       temperature,

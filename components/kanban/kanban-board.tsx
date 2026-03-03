@@ -5,6 +5,7 @@ import { DragOverlay } from '@dnd-kit/core';
 import type { Contact, PipelineStage, PipelineSettings, PipelineType } from '@/lib/types';
 import { KanbanColumn } from './kanban-column';
 import { KanbanCard, type UserInfo } from './kanban-card';
+import { useIsMobile } from '@/lib/hooks/use-is-mobile';
 
 interface KanbanBoardProps {
   stages: PipelineStage[];
@@ -37,18 +38,19 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsedColumns, onToggleCollapse }: KanbanBoardProps) {
   const colCount = stages.length;
+  const isMobile = useIsMobile();
 
-  // Dynamic grid: collapsed columns use 48px, expanded use 1fr
+  // Dynamic grid: collapsed columns use 48px, expanded use 1fr (desktop only)
   const gridTemplateColumns = useMemo(() => {
-    if (colCount > 8) return undefined;
+    if (isMobile || colCount > 8) return undefined;
     return stages.map(s => collapsedColumns?.has(s.id) ? '48px' : 'minmax(0, 1fr)').join(' ');
-  }, [stages, collapsedColumns, colCount]);
+  }, [stages, collapsedColumns, colCount, isMobile]);
 
   return (
     <>
       <div
-        className="flex gap-2 sm:gap-2.5 overflow-x-auto pb-4 min-h-0 h-full snap-x snap-mandatory sm:snap-none"
-        style={colCount <= 8 && gridTemplateColumns ? { display: 'grid', gridTemplateColumns } : undefined}
+        className="kanban-board-container flex gap-2 sm:gap-2.5 overflow-x-auto pb-4 min-h-0 h-full scrollbar-hide"
+        style={gridTemplateColumns ? { display: 'grid', gridTemplateColumns } : undefined}
       >
         {stages.map((stage) => (
           <KanbanColumn

@@ -26,6 +26,7 @@ export default function FocusPage() {
   const [meetingsBooked, setMeetingsBooked] = useState(0);
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [meetingLoading, setMeetingLoading] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState('');
 
   const currentContact = queue[currentIndex] || null;
 
@@ -80,6 +81,7 @@ export default function FocusPage() {
 
   useEffect(() => {
     fetchUsers();
+    fetch('/api/me').then(r => r.ok ? r.json() : null).then(d => { if (d?.user_id) setCurrentUserId(d.user_id); }).catch(() => {});
   }, [fetchUsers]);
 
   useEffect(() => {
@@ -159,7 +161,7 @@ export default function FocusPage() {
     setActionLoading(false);
   };
 
-  const handleMeetingConfirm = async (data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string; meeting_type: string }) => {
+  const handleMeetingConfirm = async (data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string; meeting_type: string; participant_ids?: string[]; external_participants?: { name: string; email: string }[] }) => {
     if (!currentContact) return;
     setMeetingLoading(true);
     try {
@@ -330,6 +332,7 @@ export default function FocusPage() {
           onConfirm={handleMeetingConfirm}
           contactName={currentContact.name}
           loading={meetingLoading}
+          currentUserId={currentUserId}
         />
       )}
     </div>

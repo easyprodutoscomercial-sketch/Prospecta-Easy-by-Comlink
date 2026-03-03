@@ -13,6 +13,17 @@
   display: none;
 }
 
+/* Kanban board: vertical stack on mobile instead of grid */
+@media (max-width: 767px) {
+  .kanban-board-container {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+}
+
 /* Dark theme range slider (density control) */
 input[type="range"].density-slider {
   -webkit-appearance: none;

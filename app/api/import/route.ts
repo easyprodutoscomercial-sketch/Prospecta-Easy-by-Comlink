@@ -10,9 +10,9 @@ const MAX_ROWS = 2000;
 const FIELD_LABELS: Record<string, string> = {
   name: 'Nome', phone: 'Telefone', email: 'Email', cpf: 'CPF', cnpj: 'CNPJ',
   company: 'Empresa', notes: 'Observações', tipo: 'Tipo', referencia: 'Referência',
-  classe: 'Classe', produtos_fornecidos: 'Produtos Fornecidos', contato_nome: 'Contato',
-  cargo: 'Cargo', endereco: 'Endereço', cidade: 'Cidade', estado: 'Estado', cep: 'CEP',
-  website: 'Website', instagram: 'Instagram', whatsapp: 'WhatsApp',
+  classe: 'Classe', segmento: 'Segmento', produtos_fornecidos: 'Produtos Fornecidos',
+  contato_nome: 'Contato', cargo: 'Cargo', endereco: 'Endereço', cidade: 'Cidade',
+  estado: 'Estado', cep: 'CEP', website: 'Website', instagram: 'Instagram', whatsapp: 'WhatsApp',
 };
 
 function formatRowAsNotes(row: Record<string, any>, rowNumber: number): string {
@@ -34,6 +34,7 @@ const MERGEABLE_FIELDS = [
   'tipo', 'referencia', 'classe', 'produtos_fornecidos',
   'contato_nome', 'cargo', 'endereco', 'cidade', 'estado', 'cep',
   'website', 'instagram', 'whatsapp',
+  'segmento',
 ] as const;
 
 export async function POST(request: NextRequest) {
@@ -229,6 +230,7 @@ export async function POST(request: NextRequest) {
           website: row.website,
           instagram: row.instagram,
           whatsapp: row.whatsapp,
+          segmento: row.segmento,
         });
 
         // Extract additional phones from row

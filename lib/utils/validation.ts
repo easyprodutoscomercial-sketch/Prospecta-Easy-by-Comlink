@@ -27,6 +27,7 @@ export const contactSchema = z.object({
   whatsapp: z.string().optional().nullable(),
   // Qualificação
   temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).optional().nullable(),
+  segmento: z.string().max(100).optional().nullable(),
   origem: z.enum(['MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO', 'QRCODE']).optional().nullable(),
   proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'ENVIAR_PROPOSTA', 'OUTRO']).optional().nullable(),
   proxima_acao_data: z.string().optional().nullable(),
@@ -90,6 +91,7 @@ export const contactUpdateSchema = z.object({
   instagram: z.string().optional().nullable(),
   whatsapp: z.string().optional().nullable(),
   temperatura: z.enum(['FRIO', 'MORNO', 'QUENTE']).optional().nullable(),
+  segmento: z.string().max(100).optional().nullable(),
   origem: z.enum(['MANUAL', 'INDICACAO', 'FEIRA', 'LINKEDIN', 'SITE', 'WHATSAPP_INBOUND', 'OUTRO', 'QRCODE']).optional().nullable(),
   proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'ENVIAR_PROPOSTA', 'OUTRO']).optional().nullable(),
   proxima_acao_data: z.string().optional().nullable(),
@@ -207,5 +209,55 @@ export const bugReportUpdateSchema = z.object({
 });
 
 export const bugCommentSchema = z.object({
+  content: z.string().min(1, 'Comentario e obrigatorio').max(5000),
+});
+
+// ============================================
+// Support Tickets
+// ============================================
+
+export const supportTicketSchema = z.object({
+  title: z.string().min(1, 'Titulo e obrigatorio').max(200),
+  description: z.string().max(5000).optional().nullable(),
+  ticket_type: z.enum(['SUPORTE', 'TAREFA', 'BUG']).default('SUPORTE'),
+  category: z.enum(['ERRO', 'DUVIDA', 'MELHORIA', 'ENTREGA', 'CONFIGURACAO', 'GERAL']).default('GERAL'),
+  priority: z.enum(['URGENTE', 'ALTA', 'NORMAL', 'BAIXA']).default('NORMAL'),
+  severity: z.enum(['CRITICO', 'ALTO', 'MEDIO', 'BAIXO']).optional().nullable(),
+  contact_id: z.string().uuid().optional().nullable(),
+  project_id: z.string().uuid().optional().nullable(),
+  assigned_to: z.string().uuid().optional().nullable(),
+  due_date: z.string().optional().nullable(),
+});
+
+export const supportTicketUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(5000).optional().nullable(),
+  ticket_type: z.enum(['SUPORTE', 'TAREFA', 'BUG']).optional(),
+  category: z.enum(['ERRO', 'DUVIDA', 'MELHORIA', 'ENTREGA', 'CONFIGURACAO', 'GERAL']).optional(),
+  priority: z.enum(['URGENTE', 'ALTA', 'NORMAL', 'BAIXA']).optional(),
+  severity: z.enum(['CRITICO', 'ALTO', 'MEDIO', 'BAIXO']).optional().nullable(),
+  status: z.enum(['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO', 'RESOLVIDO', 'FECHADO']).optional(),
+  contact_id: z.string().uuid().optional().nullable(),
+  project_id: z.string().uuid().optional().nullable(),
+  assigned_to: z.string().uuid().optional().nullable(),
+  due_date: z.string().optional().nullable(),
+  resolution_notes: z.string().max(5000).optional().nullable(),
+});
+
+export const supportProjectSchema = z.object({
+  name: z.string().min(1, 'Nome e obrigatorio').max(100),
+  description: z.string().max(500).optional().nullable(),
+  contact_id: z.string().uuid().optional().nullable(),
+  is_active: z.boolean().default(true),
+});
+
+export const supportProjectUpdateSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional().nullable(),
+  contact_id: z.string().uuid().optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+export const supportCommentSchema = z.object({
   content: z.string().min(1, 'Comentario e obrigatorio').max(5000),
 });

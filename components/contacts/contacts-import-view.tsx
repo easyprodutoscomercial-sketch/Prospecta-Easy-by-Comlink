@@ -7,7 +7,7 @@ import { usePipeline } from '@/lib/pipeline-context';
 
 const TEMPLATE_COLUMNS = [
   'name', 'phone', 'email', 'cpf', 'cnpj', 'company', 'notes',
-  'tipo', 'referencia', 'classe', 'produtos_fornecidos',
+  'tipo', 'referencia', 'classe', 'segmento', 'produtos_fornecidos',
   'contato_nome', 'cargo', 'endereco', 'cidade', 'estado', 'cep',
   'website', 'instagram', 'whatsapp',
   'telefone_2', 'contato_2', 'cargo_2',
@@ -19,7 +19,7 @@ const TEMPLATE_ROWS = [
     name: 'João Silva', phone: '(11) 99999-0001', email: 'joao@exemplo.com',
     cpf: '123.456.789-00', cnpj: '', company: 'Empresa ABC',
     notes: 'Cliente em prospecção', tipo: 'COMPRADOR', referencia: 'LinkedIn',
-    classe: 'A', produtos_fornecidos: '', contato_nome: '', cargo: 'Diretor',
+    classe: 'A', segmento: 'Transportadora', produtos_fornecidos: '', contato_nome: '', cargo: 'Diretor',
     endereco: '', cidade: 'São Paulo', estado: 'SP', cep: '',
     website: '', instagram: '', whatsapp: '(11) 99999-0001',
     telefone_2: '(11) 98888-1111', contato_2: 'Ana Silva', cargo_2: 'Assistente',
@@ -29,7 +29,7 @@ const TEMPLATE_ROWS = [
     name: 'Maria Souza', phone: '(21) 98888-0002', email: 'maria@exemplo.com',
     cpf: '', cnpj: '', company: 'Empresa XYZ',
     notes: 'Indicação do João', tipo: 'FORNECEDOR,COMPRADOR', referencia: 'Indicação',
-    classe: 'B', produtos_fornecidos: 'Peças industriais', contato_nome: 'Maria Souza',
+    classe: 'B', segmento: 'Agricola', produtos_fornecidos: 'Peças industriais', contato_nome: 'Maria Souza',
     cargo: 'Gerente', endereco: 'Rua das Flores 123', cidade: 'Rio de Janeiro',
     estado: 'RJ', cep: '20000-000', website: 'https://empresaxyz.com',
     instagram: '@empresaxyz', whatsapp: '(21) 98888-0002',
@@ -40,7 +40,7 @@ const TEMPLATE_ROWS = [
     name: 'Pedro Santos', phone: '(31) 97777-0003', email: 'pedro@exemplo.com',
     cpf: '', cnpj: '12.345.678/0001-90', company: 'Tech Ltda',
     notes: 'Reunião marcada para segunda', tipo: 'FORNECEDOR', referencia: 'Feira',
-    classe: 'A', produtos_fornecidos: 'Componentes eletrônicos', contato_nome: 'Pedro Santos',
+    classe: 'A', segmento: 'Industria', produtos_fornecidos: 'Componentes eletrônicos', contato_nome: 'Pedro Santos',
     cargo: 'CEO', endereco: '', cidade: 'Belo Horizonte', estado: 'MG', cep: '',
     website: '', instagram: '', whatsapp: '(31) 97777-0003',
     telefone_2: '', contato_2: '', cargo_2: '',
@@ -173,7 +173,7 @@ export default function ContactsImportView({ onImportComplete }: ContactsImportV
               A planilha deve conter as colunas abaixo. Apenas <strong>name</strong> é obrigatório. Limite: 2.000 linhas.
             </p>
             <code className="inline-block bg-[#2a1245] text-purple-200 px-3 py-1.5 rounded text-xs mt-3 leading-relaxed">
-              name, phone, email, cpf, cnpj, company, notes, tipo, referencia, classe, produtos_fornecidos, contato_nome, cargo, endereco, cidade, estado, cep, website, instagram, whatsapp, telefone_2, contato_2, cargo_2, telefone_3, contato_3, cargo_3
+              name, phone, email, cpf, cnpj, company, notes, tipo, referencia, classe, segmento, produtos_fornecidos, contato_nome, cargo, endereco, cidade, estado, cep, website, instagram, whatsapp, telefone_2, contato_2, cargo_2, telefone_3, contato_3, cargo_3
             </code>
           </div>
           <button

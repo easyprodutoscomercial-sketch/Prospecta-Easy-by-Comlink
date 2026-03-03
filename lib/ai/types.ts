@@ -103,6 +103,8 @@ export interface ContactForAnalysis {
   id: string;
   name: string;
   status: ContactStatus;
+  stage_id: string | null;
+  stage_name?: string;
   temperatura: string | null;
   origem: string | null;
   proxima_acao_tipo: ProximaAcaoTipo | null;

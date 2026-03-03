@@ -261,6 +261,8 @@ export default function CalendarPage() {
     location: string;
     notes: string;
     meeting_type: string;
+    participant_ids?: string[];
+    external_participants?: { name: string; email: string }[];
   }) {
     if (!editingMeeting) return;
     setEditLoading(true);
@@ -791,6 +793,7 @@ export default function CalendarPage() {
           onConfirm={handleEditConfirm}
           contactName={editingMeeting.contact_name || 'Contato'}
           loading={editLoading}
+          currentUserId={currentUserId}
           initialData={{
             title: editingMeeting.title,
             meeting_at: editingMeeting.meeting_at,
@@ -798,6 +801,8 @@ export default function CalendarPage() {
             location: editingMeeting.location,
             notes: editingMeeting.notes,
             meeting_type: editingMeeting.meeting_type,
+            participants: editingMeeting.participants,
+            created_by_user_id: editingMeeting.created_by_user_id,
           }}
         />
       )}

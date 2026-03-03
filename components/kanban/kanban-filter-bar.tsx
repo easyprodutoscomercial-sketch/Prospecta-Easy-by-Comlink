@@ -26,7 +26,7 @@ const TEMP_CHIP_COLORS: Record<string, { active: string; inactive: string }> = {
 };
 
 export function KanbanFilterBar({ contacts, userMap, onFiltersChange }: KanbanFilterBarProps) {
-  const [mode, setMode] = useState<FilterMode>('dim');
+  const [mode, setMode] = useState<FilterMode>('hide');
   const [chipFilters, setChipFilters] = useState<ActiveChipFilters>({
     temperatura: new Set(),
     responsavel: new Set(),

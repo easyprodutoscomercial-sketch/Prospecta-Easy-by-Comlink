@@ -125,7 +125,7 @@ export async function PATCH(
       'pipeline_id', 'stage_id',
       'inexistente',
       'telefones_adicionais',
-      'temperatura', 'origem', 'proxima_acao_tipo', 'proxima_acao_data',
+      'temperatura', 'segmento', 'origem', 'proxima_acao_tipo', 'proxima_acao_data',
       'motivo_ganho_perdido', 'valor_estimado',
     ]);
 

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
-import { analyzeContacts, ACTIVE_STATUSES } from '@/lib/ai/rules-engine';
+import { analyzeContacts } from '@/lib/ai/rules-engine';
 import { ContactForAnalysis, PipelineHealth } from '@/lib/ai/types';
 import { chatCompletionJSON } from '@/lib/ai/openai';
 import { buildCoachingPrompt } from '@/lib/ai/prompts';
@@ -19,19 +19,50 @@ export async function GET() {
     const admin = getAdminClient();
     const orgId = profile.organization_id;
 
-    // Fetch active contacts
-    const { data: contacts, error: contactsError } = await admin
-      .from('contacts')
-      .select('*')
-      .eq('organization_id', orgId)
-      .in('status', ACTIVE_STATUSES);
+    // Fetch all pipelines for the org
+    const { data: pipelines } = await admin
+      .from('pipelines')
+      .select('id')
+      .eq('organization_id', orgId);
 
-    if (contactsError) throw contactsError;
+    const pipelineIds = (pipelines || []).map((p: any) => p.id);
 
-    const activeContacts = contacts || [];
+    // Fetch stages for those pipelines
+    const { data: stages } = await admin
+      .from('pipeline_stages')
+      .select('id, name, is_terminal, terminal_type')
+      .in('pipeline_id', pipelineIds.length > 0 ? pipelineIds : ['__none__']);
 
-    // Fetch interactions
-    const contactIds = activeContacts.map((c) => c.id);
+    const activeStageIds = new Set<string>();
+    const wonStageIds = new Set<string>();
+    const stageNameMap = new Map<string, string>();
+
+    for (const s of stages || []) {
+      stageNameMap.set(s.id, s.name);
+      if (s.is_terminal) {
+        if (s.terminal_type === 'won') wonStageIds.add(s.id);
+      } else {
+        activeStageIds.add(s.id);
+      }
+    }
+
+    // Fetch active contacts using stage_id (not old status field)
+    let activeContacts: any[] = [];
+    if (activeStageIds.size > 0) {
+      const { data, error } = await admin
+        .from('contacts')
+        .select('*')
+        .eq('organization_id', orgId)
+        .in('stage_id', Array.from(activeStageIds));
+
+      if (error) {
+        console.error('Pipeline health: contacts query error:', error.message);
+      }
+      activeContacts = data || [];
+    }
+
+    // Fetch interactions for active contacts
+    const contactIds = activeContacts.map((c: any) => c.id);
     let interactions: any[] = [];
     if (contactIds.length > 0) {
       const { data: intData } = await admin
@@ -51,15 +82,16 @@ export async function GET() {
       interactionsByContact.set(i.contact_id, list);
     }
 
-    const contactsForAnalysis: ContactForAnalysis[] = activeContacts.map((c) => ({
+    const contactsForAnalysis: ContactForAnalysis[] = activeContacts.map((c: any) => ({
       ...c,
+      stage_name: stageNameMap.get(c.stage_id) || null,
       interactions: (interactionsByContact.get(c.id) || []).slice(0, 10),
     }));
 
-    // Run rules engine
-    const alerts = analyzeContacts(contactsForAnalysis);
+    // Run rules engine with stage_id awareness
+    const alerts = analyzeContacts(contactsForAnalysis, { activeStageIds });
 
-    // Compute metrics
+    // Compute metrics by stage name
     const now = new Date();
     const byStage: Record<string, number> = {};
     const daysInStageSum: Record<string, number> = {};
@@ -68,11 +100,12 @@ export async function GET() {
     let noNextAction = 0;
 
     for (const c of activeContacts) {
-      byStage[c.status] = (byStage[c.status] || 0) + 1;
+      const stageName = stageNameMap.get(c.stage_id) || 'Desconhecido';
+      byStage[stageName] = (byStage[stageName] || 0) + 1;
 
       const days = Math.floor((now.getTime() - new Date(c.updated_at).getTime()) / (1000 * 60 * 60 * 24));
-      daysInStageSum[c.status] = (daysInStageSum[c.status] || 0) + days;
-      daysInStageCount[c.status] = (daysInStageCount[c.status] || 0) + 1;
+      daysInStageSum[stageName] = (daysInStageSum[stageName] || 0) + days;
+      daysInStageCount[stageName] = (daysInStageCount[stageName] || 0) + 1;
 
       if (!c.assigned_to_user_id) noOwner++;
       if (!c.proxima_acao_tipo && !c.proxima_acao_data) noNextAction++;
@@ -83,12 +116,16 @@ export async function GET() {
       avgDaysInStage[stage] = Math.round(sum / (daysInStageCount[stage] || 1));
     }
 
-    // Get conversion stats (all time)
-    const { count: totalConverted } = await admin
-      .from('contacts')
-      .select('*', { count: 'exact', head: true })
-      .eq('organization_id', orgId)
-      .eq('status', 'CONVERTIDO');
+    // Get conversion stats using won stage_ids
+    let totalConverted = 0;
+    if (wonStageIds.size > 0) {
+      const { count } = await admin
+        .from('contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('organization_id', orgId)
+        .in('stage_id', Array.from(wonStageIds));
+      totalConverted = count || 0;
+    }
 
     const { count: totalAll } = await admin
       .from('contacts')
@@ -96,10 +133,10 @@ export async function GET() {
       .eq('organization_id', orgId);
 
     const conversionRate = totalAll && totalAll > 0
-      ? Math.round(((totalConverted || 0) / totalAll) * 100)
+      ? Math.round((totalConverted / totalAll) * 100)
       : 0;
 
-    const totalValue = activeContacts.reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
+    const totalValue = activeContacts.reduce((sum: number, c: any) => sum + (c.valor_estimado || 0), 0);
 
     const atRiskContacts = new Set(
       alerts.filter((a) => a.level === 'CRITICAL' || a.level === 'HIGH').map((a) => a.contactId)

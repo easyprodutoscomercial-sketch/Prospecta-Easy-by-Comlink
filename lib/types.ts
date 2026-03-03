@@ -12,6 +12,8 @@ export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE';
 
 export type Origem = 'MANUAL' | 'INDICACAO' | 'FEIRA' | 'LINKEDIN' | 'SITE' | 'WHATSAPP_INBOUND' | 'OUTRO' | 'QRCODE';
 
+export type Segmento = string;
+
 export type ProximaAcaoTipo = 'LIGAR' | 'ENVIAR_WHATSAPP' | 'ENVIAR_EMAIL' | 'REUNIAO' | 'VISITA' | 'FOLLOW_UP' | 'ENVIAR_PROPOSTA' | 'OUTRO';
 
 export type InteractionType =
@@ -86,6 +88,7 @@ export interface Contact {
   cnpj_digits: string | null;
   // Qualificação
   temperatura: Temperatura | null;
+  segmento: Segmento | null;
   origem: Origem | null;
   proxima_acao_tipo: ProximaAcaoTipo | null;
   proxima_acao_data: string | null;
@@ -244,6 +247,15 @@ export type MeetingType =
   | 'SUPORTE'
   | 'OUTRO';
 
+export interface MeetingParticipant {
+  id: string;
+  user_id: string | null;
+  name: string;
+  email: string;
+  avatar_url?: string | null;
+  is_external: boolean;
+}
+
 export interface Meeting {
   id: string;
   organization_id: string;
@@ -257,6 +269,7 @@ export interface Meeting {
   status: MeetingStatus;
   meeting_type: MeetingType;
   notifications_generated: boolean;
+  participants?: MeetingParticipant[];
   created_at: string;
   updated_at: string;
 }
@@ -415,6 +428,86 @@ export interface ContactCustomFieldValue {
 }
 
 export type KanbanViewMode = 'kanban' | 'list' | 'compact';
+
+// ============================================
+// Support Tickets
+// ============================================
+
+export type SupportTicketType = 'SUPORTE' | 'TAREFA' | 'BUG';
+
+export type SupportCategory = 'ERRO' | 'DUVIDA' | 'MELHORIA' | 'ENTREGA' | 'CONFIGURACAO' | 'GERAL';
+
+export type SupportPriority = 'URGENTE' | 'ALTA' | 'NORMAL' | 'BAIXA';
+
+export type SupportStatus = 'ABERTO' | 'EM_ANDAMENTO' | 'AGUARDANDO' | 'RESOLVIDO' | 'FECHADO';
+
+export type SupportSeverity = 'CRITICO' | 'ALTO' | 'MEDIO' | 'BAIXO';
+
+export interface SupportTicket {
+  id: string;
+  organization_id: string;
+  title: string;
+  description: string | null;
+  ticket_type: SupportTicketType;
+  category: SupportCategory;
+  priority: SupportPriority;
+  severity: SupportSeverity | null;
+  status: SupportStatus;
+  contact_id: string | null;
+  project_id: string | null;
+  reported_by: string;
+  assigned_to: string | null;
+  due_date: string | null;
+  resolution_notes: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+  // joined
+  reported_by_name?: string;
+  assigned_to_name?: string;
+  contact_name?: string;
+  project_name?: string;
+}
+
+export interface SupportProject {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  contact_id: string | null;
+  token: string;
+  is_active: boolean;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  // joined
+  contact_name?: string;
+  created_by_name?: string;
+  ticket_count?: number;
+}
+
+export interface SupportComment {
+  id: string;
+  ticket_id: string;
+  user_id: string;
+  user_name: string;
+  content: string;
+  is_status_change: boolean;
+  created_at: string;
+}
+
+export interface SupportAttachment {
+  id: string;
+  ticket_id: string;
+  organization_id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  uploaded_by: string;
+  created_at: string;
+  public_url?: string;
+}
 
 // Re-export AI types for convenience
 export type { Notification, RiskAlert, ActionSuggestion, PipelineHealth } from '@/lib/ai/types';

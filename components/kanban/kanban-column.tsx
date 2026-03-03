@@ -130,44 +130,60 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
       <div
         ref={setNodeRef}
         onClick={onToggleCollapse}
-        className={`flex-shrink-0 w-12 bg-[#160b2e] rounded-xl flex flex-col items-center py-3 cursor-pointer transition-all duration-200 hover:bg-[#1e0f35] ${
+        className={`flex-shrink-0 bg-[#160b2e] rounded-xl cursor-pointer transition-all duration-200 hover:bg-[#1e0f35] ${
           isOver
             ? 'ring-2 ring-emerald-500/40 bg-[#1e0f35] shadow-lg shadow-emerald-900/20'
             : 'border border-purple-800/15'
         }`}
       >
-        {/* Icon */}
-        <div className="w-6 h-6 rounded-md flex items-center justify-center mb-2" style={{ backgroundColor: `${color}15` }}>
-          <svg className="w-3.5 h-3.5" style={{ color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={iconPath} />
+        {/* Mobile: horizontal compact bar */}
+        <div className="flex sm:hidden items-center gap-2 px-3 py-2.5">
+          <div className="w-6 h-6 rounded-md flex items-center justify-center" style={{ backgroundColor: `${color}15` }}>
+            <svg className="w-3.5 h-3.5" style={{ color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={iconPath} />
+            </svg>
+          </div>
+          <span className="text-xs font-semibold text-neutral-200 flex-1 truncate">{label}</span>
+          {totalValue > 0 && (
+            <span className="text-[10px] font-semibold text-emerald-400/60">{abbreviateValue(totalValue)}</span>
+          )}
+          <span
+            className="text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center"
+            style={{ backgroundColor: `${color}25`, color }}
+          >
+            {contacts.length}
+          </span>
+          <svg className="w-3.5 h-3.5 text-purple-400/40 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
         </div>
 
-        {/* Count badge */}
-        <span
-          className="text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center mb-2"
-          style={{ backgroundColor: `${color}25`, color }}
-        >
-          {contacts.length}
-        </span>
-
-        {/* Value abbreviated */}
-        {totalValue > 0 && (
-          <span className="text-[8px] font-bold text-emerald-400/60 mb-2">
-            {abbreviateValue(totalValue)}
+        {/* Desktop: thin vertical bar */}
+        <div className="hidden sm:flex flex-col items-center py-3 w-12">
+          <div className="w-6 h-6 rounded-md flex items-center justify-center mb-2" style={{ backgroundColor: `${color}15` }}>
+            <svg className="w-3.5 h-3.5" style={{ color }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={iconPath} />
+            </svg>
+          </div>
+          <span
+            className="text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[20px] text-center mb-2"
+            style={{ backgroundColor: `${color}25`, color }}
+          >
+            {contacts.length}
           </span>
-        )}
-
-        {/* Vertical name */}
-        <div
-          className="text-[10px] font-semibold text-neutral-400 whitespace-nowrap"
-          style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
-        >
-          {label}
+          {totalValue > 0 && (
+            <span className="text-[8px] font-bold text-emerald-400/60 mb-2">
+              {abbreviateValue(totalValue)}
+            </span>
+          )}
+          <div
+            className="text-[10px] font-semibold text-neutral-400 whitespace-nowrap"
+            style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
+          >
+            {label}
+          </div>
+          {isOver && <div className="h-1 w-8 mt-2 rounded-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />}
         </div>
-
-        {/* Drop indicator */}
-        {isOver && <div className="h-1 w-8 mt-2 rounded-full bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />}
       </div>
     );
   }
@@ -175,7 +191,7 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
   // === EXPANDED VIEW ===
   return (
     <div
-      className={`flex-shrink-0 w-[72vw] sm:w-60 md:w-64 xl:w-auto xl:flex-shrink xl:min-w-0 bg-[#160b2e] rounded-xl flex flex-col transition-all duration-200 overflow-hidden snap-center sm:snap-start ${
+      className={`flex-shrink-0 w-full sm:w-60 md:w-64 xl:w-auto xl:flex-shrink xl:min-w-0 bg-[#160b2e] rounded-xl flex flex-col transition-all duration-200 overflow-hidden ${
         isOver
           ? 'border border-emerald-500/30 bg-[#1e0f35] shadow-lg shadow-emerald-900/20'
           : 'border border-purple-800/15'
@@ -254,8 +270,7 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
       {/* Cards — scrollable */}
       <div
         ref={setNodeRef}
-        className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[120px]"
-        style={{ maxHeight: 'calc(100vh - 280px)' }}
+        className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[80px] sm:min-h-[120px] max-h-[200px] sm:max-h-[calc(100vh-280px)]"
       >
         <SortableContext items={filtered.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           {filtered.map((contact) => (

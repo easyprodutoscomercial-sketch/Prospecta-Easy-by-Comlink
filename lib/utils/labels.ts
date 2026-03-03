@@ -37,6 +37,34 @@ export const CONTACT_TYPE_COLORS: Record<string, string> = {
   COMPRADOR: 'bg-cyan-100 text-cyan-700',
 };
 
+// Segmento de mercado — texto livre, cor gerada dinamicamente
+export const SEGMENTO_LABELS: Record<string, string> = {};
+
+const SEGMENTO_PALETTE = [
+  '#3b82f6', '#f97316', '#ec4899', '#14b8a6', '#8b5cf6',
+  '#eab308', '#ef4444', '#06b6d4', '#84cc16', '#f43f5e',
+  '#6366f1', '#22c55e', '#d946ef', '#0ea5e9', '#a855f7',
+];
+
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+export function getSegmentoColor(segmento: string): { bg: string; text: string; stripe: string } {
+  const color = SEGMENTO_PALETTE[hashString(segmento) % SEGMENTO_PALETTE.length];
+  return { bg: '', text: '', stripe: color };
+}
+
+export const SEGMENTO_COLORS: Record<string, { bg: string; text: string; stripe: string }> = new Proxy(
+  {} as Record<string, { bg: string; text: string; stripe: string }>,
+  { get: (_target, prop: string) => getSegmentoColor(prop) }
+);
+
 export const CLASSE_LABELS: Record<string, string> = {
   A: 'Classe A',
   B: 'Classe B',
@@ -367,3 +395,97 @@ export const WF_ROLE_LABELS: Record<string, string> = {
   lead: 'Lider',
   member: 'Membro',
 };
+
+// ============================================
+// Support Tickets Labels & Colors
+// ============================================
+
+export const SUPPORT_TYPE_LABELS: Record<string, string> = {
+  SUPORTE: 'Suporte',
+  TAREFA: 'Tarefa',
+  BUG: 'Bug',
+};
+
+export const SUPPORT_TYPE_COLORS: Record<string, string> = {
+  SUPORTE: 'bg-orange-500/20 text-orange-400',
+  TAREFA: 'bg-cyan-500/20 text-cyan-400',
+  BUG: 'bg-red-500/20 text-red-400',
+};
+
+export const SUPPORT_SEVERITY_LABELS: Record<string, string> = {
+  CRITICO: 'Critico',
+  ALTO: 'Alto',
+  MEDIO: 'Medio',
+  BAIXO: 'Baixo',
+};
+
+export const SUPPORT_SEVERITY_COLORS: Record<string, string> = {
+  CRITICO: 'bg-red-500/20 text-red-400',
+  ALTO: 'bg-orange-500/20 text-orange-400',
+  MEDIO: 'bg-amber-500/20 text-amber-400',
+  BAIXO: 'bg-blue-500/20 text-blue-400',
+};
+
+export const SUPPORT_CATEGORY_LABELS: Record<string, string> = {
+  ERRO: 'Erro',
+  DUVIDA: 'Duvida',
+  MELHORIA: 'Melhoria',
+  ENTREGA: 'Entrega',
+  CONFIGURACAO: 'Configuracao',
+  GERAL: 'Geral',
+};
+
+export const SUPPORT_CATEGORY_COLORS: Record<string, string> = {
+  ERRO: 'bg-red-500/20 text-red-400',
+  DUVIDA: 'bg-blue-500/20 text-blue-400',
+  MELHORIA: 'bg-purple-500/20 text-purple-400',
+  ENTREGA: 'bg-emerald-500/20 text-emerald-400',
+  CONFIGURACAO: 'bg-amber-500/20 text-amber-400',
+  GERAL: 'bg-neutral-500/20 text-neutral-400',
+};
+
+export const SUPPORT_PRIORITY_LABELS: Record<string, string> = {
+  URGENTE: 'Urgente',
+  ALTA: 'Alta',
+  NORMAL: 'Normal',
+  BAIXA: 'Baixa',
+};
+
+export const SUPPORT_PRIORITY_COLORS: Record<string, string> = {
+  URGENTE: 'bg-red-500/20 text-red-400',
+  ALTA: 'bg-orange-500/20 text-orange-400',
+  NORMAL: 'bg-neutral-500/20 text-neutral-400',
+  BAIXA: 'bg-blue-500/20 text-blue-400',
+};
+
+export const SUPPORT_STATUS_LABELS: Record<string, string> = {
+  ABERTO: 'Aberto',
+  EM_ANDAMENTO: 'Em Andamento',
+  AGUARDANDO: 'Aguardando',
+  RESOLVIDO: 'Resolvido',
+  FECHADO: 'Fechado',
+};
+
+export const SUPPORT_STATUS_COLORS: Record<string, string> = {
+  ABERTO: 'bg-red-500/20 text-red-400',
+  EM_ANDAMENTO: 'bg-blue-500/20 text-blue-400',
+  AGUARDANDO: 'bg-amber-500/20 text-amber-400',
+  RESOLVIDO: 'bg-emerald-500/20 text-emerald-400',
+  FECHADO: 'bg-neutral-500/20 text-neutral-400',
+};
+
+export const SUPPORT_STATUS_CHART_COLORS: Record<string, string> = {
+  ABERTO: '#ef4444',
+  EM_ANDAMENTO: '#3b82f6',
+  AGUARDANDO: '#f59e0b',
+  RESOLVIDO: '#10b981',
+  FECHADO: '#6b7280',
+};
+
+export const SUPPORT_KANBAN_COLUMNS = [
+  { id: 'ABERTO', label: 'Aberto', color: '#ef4444' },
+  { id: 'EM_ANDAMENTO', label: 'Em Andamento', color: '#3b82f6' },
+  { id: 'AGUARDANDO', label: 'Aguardando', color: '#f59e0b' },
+  { id: 'RESOLVIDO', label: 'Resolvido', color: '#10b981' },
+  { id: 'FECHADO', label: 'Fechado', color: '#6b7280' },
+];

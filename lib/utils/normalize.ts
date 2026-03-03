@@ -63,6 +63,8 @@ export interface NormalizedContact {
   website: string | null;
   instagram: string | null;
   whatsapp: string | null;
+  // Segmento
+  segmento: string | null;
   // Dados normalizados
   name_normalized: string;
   phone_normalized: string | null;
@@ -92,6 +94,7 @@ export function normalizeContactData(data: {
   website?: string | null;
   instagram?: string | null;
   whatsapp?: string | null;
+  segmento?: string | null;
 }): NormalizedContact {
   return {
     name: data.name.trim(),
@@ -118,6 +121,8 @@ export function normalizeContactData(data: {
     website: data.website || null,
     instagram: data.instagram || null,
     whatsapp: data.whatsapp || null,
+    // Segmento
+    segmento: data.segmento || null,
     // Normalizados
     name_normalized: normalizeName(data.name),
     phone_normalized: normalizePhone(data.phone),

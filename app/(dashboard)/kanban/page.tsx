@@ -32,6 +32,7 @@ import MeetingModal from '@/components/meetings/meeting-modal';
 import AiChatPanel from '@/components/ai-chat-panel';
 import { normalizeSearch } from '@/lib/utils/normalize';
 import { useSessionState } from '@/lib/hooks/use-session-state';
+import { useIsMobile } from '@/lib/hooks/use-is-mobile';
 
 
 // Sons usando Web Audio API
@@ -101,6 +102,7 @@ function saveCollapsedColumns(pipelineId: string, collapsed: Set<string>) {
 
 export default function KanbanPage() {
   const toast = useToast();
+  const isMobile = useIsMobile();
   const { pipelines, selectedPipelineId, setSelectedPipelineId, currentPipeline, refetch: refetchPipelines } = usePipeline();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -420,6 +422,12 @@ export default function KanbanPage() {
     return result;
   }, [contacts, search, tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
 
+  // Apply chip filter IDs for views that don't support dimming (list view)
+  const chipFiltered = useMemo(() => {
+    if (hiddenContactIds.size === 0 && dimmedContactIds.size === 0) return filtered;
+    return filtered.filter(c => !hiddenContactIds.has(c.id) && !dimmedContactIds.has(c.id));
+  }, [filtered, hiddenContactIds, dimmedContactIds]);
+
   // Group by stage_id
   const grouped = useMemo(() => {
     const groups: Record<string, Contact[]> = {};
@@ -725,7 +733,7 @@ export default function KanbanPage() {
     setShowMeetingModal(true);
   }
 
-  async function handleMeetingConfirm(data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string; meeting_type: string }) {
+  async function handleMeetingConfirm(data: { title: string; meeting_at: string; duration_minutes: number; location: string; notes: string; meeting_type: string; participant_ids?: string[]; external_participants?: { name: string; email: string }[] }) {
     if (!meetingContact) return;
     setMeetingLoading(true);
 
@@ -990,7 +998,7 @@ export default function KanbanPage() {
           <KanbanSkeleton />
         ) : viewMode === 'list' ? (
           <KanbanListView
-            contacts={filtered}
+            contacts={chipFiltered}
             stages={stages}
             userMap={userMap}
             onCardClick={handleCardClick}
@@ -998,6 +1006,36 @@ export default function KanbanPage() {
             stageMap={stageMap}
           />
         ) : (
+          isMobile ? (
+            <KanbanBoard
+              stages={stages}
+              grouped={grouped}
+              activeContact={null}
+              userMap={userMap}
+              currentUserId={currentUserId}
+              onClaimContact={handleClaimContact}
+              onRequestContact={handleRequestContact}
+              pendingRequestContactIds={pendingRequestContactIds}
+              onJumpForward={handleJumpForward}
+              onJumpBackward={handleJumpBackward}
+              onScheduleMeeting={handleScheduleMeeting}
+              pipelineSettings={pipelineSettings}
+              contactsWithMeeting={contactsWithMeeting}
+              lastInteractionMap={lastInteractionMap}
+              bulkMode={bulkMode}
+              bulkSelectedIds={bulkSelectedIds}
+              onBulkToggle={handleBulkToggle}
+              pipelineType={pipelineType}
+              attachmentCountMap={attachmentCountMap}
+              dimmedContactIds={dimmedContactIds}
+              hiddenContactIds={hiddenContactIds}
+              stuckContactIds={stuckContactIds}
+              compact={viewMode === 'kanban'}
+              onCardClick={handleCardClick}
+              collapsedColumns={collapsedColumns}
+              onToggleCollapse={handleToggleCollapse}
+            />
+          ) : (
           <DndContext
             sensors={sensors}
             collisionDetection={columnFirstCollision}
@@ -1033,6 +1071,7 @@ export default function KanbanPage() {
               onToggleCollapse={handleToggleCollapse}
             />
           </DndContext>
+          )
         )}
       </div>
 
@@ -1071,6 +1110,7 @@ export default function KanbanPage() {
           onConfirm={handleMeetingConfirm}
           contactName={meetingContact.name}
           loading={meetingLoading}
+          currentUserId={currentUserId}
         />
       )}
 

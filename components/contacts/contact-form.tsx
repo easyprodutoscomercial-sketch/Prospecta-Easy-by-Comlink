@@ -19,6 +19,7 @@ interface ContactFormData {
   classe: string;
   produtos_fornecidos: string;
   temperatura: string;
+  segmento: string;
   origem: string;
   proxima_acao_tipo: string;
   proxima_acao_data: string;
@@ -62,6 +63,7 @@ function toFormData(contact?: Partial<Contact>, defaultPipelineId?: string): Con
     classe: contact?.classe || '',
     produtos_fornecidos: contact?.produtos_fornecidos || '',
     temperatura: contact?.temperatura || '',
+    segmento: contact?.segmento || '',
     origem: contact?.origem || '',
     proxima_acao_tipo: contact?.proxima_acao_tipo || '',
     proxima_acao_data: contact?.proxima_acao_data ? new Date(contact.proxima_acao_data).toISOString().slice(0, 16) : '',
@@ -371,7 +373,7 @@ export default function ContactForm({
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
         <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Qualificação</h2>
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className={labelClass}>Temperatura</label>
               <select
@@ -384,6 +386,16 @@ export default function ContactForm({
                   <option key={key} value={key}>{label}</option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className={labelClass}>Segmento</label>
+              <input
+                type="text"
+                value={formData.segmento || ''}
+                onChange={(e) => update('segmento', e.target.value)}
+                placeholder="Ex: Transportadora, Agricola, Varejo..."
+                className={inputClass()}
+              />
             </div>
             <div>
               <label className={labelClass}>Origem</label>

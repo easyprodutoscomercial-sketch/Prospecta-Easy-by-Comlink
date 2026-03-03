@@ -14,7 +14,7 @@ export function KanbanSkeleton() {
       </div>
 
       {/* Board skeleton */}
-      <div className="flex gap-3 overflow-x-auto pb-4" style={{ display: 'grid', gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))` }}>
+      <div className="kanban-board-container flex gap-3 overflow-x-auto pb-4 scrollbar-hide" style={{ display: 'grid', gridTemplateColumns: `repeat(${COLUMNS}, minmax(0, 1fr))` }}>
         {Array.from({ length: COLUMNS }).map((_, colIdx) => (
           <div key={colIdx} className="bg-[#160b2e] border border-purple-800/15 rounded-xl overflow-hidden">
             {/* Column header */}
