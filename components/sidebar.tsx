@@ -96,6 +96,16 @@ const navItems = [
     ),
   },
   {
+    key: 'reports',
+    href: '/reports',
+    label: 'Relatorios',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+      </svg>
+    ),
+  },
+  {
     key: 'requests',
     href: '/requests',
     label: 'Solicitacoes',
@@ -169,7 +179,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
   }, []);
 
   const filteredNavItems = navItems.filter((item) => {
-    if ('adminOnly' in item && item.adminOnly && userRole !== 'admin') return false;
+    if ('adminOnly' in item && item.adminOnly && userRole !== 'admin' && userRole !== 'gerente') return false;
     // If visibleMenus is set and user is not admin, filter by allowed keys
     if (visibleMenus && visibleMenus.length > 0 && userRole !== 'admin' && !('adminOnly' in item)) {
       if (!visibleMenus.includes(item.key)) return false;
@@ -259,7 +269,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
             <div className="min-w-0">
               <span className="text-sm text-white font-medium truncate block">{profileName}</span>
               <span className="text-[10px] text-emerald-400/70 font-bold uppercase tracking-wider">
-                {userRole === 'admin' ? 'Admin' : 'Vendedor'}
+                {{ admin: 'Admin', gerente: 'Gerente', sdr: 'SDR', closer: 'Closer', suporte: 'Suporte', user: 'Vendedor' }[userRole] || userRole}
               </span>
             </div>
           </div>

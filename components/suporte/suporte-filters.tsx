@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { Profile, SupportProject } from '@/lib/types';
+import type { Profile, SupportProject, PipelineStage } from '@/lib/types';
 import {
   SUPPORT_STATUS_LABELS,
   SUPPORT_TYPE_LABELS,
@@ -20,9 +20,10 @@ interface SuporteFiltersProps {
     search: string;
   };
   onChange: (filters: any) => void;
+  stages?: PipelineStage[];
 }
 
-export default function SuporteFilters({ filters, onChange }: SuporteFiltersProps) {
+export default function SuporteFilters({ filters, onChange, stages }: SuporteFiltersProps) {
   const [users, setUsers] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<SupportProject[]>([]);
 
@@ -73,9 +74,14 @@ export default function SuporteFilters({ filters, onChange }: SuporteFiltersProp
         className="px-3 py-2 bg-[#160b2e] border border-purple-800/30 rounded-lg text-sm text-neutral-200 focus:outline-none focus:border-purple-600/50"
       >
         <option value="">Todos Status</option>
-        {Object.entries(SUPPORT_STATUS_LABELS).map(([k, v]) => (
-          <option key={k} value={k}>{v}</option>
-        ))}
+        {stages && stages.length > 0
+          ? stages.map((s) => (
+              <option key={s.slug} value={s.slug}>{s.name}</option>
+            ))
+          : Object.entries(SUPPORT_STATUS_LABELS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))
+        }
       </select>
 
       {/* Type */}

@@ -95,7 +95,7 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
 
   const isOverdue = contact.proxima_acao_data && new Date(contact.proxima_acao_data) < new Date();
 
-  const leadScore = useMemo(() => computeLeadScore(contact), [contact.temperatura, contact.valor_estimado, contact.status, contact.updated_at, contact.proxima_acao_data, contact.proxima_acao_tipo, contact.phone, contact.email, contact.whatsapp, contact.company, contact.assigned_to_user_id]);
+  const leadScore = useMemo(() => (contact as any).lead_score ?? computeLeadScore(contact), [contact.temperatura, contact.valor_estimado, contact.status, contact.updated_at, contact.proxima_acao_data, contact.proxima_acao_tipo, contact.phone, contact.email, contact.whatsapp, contact.company, contact.assigned_to_user_id, (contact as any).lead_score]);
   const scoreStyle = useMemo(() => getScoreColor(leadScore), [leadScore]);
 
   const daysSinceLastInteraction = lastInteractionAt

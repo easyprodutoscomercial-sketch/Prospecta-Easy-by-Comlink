@@ -11,6 +11,9 @@ import ContactSidebar from '@/components/contacts/contact-sidebar';
 import ContactDetails from '@/components/contacts/contact-details';
 import ContactTimeline from '@/components/contacts/contact-timeline';
 import AICopilotPanel from '@/components/ai/ai-copilot-panel';
+import { ScoreBadge } from '@/components/lead-score/score-badge';
+import { ScoreBreakdownChart } from '@/components/lead-score/score-breakdown';
+import { ScoreTrend } from '@/components/lead-score/score-trend';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import { useToast } from '@/lib/toast-context';
 
@@ -47,9 +50,18 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [pendingTerminalStageId, setPendingTerminalStageId] = useState<string | null>(null);
   const [motivoLoading, setMotivoLoading] = useState(false);
 
-  useEffect(() => { loadContact(); loadCurrentUser(); }, [id]);
+  const [scoreData, setScoreData] = useState<{ score: number; breakdown: any; weeklyDelta: number } | null>(null);
+
+  useEffect(() => { loadContact(); loadCurrentUser(); loadScore(); }, [id]);
 
   const loadCurrentUser = async () => { try { const r = await fetch('/api/me'); if (r.ok) setCurrentUser(await r.json()); } catch {} };
+
+  const loadScore = async () => {
+    try {
+      const r = await fetch(`/api/contacts/${id}/score`);
+      if (r.ok) setScoreData(await r.json());
+    } catch {}
+  };
 
   const loadContact = async () => {
     const [res, meetingsRes] = await Promise.all([
@@ -237,7 +249,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       {/* 2-column layout */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Sidebar */}
-        <div className="w-full lg:w-[350px] shrink-0 lg:sticky lg:top-6 lg:self-start">
+        <div className="w-full lg:w-[350px] shrink-0 lg:sticky lg:top-6 lg:self-start space-y-4">
           <ContactSidebar
             contact={contact}
             ownerName={ownerName}
@@ -262,6 +274,20 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             requestingAccess={requestingAccess}
             pendingAccessRequest={pendingAccessRequest}
           />
+
+          {/* Lead Score */}
+          {scoreData && (
+            <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-medium text-purple-300/60 uppercase tracking-wider">Lead Score</h3>
+                <div className="flex items-center gap-2">
+                  <ScoreTrend delta={scoreData.weeklyDelta} />
+                  <ScoreBadge score={scoreData.score} size="md" />
+                </div>
+              </div>
+              <ScoreBreakdownChart breakdown={scoreData.breakdown} />
+            </div>
+          )}
         </div>
 
         {/* Main area */}

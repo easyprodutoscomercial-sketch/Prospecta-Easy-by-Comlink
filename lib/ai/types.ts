@@ -22,7 +22,8 @@ export type NotificationType =
   | 'STALE_DEAL'
   | 'NO_OWNER'
   | 'SYSTEM'
-  | 'MEETING_REMINDER';
+  | 'MEETING_REMINDER'
+  | 'AUTOMATION';
 
 // Risk alert
 export interface RiskAlert {

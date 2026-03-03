@@ -3,6 +3,7 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { interactionSchema } from '@/lib/utils/validation';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { computeLeadScoreDetailed } from '@/lib/utils/lead-score';
 
 // GET /api/interactions - Listar interações
 export async function GET(request: NextRequest) {
@@ -131,6 +132,18 @@ export async function POST(request: NextRequest) {
         .update({ status: newStatus })
         .eq('id', validated.contact_id);
     }
+
+    // Recalculate lead score after new interaction
+    try {
+      const [contactRes, intRes] = await Promise.all([
+        admin.from('contacts').select('*').eq('id', validated.contact_id).single(),
+        admin.from('interactions').select('outcome, happened_at').eq('contact_id', validated.contact_id).order('happened_at', { ascending: false }).limit(50),
+      ]);
+      if (contactRes.data) {
+        const detailed = computeLeadScoreDetailed({ ...contactRes.data, interactions: intRes.data || [] });
+        await admin.from('contacts').update({ lead_score: detailed.total }).eq('id', validated.contact_id);
+      }
+    } catch { /* non-blocking */ }
 
     return NextResponse.json(interaction, { status: 201 });
 

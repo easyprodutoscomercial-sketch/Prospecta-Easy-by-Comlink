@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import type { SupportTicket } from '@/lib/types';
+import type { SupportTicket, PipelineStage } from '@/lib/types';
 import {
   SUPPORT_STATUS_LABELS, SUPPORT_STATUS_COLORS,
   SUPPORT_TYPE_LABELS, SUPPORT_TYPE_COLORS,
@@ -14,9 +14,10 @@ import { getUserInitials } from '@/lib/utils/user-colors';
 interface SuporteListProps {
   tickets: SupportTicket[];
   loading?: boolean;
+  stagesMap?: Record<string, PipelineStage>;
 }
 
-export default function SuporteList({ tickets, loading }: SuporteListProps) {
+export default function SuporteList({ tickets, loading, stagesMap }: SuporteListProps) {
   if (loading) {
     return (
       <div className="space-y-2">
@@ -47,10 +48,11 @@ export default function SuporteList({ tickets, loading }: SuporteListProps) {
   return (
     <div className="space-y-2">
       {tickets.map((ticket) => {
+        const stage = stagesMap && ticket.stage_id ? stagesMap[ticket.stage_id] : null;
+        const isTerminal = stage ? stage.is_terminal : (ticket.status === 'RESOLVIDO' || ticket.status === 'FECHADO');
         const isOverdue = ticket.due_date &&
           new Date(ticket.due_date) < new Date() &&
-          ticket.status !== 'RESOLVIDO' &&
-          ticket.status !== 'FECHADO';
+          !isTerminal;
 
         return (
           <Link
@@ -71,9 +73,18 @@ export default function SuporteList({ tickets, loading }: SuporteListProps) {
                 <p className="text-sm font-medium text-neutral-200 truncate">{ticket.title}</p>
               </div>
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SUPPORT_STATUS_COLORS[ticket.status]}`}>
-                  {SUPPORT_STATUS_LABELS[ticket.status]}
-                </span>
+                {stage ? (
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded font-medium text-white"
+                    style={{ backgroundColor: `${stage.color}30`, color: stage.color }}
+                  >
+                    {stage.name}
+                  </span>
+                ) : (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SUPPORT_STATUS_COLORS[ticket.status]}`}>
+                    {SUPPORT_STATUS_LABELS[ticket.status]}
+                  </span>
+                )}
                 <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SUPPORT_TYPE_COLORS[ticket.ticket_type]}`}>
                   {SUPPORT_TYPE_LABELS[ticket.ticket_type]}
                 </span>

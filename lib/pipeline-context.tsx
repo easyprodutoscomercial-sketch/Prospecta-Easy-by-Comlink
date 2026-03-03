@@ -31,7 +31,9 @@ export function PipelineProvider({ children }: { children: ReactNode }) {
       const res = await fetch('/api/pipelines');
       if (res.ok) {
         const data = await res.json();
-        const list: PipelineWithStages[] = data.pipelines || [];
+        const list: PipelineWithStages[] = (data.pipelines || []).filter(
+          (p: PipelineWithStages) => p.pipeline_type !== 'SUPORTE'
+        );
         setPipelines(list);
 
         // Auto-select: keep current if still valid, otherwise default

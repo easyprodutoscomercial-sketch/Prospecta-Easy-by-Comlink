@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { SupportTicket, Profile, SupportProject } from '@/lib/types';
+import type { SupportTicket, Profile, SupportProject, PipelineStage } from '@/lib/types';
 import {
   SUPPORT_STATUS_LABELS, SUPPORT_STATUS_COLORS,
   SUPPORT_TYPE_LABELS,
@@ -14,9 +14,10 @@ import { useToast } from '@/lib/toast-context';
 interface SuporteDetailSidebarProps {
   ticket: SupportTicket;
   onUpdate: (updated: Partial<SupportTicket>) => void;
+  stages?: PipelineStage[];
 }
 
-export default function SuporteDetailSidebar({ ticket, onUpdate }: SuporteDetailSidebarProps) {
+export default function SuporteDetailSidebar({ ticket, onUpdate, stages }: SuporteDetailSidebarProps) {
   const toast = useToast();
   const [users, setUsers] = useState<Profile[]>([]);
   const [projects, setProjects] = useState<SupportProject[]>([]);
@@ -39,10 +40,15 @@ export default function SuporteDetailSidebar({ ticket, onUpdate }: SuporteDetail
   const handleChange = async (field: string, value: string | null) => {
     setSaving(true);
     try {
+      const body: Record<string, any> = { [field]: value || null };
+      // If changing stage via stage_id, also send it
+      if (field === 'stage_id' && value) {
+        body.stage_id = value;
+      }
       const res = await fetch(`/api/suporte/${ticket.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [field]: value || null }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -63,21 +69,58 @@ export default function SuporteDetailSidebar({ ticket, onUpdate }: SuporteDetail
       {/* Status */}
       <div>
         <label className="block text-[10px] font-semibold text-neutral-500 uppercase tracking-wider mb-1.5">Status</label>
-        <select
-          value={ticket.status}
-          onChange={(e) => handleChange('status', e.target.value)}
-          disabled={saving}
-          className="w-full px-3 py-2 bg-[#160b2e] border border-purple-800/30 rounded-lg text-sm text-neutral-200 focus:outline-none focus:border-purple-600/50"
-        >
-          {Object.entries(SUPPORT_STATUS_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
-        <div className="mt-1">
-          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SUPPORT_STATUS_COLORS[ticket.status]}`}>
-            {SUPPORT_STATUS_LABELS[ticket.status]}
-          </span>
-        </div>
+        {stages && stages.length > 0 ? (
+          <>
+            <select
+              value={ticket.stage_id || ''}
+              onChange={(e) => handleChange('stage_id', e.target.value)}
+              disabled={saving}
+              className="w-full px-3 py-2 bg-[#160b2e] border border-purple-800/30 rounded-lg text-sm text-neutral-200 focus:outline-none focus:border-purple-600/50"
+            >
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <div className="mt-1">
+              {(() => {
+                const currentStage = stages.find((s) => s.id === ticket.stage_id);
+                if (currentStage) {
+                  return (
+                    <span
+                      className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                      style={{ backgroundColor: `${currentStage.color}30`, color: currentStage.color }}
+                    >
+                      {currentStage.name}
+                    </span>
+                  );
+                }
+                return (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SUPPORT_STATUS_COLORS[ticket.status]}`}>
+                    {SUPPORT_STATUS_LABELS[ticket.status]}
+                  </span>
+                );
+              })()}
+            </div>
+          </>
+        ) : (
+          <>
+            <select
+              value={ticket.status}
+              onChange={(e) => handleChange('status', e.target.value)}
+              disabled={saving}
+              className="w-full px-3 py-2 bg-[#160b2e] border border-purple-800/30 rounded-lg text-sm text-neutral-200 focus:outline-none focus:border-purple-600/50"
+            >
+              {Object.entries(SUPPORT_STATUS_LABELS).map(([k, v]) => (
+                <option key={k} value={k}>{v}</option>
+              ))}
+            </select>
+            <div className="mt-1">
+              <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SUPPORT_STATUS_COLORS[ticket.status]}`}>
+                {SUPPORT_STATUS_LABELS[ticket.status]}
+              </span>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Type */}

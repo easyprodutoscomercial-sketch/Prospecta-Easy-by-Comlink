@@ -37,9 +37,9 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, email, password, role, visible_menus } = body;
+    const { name, email, password, role, visible_menus, manager_id } = body;
 
-    if (!name && !email && !password && role === undefined && visible_menus === undefined) {
+    if (!name && !email && !password && role === undefined && visible_menus === undefined && manager_id === undefined) {
       return NextResponse.json({ error: 'Nenhum dado para atualizar' }, { status: 400 });
     }
 
@@ -48,8 +48,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Apenas administradores podem alterar roles' }, { status: 403 });
     }
 
-    if (role !== undefined && !['admin', 'user'].includes(role)) {
+    const VALID_ROLES = ['admin', 'user', 'gerente', 'sdr', 'closer', 'suporte'];
+    if (role !== undefined && !VALID_ROLES.includes(role)) {
       return NextResponse.json({ error: 'Role inválido' }, { status: 400 });
+    }
+
+    // Manager changes require admin
+    if (manager_id !== undefined && profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas administradores podem alterar gerente' }, { status: 403 });
     }
 
     // visible_menus changes require admin
@@ -62,6 +68,7 @@ export async function PATCH(
     if (name) profileUpdate.name = name;
     if (email) profileUpdate.email = email;
     if (role !== undefined) profileUpdate.role = role;
+    if (manager_id !== undefined) profileUpdate.manager_id = manager_id || null;
     if (Object.keys(profileUpdate).length > 0) {
       const { error: updateError } = await admin
         .from('profiles')

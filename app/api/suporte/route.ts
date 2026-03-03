@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const ticket_type = searchParams.get('ticket_type');
     const category = searchParams.get('category');
     const assigned_to = searchParams.get('assigned_to');
+    const project_id = searchParams.get('project_id');
     const search = searchParams.get('search');
     const overdue = searchParams.get('overdue');
     const page = parseInt(searchParams.get('page') || '1');
@@ -52,6 +53,10 @@ export async function GET(request: NextRequest) {
       query = query.eq('assigned_to', assigned_to);
     }
 
+    if (project_id) {
+      query = query.eq('project_id', project_id);
+    }
+
     if (search) {
       query = query.ilike('title', `%${search}%`);
     }
@@ -70,10 +75,12 @@ export async function GET(request: NextRequest) {
     // Fetch reporter and assignee names
     const userIds = new Set<string>();
     const contactIds = new Set<string>();
+    const projectIds = new Set<string>();
     (tickets || []).forEach((t: any) => {
       if (t.reported_by) userIds.add(t.reported_by);
       if (t.assigned_to) userIds.add(t.assigned_to);
       if (t.contact_id) contactIds.add(t.contact_id);
+      if (t.project_id) projectIds.add(t.project_id);
     });
 
     let profilesMap: Record<string, string> = {};
@@ -100,11 +107,29 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Fetch project names (graceful if table doesn't exist)
+    let projectsMap: Record<string, string> = {};
+    if (projectIds.size > 0) {
+      try {
+        const { data: projects } = await admin
+          .from('support_projects')
+          .select('id, name')
+          .in('id', Array.from(projectIds));
+
+        (projects || []).forEach((p: any) => {
+          projectsMap[p.id] = p.name;
+        });
+      } catch {
+        // support_projects table may not exist yet
+      }
+    }
+
     const ticketsWithNames = (tickets || []).map((t: any) => ({
       ...t,
       reported_by_name: profilesMap[t.reported_by] || null,
       assigned_to_name: t.assigned_to ? (profilesMap[t.assigned_to] || null) : null,
       contact_name: t.contact_id ? (contactsMap[t.contact_id] || null) : null,
+      project_name: t.project_id ? (projectsMap[t.project_id] || null) : null,
     }));
 
     return NextResponse.json({
@@ -137,16 +162,74 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = supportTicketSchema.parse(body);
 
-    const { data: ticket, error } = await admin
+    // Build insert data, stripping fields that may not exist in DB yet
+    const insertData: Record<string, any> = {
+      title: validated.title,
+      description: validated.description,
+      ticket_type: validated.ticket_type,
+      category: validated.category,
+      priority: validated.priority,
+      contact_id: validated.contact_id,
+      assigned_to: validated.assigned_to,
+      due_date: validated.due_date,
+      reported_by: user.id,
+      organization_id: profile.organization_id,
+      status: 'ABERTO',
+    };
+
+    // Add optional new columns only if they have values
+    if (validated.severity) insertData.severity = validated.severity;
+    if (validated.project_id) insertData.project_id = validated.project_id;
+
+    // Lookup default SUPORTE pipeline and first stage
+    try {
+      const { data: suportePipeline } = await admin
+        .from('pipelines')
+        .select('id')
+        .eq('organization_id', profile.organization_id)
+        .eq('pipeline_type', 'SUPORTE')
+        .eq('is_default', true)
+        .limit(1)
+        .single();
+
+      if (suportePipeline) {
+        insertData.pipeline_id = suportePipeline.id;
+        const { data: firstStage } = await admin
+          .from('pipeline_stages')
+          .select('id')
+          .eq('pipeline_id', suportePipeline.id)
+          .order('position', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (firstStage) {
+          insertData.stage_id = firstStage.id;
+        }
+      }
+    } catch {
+      // Pipeline may not exist yet — continue without it
+    }
+
+    // Try insert with all fields first
+    let { data: ticket, error } = await admin
       .from('support_tickets')
-      .insert({
-        ...validated,
-        reported_by: user.id,
-        organization_id: profile.organization_id,
-        status: 'ABERTO',
-      })
+      .insert(insertData)
       .select()
       .single();
+
+    // If failed because of new columns, retry without them
+    if (error && (error.message?.includes('severity') || error.message?.includes('project_id'))) {
+      console.warn('Insert with new columns failed, retrying without:', error.message);
+      delete insertData.severity;
+      delete insertData.project_id;
+      const retry = await admin
+        .from('support_tickets')
+        .insert(insertData)
+        .select()
+        .single();
+      ticket = retry.data;
+      error = retry.error;
+    }
 
     if (error) throw error;
 

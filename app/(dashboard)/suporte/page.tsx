@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   DndContext,
   pointerWithin,
@@ -13,8 +13,9 @@ import {
 } from '@dnd-kit/core';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import type { SupportTicket, SupportStatus } from '@/lib/types';
+import type { SupportTicket, SupportStatus, PipelineStage } from '@/lib/types';
 import { useToast } from '@/lib/toast-context';
+import { useSupportPipeline } from '@/lib/support-pipeline-context';
 import SuporteStatsCards from '@/components/suporte/suporte-stats-cards';
 import SuporteFilters from '@/components/suporte/suporte-filters';
 import SuporteViewToggle from '@/components/suporte/suporte-view-toggle';
@@ -24,6 +25,7 @@ import { SuporteKanbanBoard } from '@/components/suporte/suporte-kanban-board';
 export default function SuportePage() {
   const toast = useToast();
   const searchParams = useSearchParams();
+  const { currentPipeline, pipelines, selectedPipelineId, setSelectedPipelineId, loading: pipelineLoading } = useSupportPipeline();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<'list' | 'kanban'>('kanban');
@@ -37,6 +39,15 @@ export default function SuportePage() {
     project_id: searchParams.get('project_id') || '',
     search: '',
   });
+
+  const stages = currentPipeline?.stages || [];
+  const useStageId = stages.length > 0;
+
+  const stagesMap = useMemo(() => {
+    const map: Record<string, PipelineStage> = {};
+    stages.forEach((s) => { map[s.id] = s; });
+    return map;
+  }, [stages]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -77,27 +88,60 @@ export default function SuportePage() {
     if (!over) return;
 
     const ticketId = active.id as string;
-    const newStatus = over.id as SupportStatus;
+    const targetId = over.id as string;
     const ticket = tickets.find((t) => t.id === ticketId);
-    if (!ticket || ticket.status === newStatus) return;
+    if (!ticket) return;
 
-    // Optimistic update
-    setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, status: newStatus } : t));
+    if (useStageId) {
+      // Stage-based drag
+      const newStageId = targetId;
+      if (ticket.stage_id === newStageId) return;
 
-    try {
-      const res = await fetch(`/api/suporte/${ticketId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-      if (!res.ok) {
-        // Revert
+      // Optimistic update
+      const stage = stagesMap[newStageId];
+      setTickets((prev) => prev.map((t) =>
+        t.id === ticketId ? { ...t, stage_id: newStageId, status: (stage?.slug || t.status) as SupportStatus } : t
+      ));
+
+      try {
+        const res = await fetch(`/api/suporte/${ticketId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stage_id: newStageId }),
+        });
+        if (!res.ok) {
+          setTickets((prev) => prev.map((t) =>
+            t.id === ticketId ? { ...t, stage_id: ticket.stage_id, status: ticket.status } : t
+          ));
+          toast.error('Erro ao mover chamado');
+        }
+      } catch {
+        setTickets((prev) => prev.map((t) =>
+          t.id === ticketId ? { ...t, stage_id: ticket.stage_id, status: ticket.status } : t
+        ));
+        toast.error('Erro ao mover chamado');
+      }
+    } else {
+      // Legacy status-based drag
+      const newStatus = targetId as SupportStatus;
+      if (ticket.status === newStatus) return;
+
+      setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, status: newStatus } : t));
+
+      try {
+        const res = await fetch(`/api/suporte/${ticketId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus }),
+        });
+        if (!res.ok) {
+          setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, status: ticket.status } : t));
+          toast.error('Erro ao mover chamado');
+        }
+      } catch {
         setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, status: ticket.status } : t));
         toast.error('Erro ao mover chamado');
       }
-    } catch {
-      setTickets((prev) => prev.map((t) => t.id === ticketId ? { ...t, status: ticket.status } : t));
-      toast.error('Erro ao mover chamado');
     }
   };
 
@@ -109,7 +153,19 @@ export default function SuportePage() {
           <h1 className="text-xl font-bold text-neutral-100">Suporte</h1>
           <p className="text-sm text-neutral-500 mt-0.5">Gerencie chamados, tarefas e bugs</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Pipeline selector - only show if multiple pipelines */}
+          {pipelines.length > 1 && (
+            <select
+              value={selectedPipelineId}
+              onChange={(e) => setSelectedPipelineId(e.target.value)}
+              className="px-3 py-2.5 bg-[#160b2e] border border-purple-800/30 rounded-lg text-sm text-neutral-200 focus:outline-none focus:border-purple-600/50"
+            >
+              {pipelines.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          )}
           <Link
             href="/suporte/projects"
             className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-neutral-300 border border-purple-800/30 hover:border-purple-600/40 hover:bg-purple-800/10 rounded-lg transition-colors"
@@ -137,7 +193,7 @@ export default function SuportePage() {
       {/* Filters + View Toggle */}
       <div className="flex items-center gap-3 mt-6 mb-4">
         <div className="flex-1">
-          <SuporteFilters filters={filters} onChange={setFilters} />
+          <SuporteFilters filters={filters} onChange={setFilters} stages={stages} />
         </div>
         <SuporteViewToggle view={view} onChange={setView} />
       </div>
@@ -150,10 +206,10 @@ export default function SuportePage() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <SuporteKanbanBoard tickets={tickets} activeTicket={activeTicket} />
+          <SuporteKanbanBoard tickets={tickets} activeTicket={activeTicket} stages={stages} />
         </DndContext>
       ) : (
-        <SuporteList tickets={tickets} loading={loading} />
+        <SuporteList tickets={tickets} loading={loading} stagesMap={useStageId ? stagesMap : undefined} />
       )}
     </div>
   );

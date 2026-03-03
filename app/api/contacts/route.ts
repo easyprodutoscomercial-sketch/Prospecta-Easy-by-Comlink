@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { contactSchema } from '@/lib/utils/validation';
 import { normalizeContactData } from '@/lib/utils/normalize';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { applyVisibilityFilter } from '@/lib/utils/visibility-filter';
+import type { UserRole } from '@/lib/types';
 
 // GET /api/contacts - Listar contatos com filtros
 export async function GET(request: NextRequest) {
@@ -58,6 +60,9 @@ export async function GET(request: NextRequest) {
       // Sem membership em nenhum pipeline — nao retorna contatos
       return NextResponse.json({ contacts: [], total: 0, page, limit, totalPages: 0 });
     }
+
+    // Apply role-based visibility filter (sdr/closer/user only see own contacts)
+    query = applyVisibilityFilter(query, profile.role as UserRole, user.id);
 
     // Filtro de busca
     if (search) {

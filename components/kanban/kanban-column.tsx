@@ -270,7 +270,7 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
       {/* Cards — scrollable */}
       <div
         ref={setNodeRef}
-        className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[80px] sm:min-h-[120px] max-h-[200px] sm:max-h-[calc(100vh-280px)]"
+        className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[80px] sm:min-h-[120px] max-h-[50vh] sm:max-h-[calc(100vh-280px)]"
       >
         <SortableContext items={filtered.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           {filtered.map((contact) => (

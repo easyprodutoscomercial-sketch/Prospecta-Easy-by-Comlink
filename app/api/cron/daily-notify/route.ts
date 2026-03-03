@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { chatCompletion } from '@/lib/ai/openai';
+import { sendPushToUser } from '@/lib/push/send-push';
 
 const ACTIVE_STATUSES = ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA'];
 
@@ -345,6 +346,25 @@ export async function GET(request: NextRequest) {
           console.error(`[daily-notify] Erro org ${orgId}:`, error.message);
         } else {
           totalNotifications += notificationsToInsert.length;
+
+          // Send push notifications (non-blocking, best-effort)
+          try {
+            const userIds = [...new Set(notificationsToInsert.map(n => n.user_id))];
+            for (const uid of userIds) {
+              const userNotifs = notificationsToInsert.filter(n => n.user_id === uid);
+              const count = userNotifs.length;
+              const firstTitle = userNotifs[0]?.title || 'Notificacao';
+              await sendPushToUser(admin, uid, {
+                title: count === 1 ? firstTitle : `${count} alertas pendentes`,
+                body: count === 1
+                  ? (userNotifs[0]?.body?.substring(0, 120) || '')
+                  : `Voce tem ${count} contatos que precisam de atencao.`,
+                url: '/dashboard',
+              });
+            }
+          } catch (pushErr: any) {
+            console.error(`[daily-notify] Push error org ${orgId}:`, pushErr.message);
+          }
         }
       }
 

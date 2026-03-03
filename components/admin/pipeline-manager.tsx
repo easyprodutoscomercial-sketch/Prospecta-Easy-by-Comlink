@@ -21,14 +21,24 @@ const DEFAULT_BUG_STAGES: StageEditorItem[] = [
   { name: 'Resolvido', slug: 'RESOLVIDO', color: '#10b981', position: 4, is_terminal: true, terminal_type: 'won' },
 ];
 
+const DEFAULT_SUPORTE_STAGES: StageEditorItem[] = [
+  { name: 'Aberto', slug: 'ABERTO', color: '#ef4444', position: 0, is_terminal: false, terminal_type: null },
+  { name: 'Em Andamento', slug: 'EM_ANDAMENTO', color: '#3b82f6', position: 1, is_terminal: false, terminal_type: null },
+  { name: 'Aguardando', slug: 'AGUARDANDO', color: '#f59e0b', position: 2, is_terminal: false, terminal_type: null },
+  { name: 'Resolvido', slug: 'RESOLVIDO', color: '#10b981', position: 3, is_terminal: true, terminal_type: 'won' },
+  { name: 'Fechado', slug: 'FECHADO', color: '#6b7280', position: 4, is_terminal: true, terminal_type: 'lost' },
+];
+
 const PIPELINE_TYPE_LABELS: Record<PipelineType, string> = {
   PADRAO: 'Pipeline Padrao',
   BUGS: 'Pipeline de Bugs',
+  SUPORTE: 'Pipeline de Suporte',
 };
 
 const PIPELINE_TYPE_COLORS: Record<PipelineType, string> = {
   PADRAO: 'bg-emerald-500/15 text-emerald-400',
   BUGS: 'bg-red-500/15 text-red-400',
+  SUPORTE: 'bg-orange-500/15 text-orange-400',
 };
 
 interface OrgUser {
@@ -41,9 +51,10 @@ interface OrgUser {
 
 interface PipelineManagerProps {
   showBugsType?: boolean;
+  showSuporteType?: boolean;
 }
 
-export default function PipelineManager({ showBugsType = false }: PipelineManagerProps) {
+export default function PipelineManager({ showBugsType = false, showSuporteType = false }: PipelineManagerProps) {
   const { refetch: refetchGlobalPipelines } = usePipeline();
   const [pipelines, setPipelines] = useState<PipelineWithStages[]>([]);
   const [loading, setLoading] = useState(true);
@@ -445,18 +456,18 @@ export default function PipelineManager({ showBugsType = false }: PipelineManage
             </p>
           </div>
 
-          {/* Pipeline type selector - only show if bugs type is available or editing a bugs pipeline */}
-          {(showBugsType || formType === 'BUGS') && (
+          {/* Pipeline type selector - only show if bugs/suporte type is available or editing one */}
+          {(showBugsType || showSuporteType || formType === 'BUGS' || formType === 'SUPORTE') && (
           <div>
             <label className="block text-xs font-medium text-purple-300/80 mb-1">Tipo do Pipeline *</label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => {
                   setFormType('PADRAO');
                   if (!editingId) setFormStages(DEFAULT_STAGES);
                 }}
-                className={`flex-1 p-3 rounded-lg border text-left transition-colors ${
+                className={`flex-1 min-w-[140px] p-3 rounded-lg border text-left transition-colors ${
                   formType === 'PADRAO'
                     ? 'border-emerald-500/40 bg-emerald-500/10'
                     : 'border-purple-700/30 bg-[#2a1245] hover:border-purple-600/40'
@@ -469,13 +480,14 @@ export default function PipelineManager({ showBugsType = false }: PipelineManage
                   Vendas, prospecao, parcerias, etc.
                 </p>
               </button>
+              {(showBugsType || formType === 'BUGS') && (
               <button
                 type="button"
                 onClick={() => {
                   setFormType('BUGS');
                   if (!editingId) setFormStages(DEFAULT_BUG_STAGES);
                 }}
-                className={`flex-1 p-3 rounded-lg border text-left transition-colors ${
+                className={`flex-1 min-w-[140px] p-3 rounded-lg border text-left transition-colors ${
                   formType === 'BUGS'
                     ? 'border-red-500/40 bg-red-500/10'
                     : 'border-purple-700/30 bg-[#2a1245] hover:border-purple-600/40'
@@ -488,6 +500,28 @@ export default function PipelineManager({ showBugsType = false }: PipelineManage
                   Rastreamento de bugs com campo de anexo nos cards.
                 </p>
               </button>
+              )}
+              {(showSuporteType || formType === 'SUPORTE') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFormType('SUPORTE');
+                  if (!editingId) setFormStages(DEFAULT_SUPORTE_STAGES);
+                }}
+                className={`flex-1 min-w-[140px] p-3 rounded-lg border text-left transition-colors ${
+                  formType === 'SUPORTE'
+                    ? 'border-orange-500/40 bg-orange-500/10'
+                    : 'border-purple-700/30 bg-[#2a1245] hover:border-purple-600/40'
+                }`}
+              >
+                <p className={`text-sm font-semibold ${formType === 'SUPORTE' ? 'text-orange-400' : 'text-neutral-300'}`}>
+                  Pipeline de Suporte
+                </p>
+                <p className="text-[10px] text-purple-300/50 mt-0.5">
+                  Fluxo de chamados e tickets de suporte.
+                </p>
+              </button>
+              )}
             </div>
           </div>
           )}

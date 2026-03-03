@@ -142,7 +142,7 @@ export const pipelineStageSchema = z.object({
 export const pipelineCreateSchema = z.object({
   name: z.string().min(1, 'Nome do pipeline obrigatorio').max(100),
   description: z.string().max(500).optional().nullable(),
-  pipeline_type: z.enum(['PADRAO', 'BUGS']).default('PADRAO'),
+  pipeline_type: z.enum(['PADRAO', 'BUGS', 'SUPORTE']).default('PADRAO'),
   stages: z.array(pipelineStageSchema).min(1, 'Pelo menos 1 stage obrigatorio'),
   member_user_ids: z.array(z.string().uuid()).optional(),
 });
@@ -150,7 +150,7 @@ export const pipelineCreateSchema = z.object({
 export const pipelineUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional().nullable(),
-  pipeline_type: z.enum(['PADRAO', 'BUGS']).optional(),
+  pipeline_type: z.enum(['PADRAO', 'BUGS', 'SUPORTE']).optional(),
   stages: z.array(pipelineStageSchema).min(1, 'Pelo menos 1 stage obrigatorio').optional(),
   member_user_ids: z.array(z.string().uuid()).optional(),
 });
@@ -237,6 +237,8 @@ export const supportTicketUpdateSchema = z.object({
   priority: z.enum(['URGENTE', 'ALTA', 'NORMAL', 'BAIXA']).optional(),
   severity: z.enum(['CRITICO', 'ALTO', 'MEDIO', 'BAIXO']).optional().nullable(),
   status: z.enum(['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO', 'RESOLVIDO', 'FECHADO']).optional(),
+  pipeline_id: z.string().uuid().optional().nullable(),
+  stage_id: z.string().uuid().optional().nullable(),
   contact_id: z.string().uuid().optional().nullable(),
   project_id: z.string().uuid().optional().nullable(),
   assigned_to: z.string().uuid().optional().nullable(),

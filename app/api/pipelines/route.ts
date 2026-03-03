@@ -20,13 +20,20 @@ export async function GET(request: NextRequest) {
     }
 
     const admin = getAdminClient();
+    const typeFilter = request.nextUrl.searchParams.get('type');
 
     // Try with pipeline_type first; fall back to without if column doesn't exist
     let pipelines: any[] | null = null;
-    const { data: pipelinesData, error } = await admin
+    let query = admin
       .from('pipelines')
       .select('*')
-      .eq('organization_id', profile.organization_id)
+      .eq('organization_id', profile.organization_id);
+
+    if (typeFilter) {
+      query = query.eq('pipeline_type', typeFilter);
+    }
+
+    const { data: pipelinesData, error } = await query
       .order('position', { ascending: true });
 
     if (error && error.message?.includes('pipeline_type')) {

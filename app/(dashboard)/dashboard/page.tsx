@@ -3,6 +3,8 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import DailyTasksWidget from '@/components/daily-tasks-widget';
 import PipelineHealthWidget from '@/components/ai/pipeline-health-widget';
 import PipelineDashboard from '@/components/dashboard/pipeline-dashboard';
+import { SetupChecklist } from '@/components/onboarding/setup-checklist';
+import { PushNotificationPrompt } from '@/components/push-notification-prompt';
 import { ensureProfile } from '@/lib/ensure-profile';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +32,8 @@ export default async function DashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-emerald-400 mb-8">Dashboard</h1>
+      <PushNotificationPrompt />
+      <SetupChecklist />
       <DailyTasksWidget />
       <PipelineHealthWidget />
       <PipelineDashboard

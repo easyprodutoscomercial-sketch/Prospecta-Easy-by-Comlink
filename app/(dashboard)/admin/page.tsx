@@ -14,10 +14,11 @@ const MENU_OPTIONS = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'contacts', label: 'Contatos' },
   { key: 'kanban', label: 'Pipeline' },
-  { key: 'bugs', label: 'Bugs' },
+  { key: 'focus', label: 'Modo Foco' },
+  { key: 'suporte', label: 'Suporte' },
   { key: 'calendar', label: 'Calendario' },
   { key: 'ai', label: 'Assistente IA' },
-  { key: 'import', label: 'Importar' },
+  { key: 'reports', label: 'Relatorios' },
   { key: 'requests', label: 'Solicitacoes' },
   { key: 'settings', label: 'Configuracoes' },
 ] as const;
@@ -495,7 +496,7 @@ export default function AdminPage() {
           <PipelineManager showBugsType={users.some(u => {
             const menus = (u as any).visible_menus as string[] | undefined;
             return menus && menus.length > 0 && menus.includes('bugs');
-          })} />
+          })} showSuporteType />
         </div>
       </div>
 
@@ -825,9 +826,9 @@ export default function AdminPage() {
                           <div className="flex items-center gap-2">
                             <p className="text-sm font-medium text-neutral-100 truncate">{u.name}</p>
                             <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full ${
-                              u.role === 'admin' ? 'bg-purple-500/15 text-purple-400' : 'bg-purple-800/30 text-purple-300/60'
+                              u.role === 'admin' ? 'bg-purple-500/15 text-purple-400' : u.role === 'gerente' ? 'bg-blue-500/15 text-blue-400' : 'bg-purple-800/30 text-purple-300/60'
                             }`}>
-                              {u.role === 'admin' ? 'Admin' : 'Vendedor'}
+                              {{ admin: 'Admin', gerente: 'Gerente', sdr: 'SDR', closer: 'Closer', suporte: 'Suporte', user: 'Vendedor' }[u.role || 'user'] || u.role}
                             </span>
                           </div>
                           <p className="text-xs text-purple-300/60 truncate">{u.email}</p>
@@ -840,7 +841,11 @@ export default function AdminPage() {
                             className="text-[10px] bg-[#2a1245] border border-purple-700/30 text-neutral-100 rounded px-1 py-0.5 focus:outline-none disabled:opacity-40"
                           >
                             <option value="admin">Admin</option>
+                            <option value="gerente">Gerente</option>
+                            <option value="closer">Closer</option>
+                            <option value="sdr">SDR</option>
                             <option value="user">Vendedor</option>
+                            <option value="suporte">Suporte</option>
                           </select>
                           <button
                             onClick={() => startMenuEditing(u)}
@@ -923,6 +928,46 @@ export default function AdminPage() {
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Automations Section */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">Automacoes</h2>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+          <h3 className="text-sm font-medium text-neutral-100 mb-1">Regras de Automacao</h3>
+          <p className="text-xs text-purple-300/60 mb-4">
+            Configure gatilhos e acoes automaticas para seu pipeline (notificacoes, mudancas de etapa, etc.).
+          </p>
+          <Link
+            href="/admin/automations"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            Gerenciar Automacoes
+          </Link>
+        </div>
+      </div>
+
+      {/* Audit Log Section */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">Auditoria</h2>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+          <h3 className="text-sm font-medium text-neutral-100 mb-1">Log de Auditoria</h3>
+          <p className="text-xs text-purple-300/60 mb-4">
+            Visualize todas as acoes realizadas no sistema pelos usuarios.
+          </p>
+          <Link
+            href="/admin/audit"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-500 shadow-lg shadow-purple-600/20 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            Ver Log de Auditoria
+          </Link>
         </div>
       </div>
 

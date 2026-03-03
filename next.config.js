@@ -3,6 +3,7 @@ const withPWA = require("@ducanh2912/next-pwa").default({
   disable: process.env.NODE_ENV === "development",
   register: true,
   skipWaiting: true,
+  customWorkerSrc: "worker",
   fallbacks: {
     document: "/offline",
   },
@@ -15,6 +16,14 @@ const withPWA = require("@ducanh2912/next-pwa").default({
           cacheName: "supabase-api",
           expiration: { maxEntries: 64, maxAgeSeconds: 60 * 60 },
           networkTimeoutSeconds: 10,
+        },
+      },
+      {
+        urlPattern: /\/api\/contacts.*/i,
+        handler: "StaleWhileRevalidate",
+        options: {
+          cacheName: "contacts-cache",
+          expiration: { maxEntries: 64, maxAgeSeconds: 5 * 60 },
         },
       },
       {

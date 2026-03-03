@@ -15,9 +15,10 @@ import { getUserInitials } from '@/lib/utils/user-colors';
 interface SuporteKanbanCardProps {
   ticket: SupportTicket;
   overlay?: boolean;
+  terminalStageIds?: Set<string>;
 }
 
-export function SuporteKanbanCard({ ticket, overlay }: SuporteKanbanCardProps) {
+export function SuporteKanbanCard({ ticket, overlay, terminalStageIds }: SuporteKanbanCardProps) {
   const router = useRouter();
   const {
     attributes,
@@ -37,10 +38,13 @@ export function SuporteKanbanCard({ ticket, overlay }: SuporteKanbanCardProps) {
     opacity: isDragging ? 0.4 : 1,
   };
 
+  const isTerminal = terminalStageIds && ticket.stage_id
+    ? terminalStageIds.has(ticket.stage_id)
+    : (ticket.status === 'RESOLVIDO' || ticket.status === 'FECHADO');
+
   const isOverdue = ticket.due_date &&
     new Date(ticket.due_date) < new Date() &&
-    ticket.status !== 'RESOLVIDO' &&
-    ticket.status !== 'FECHADO';
+    !isTerminal;
 
   return (
     <div

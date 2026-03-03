@@ -111,6 +111,9 @@ export async function GET(request: NextRequest) {
 
     const contacts = [...(priority1 || []), ...priority2, ...priority3];
 
+    // Secondary sort by lead_score DESC within each priority bucket
+    contacts.sort((a: any, b: any) => (b.lead_score || 0) - (a.lead_score || 0));
+
     return NextResponse.json({ contacts });
   } catch (error: any) {
     console.error('Error fetching focus queue:', error);

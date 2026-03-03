@@ -15,11 +15,13 @@ import {
 } from '@/lib/utils/labels';
 import ConfirmModal from '@/components/ui/confirm-modal';
 import { useToast } from '@/lib/toast-context';
+import { useSupportPipeline } from '@/lib/support-pipeline-context';
 
 export default function SuporteDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
+  const { currentPipeline } = useSupportPipeline();
   const [ticket, setTicket] = useState<SupportTicket | null>(null);
   const [attachments, setAttachments] = useState<SupportAttachment[]>([]);
   const [comments, setComments] = useState<SupportComment[]>([]);
@@ -27,6 +29,8 @@ export default function SuporteDetailPage() {
   const [activeTab, setActiveTab] = useState('details');
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const stages = currentPipeline?.stages || [];
 
   useEffect(() => {
     const load = async () => {
@@ -88,10 +92,15 @@ export default function SuporteDetailPage() {
     { key: 'comments', label: 'Comentarios', count: comments.length },
   ];
 
+  // Find current stage for badge display
+  const currentStage = stages.find((s) => s.id === ticket.stage_id);
+  const isTerminal = currentStage
+    ? currentStage.is_terminal
+    : (ticket.status === 'RESOLVIDO' || ticket.status === 'FECHADO');
+
   const isOverdue = ticket.due_date &&
     new Date(ticket.due_date) < new Date() &&
-    ticket.status !== 'RESOLVIDO' &&
-    ticket.status !== 'FECHADO';
+    !isTerminal;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-6xl mx-auto">
@@ -115,9 +124,18 @@ export default function SuporteDetailPage() {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-neutral-100 mb-2">{ticket.title}</h1>
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs px-2 py-0.5 rounded font-medium ${SUPPORT_STATUS_COLORS[ticket.status]}`}>
-            {SUPPORT_STATUS_LABELS[ticket.status]}
-          </span>
+          {currentStage ? (
+            <span
+              className="text-xs px-2 py-0.5 rounded font-medium"
+              style={{ backgroundColor: `${currentStage.color}30`, color: currentStage.color }}
+            >
+              {currentStage.name}
+            </span>
+          ) : (
+            <span className={`text-xs px-2 py-0.5 rounded font-medium ${SUPPORT_STATUS_COLORS[ticket.status]}`}>
+              {SUPPORT_STATUS_LABELS[ticket.status]}
+            </span>
+          )}
           <span className={`text-xs px-2 py-0.5 rounded font-medium ${SUPPORT_TYPE_COLORS[ticket.ticket_type]}`}>
             {SUPPORT_TYPE_LABELS[ticket.ticket_type]}
           </span>
@@ -182,6 +200,7 @@ export default function SuporteDetailPage() {
           <SuporteDetailSidebar
             ticket={ticket}
             onUpdate={(updated) => setTicket((prev) => prev ? { ...prev, ...updated } : prev)}
+            stages={stages}
           />
         </div>
       </div>

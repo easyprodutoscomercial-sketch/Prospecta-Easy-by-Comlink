@@ -101,6 +101,8 @@ export interface Contact {
   telefones_adicionais: TelefoneAdicional[];
   // Marcação
   inexistente: boolean;
+  // Lead scoring
+  lead_score: number | null;
   // Status e atribuição
   status: ContactStatus;
   assigned_to_user_id: string | null;
@@ -124,7 +126,7 @@ export interface Interaction {
   updated_at: string;
 }
 
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'user' | 'gerente' | 'sdr' | 'closer' | 'suporte';
 
 export interface Profile {
   user_id: string;
@@ -134,6 +136,7 @@ export interface Profile {
   role: UserRole;
   avatar_url: string | null;
   visible_menus?: string[];
+  manager_id?: string | null;
   created_at: string;
 }
 
@@ -157,7 +160,7 @@ export interface PipelineSettings {
   columns: Record<ContactStatus, { label: string; color: string }>;
 }
 
-export type PipelineType = 'PADRAO' | 'BUGS';
+export type PipelineType = 'PADRAO' | 'BUGS' | 'SUPORTE';
 
 export interface Pipeline {
   id: string;
@@ -453,6 +456,8 @@ export interface SupportTicket {
   priority: SupportPriority;
   severity: SupportSeverity | null;
   status: SupportStatus;
+  pipeline_id: string | null;
+  stage_id: string | null;
   contact_id: string | null;
   project_id: string | null;
   reported_by: string;

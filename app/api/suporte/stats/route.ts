@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     // Fetch all tickets for this org to compute stats
     let query = admin
       .from('support_tickets')
-      .select('id, status, ticket_type, priority, due_date, project_id')
+      .select('*')
       .eq('organization_id', orgId);
 
     if (projectId) {
@@ -38,12 +38,53 @@ export async function GET(request: NextRequest) {
 
     const allTickets = tickets || [];
 
-    // Count by status
+    // Fetch SUPORTE pipeline stages for stage-based stats
+    let stages: any[] = [];
+    const terminalStageIds = new Set<string>();
+    const stageMap: Record<string, any> = {};
+
+    try {
+      const { data: suportePipeline } = await admin
+        .from('pipelines')
+        .select('id')
+        .eq('organization_id', orgId)
+        .eq('pipeline_type', 'SUPORTE')
+        .eq('is_default', true)
+        .limit(1)
+        .single();
+
+      if (suportePipeline) {
+        const { data: stagesData } = await admin
+          .from('pipeline_stages')
+          .select('*')
+          .eq('pipeline_id', suportePipeline.id)
+          .order('position', { ascending: true });
+
+        stages = stagesData || [];
+        stages.forEach((s: any) => {
+          stageMap[s.id] = s;
+          if (s.is_terminal) terminalStageIds.add(s.id);
+        });
+      }
+    } catch {
+      // Pipeline may not exist yet
+    }
+
+    // Count by status (legacy)
     const by_status: Record<string, number> = {};
     const statuses = ['ABERTO', 'EM_ANDAMENTO', 'AGUARDANDO', 'RESOLVIDO', 'FECHADO'];
     statuses.forEach((s) => { by_status[s] = 0; });
     allTickets.forEach((t: any) => {
       by_status[t.status] = (by_status[t.status] || 0) + 1;
+    });
+
+    // Count by stage
+    const by_stage: Record<string, number> = {};
+    stages.forEach((s: any) => { by_stage[s.id] = 0; });
+    allTickets.forEach((t: any) => {
+      if (t.stage_id && by_stage[t.stage_id] !== undefined) {
+        by_stage[t.stage_id] = (by_stage[t.stage_id] || 0) + 1;
+      }
     });
 
     // Count by type
@@ -69,22 +110,33 @@ export async function GET(request: NextRequest) {
       by_project[pid] = (by_project[pid] || 0) + 1;
     });
 
-    // Count overdue
+    // Count overdue - use terminal stages if available, fallback to status
     const today = new Date().toISOString().split('T')[0];
-    const overdue = allTickets.filter((t: any) =>
-      t.due_date &&
-      t.due_date < today &&
-      t.status !== 'RESOLVIDO' &&
-      t.status !== 'FECHADO'
-    ).length;
+    const overdue = allTickets.filter((t: any) => {
+      if (!t.due_date || t.due_date >= today) return false;
+      if (terminalStageIds.size > 0 && t.stage_id) {
+        return !terminalStageIds.has(t.stage_id);
+      }
+      return t.status !== 'RESOLVIDO' && t.status !== 'FECHADO';
+    }).length;
 
     return NextResponse.json({
       by_status,
+      by_stage,
       by_type,
       by_priority,
       by_project,
       overdue,
       total: allTickets.length,
+      stages: stages.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        slug: s.slug,
+        color: s.color,
+        position: s.position,
+        is_terminal: s.is_terminal,
+        terminal_type: s.terminal_type,
+      })),
     });
   } catch (error: any) {
     console.error('Error fetching support stats:', error);

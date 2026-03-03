@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { contactUpdateSchema } from '@/lib/utils/validation';
 import { normalizeEmail, normalizePhone, normalizeCPF, normalizeCNPJ, normalizeName } from '@/lib/utils/normalize';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { computeLeadScoreDetailed } from '@/lib/utils/lead-score';
+import { processStageChangeAutomations } from '@/lib/automations/engine';
 
 // GET /api/contacts/:id - Buscar contato
 export async function GET(
@@ -97,7 +99,7 @@ export async function PATCH(
     // Ownership enforcement: buscar contato atual
     const { data: existingContact } = await admin
       .from('contacts')
-      .select('assigned_to_user_id')
+      .select('assigned_to_user_id, stage_id, organization_id')
       .eq('id', id)
       .single();
 
@@ -177,6 +179,32 @@ export async function PATCH(
     const { data: contact, error } = await query.select().single();
 
     if (error) throw error;
+
+    // Recalculate lead score after update
+    try {
+      const { data: interactions } = await admin
+        .from('interactions')
+        .select('outcome, happened_at')
+        .eq('contact_id', id)
+        .order('happened_at', { ascending: false })
+        .limit(50);
+      const detailed = computeLeadScoreDetailed({ ...contact, interactions: interactions || [] });
+      await admin.from('contacts').update({ lead_score: detailed.total }).eq('id', id);
+      contact.lead_score = detailed.total;
+    } catch { /* non-blocking */ }
+
+    // Process stage change automations
+    if (validated.stage_id && validated.stage_id !== existingContact.stage_id) {
+      try {
+        await processStageChangeAutomations(
+          admin,
+          existingContact.organization_id,
+          id,
+          existingContact.stage_id,
+          validated.stage_id,
+        );
+      } catch { /* non-blocking */ }
+    }
 
     return NextResponse.json(contact);
 
