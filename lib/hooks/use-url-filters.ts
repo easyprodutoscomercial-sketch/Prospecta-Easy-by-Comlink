@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useSearchParams, usePathname } from 'next/navigation';
 
 type FilterFieldDef = {
   type: 'text' | 'select';
@@ -13,30 +13,48 @@ type FilterDefs = Record<string, FilterFieldDef>;
 type FilterValues<T extends FilterDefs> = { [K in keyof T]: string };
 
 const DEBOUNCE_MS = 400;
-const SESSION_PREFIX = 'filters:';
+const STORAGE_PREFIX = 'filters:';
 
-function saveToSession(pathname: string, values: Record<string, string>) {
-  try { sessionStorage.setItem(SESSION_PREFIX + pathname, JSON.stringify(values)); } catch {}
+function saveToStorage(pathname: string, values: Record<string, string>) {
+  try { localStorage.setItem(STORAGE_PREFIX + pathname, JSON.stringify(values)); } catch {}
 }
 
-function loadFromSession(pathname: string): Record<string, string> | null {
+function loadFromStorage(pathname: string): Record<string, string> | null {
   try {
-    const raw = sessionStorage.getItem(SESSION_PREFIX + pathname);
+    const raw = localStorage.getItem(STORAGE_PREFIX + pathname);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
-function clearSession(pathname: string) {
-  try { sessionStorage.removeItem(SESSION_PREFIX + pathname); } catch {}
+function clearStorage(pathname: string) {
+  try { localStorage.removeItem(STORAGE_PREFIX + pathname); } catch {}
+}
+
+// Migrate old sessionStorage to localStorage (one-time)
+function migrateFromSession(pathname: string) {
+  try {
+    const key = STORAGE_PREFIX + pathname;
+    const fromSession = sessionStorage.getItem(key);
+    if (fromSession && !localStorage.getItem(key)) {
+      localStorage.setItem(key, fromSession);
+    }
+    sessionStorage.removeItem(key);
+  } catch {}
 }
 
 export function useUrlFilters<T extends FilterDefs>(defs: T) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Restore initial values: URL params > sessionStorage > defaults
-  // Done synchronously in initializer to avoid race conditions with effects
+  // One-time migration from sessionStorage → localStorage
+  const migratedRef = useRef(false);
+  if (!migratedRef.current) {
+    migratedRef.current = true;
+    migrateFromSession(pathname);
+  }
+
+  // Restore initial values: URL params > localStorage > defaults
+  // Done synchronously in initializer to avoid race conditions
   const getInitialValues = (): FilterValues<T> => {
     const hasUrlParams = Array.from(searchParams.keys()).some((k) => k in defs);
 
@@ -50,8 +68,8 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
       return vals;
     }
 
-    // Otherwise, try sessionStorage
-    const stored = loadFromSession(pathname);
+    // Otherwise, try localStorage
+    const stored = loadFromStorage(pathname);
     if (stored) {
       let hasNonDefault = false;
       const restored = {} as FilterValues<T>;
@@ -77,7 +95,8 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const lastUrlRef = useRef<string>('');
 
-  // Sync URL + sessionStorage on every values change
+  // Sync localStorage + URL on every values change
+  // Uses window.history.replaceState to avoid Next.js Suspense remounts
   useEffect(() => {
     const params = new URLSearchParams();
     const toStore: Record<string, string> = {};
@@ -89,19 +108,19 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
       }
     }
 
-    // Always persist to sessionStorage
-    saveToSession(pathname, toStore);
+    // Always persist to localStorage
+    saveToStorage(pathname, toStore);
 
-    // Only update URL if it actually changed
+    // Update URL without triggering Next.js re-render/Suspense
     const qs = params.toString();
     const newUrl = qs ? `${pathname}?${qs}` : pathname;
     if (newUrl !== lastUrlRef.current) {
       lastUrlRef.current = newUrl;
-      router.replace(newUrl, { scroll: false });
+      window.history.replaceState(null, '', newUrl);
     }
-  }, [values, defs, pathname, router]);
+  }, [values, defs, pathname]);
 
-  // Track current URL to avoid unnecessary replaces
+  // Track current URL on mount
   useEffect(() => {
     const qs = searchParams.toString();
     lastUrlRef.current = qs ? `${pathname}?${qs}` : pathname;
@@ -160,7 +179,7 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
     }
     setValues(defaults);
     setInputValues(defaults);
-    clearSession(pathname);
+    clearStorage(pathname);
   }, [defs, pathname]);
 
   useEffect(() => {
