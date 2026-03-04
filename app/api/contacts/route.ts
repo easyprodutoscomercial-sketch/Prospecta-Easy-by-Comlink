@@ -4,8 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { contactSchema } from '@/lib/utils/validation';
 import { normalizeContactData } from '@/lib/utils/normalize';
 import { ensureProfile } from '@/lib/ensure-profile';
-import { applyVisibilityFilter } from '@/lib/utils/visibility-filter';
-import type { UserRole } from '@/lib/types';
+// Visibility is now handled by pipeline membership (members see all contacts in their pipelines)
 
 // GET /api/contacts - Listar contatos com filtros
 export async function GET(request: NextRequest) {
@@ -54,15 +53,13 @@ export async function GET(request: NextRequest) {
       .eq('organization_id', profile.organization_id);
 
     // Filtrar por pipelines permitidas (non-admin)
+    // Membros do pipeline veem todos os contatos daquele pipeline
     if (allowedPipelineIds !== null && allowedPipelineIds.length > 0) {
       query = query.in('pipeline_id', allowedPipelineIds);
     } else if (allowedPipelineIds !== null && allowedPipelineIds.length === 0) {
       // Sem membership em nenhum pipeline — nao retorna contatos
       return NextResponse.json({ contacts: [], total: 0, page, limit, totalPages: 0 });
     }
-
-    // Apply role-based visibility filter (sdr/closer/user only see own contacts)
-    query = applyVisibilityFilter(query, profile.role as UserRole, user.id);
 
     // Filtro de busca
     if (search) {
