@@ -291,6 +291,41 @@ function ContactsPageContent() {
 
   const selectCls = 'px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500';
 
+  // Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.search) count++;
+    if (filters.status !== 'all') count++;
+    if (filters.tipo !== 'all') count++;
+    if (filters.assigned !== 'all') count++;
+    if (filters.temperatura !== 'all') count++;
+    if (filters.origem !== 'all') count++;
+    if (filters.classe !== 'all') count++;
+    if (filters.cidade) count++;
+    if (filters.estado !== 'all') count++;
+    if (filters.telefone) count++;
+    if (filters.cpf) count++;
+    if (filters.cnpj) count++;
+    if (filters.whatsapp) count++;
+    if (filters.empresa) count++;
+    if (filters.referencia) count++;
+    if (filters.contato_nome) count++;
+    if (filters.cargo) count++;
+    if (filters.endereco) count++;
+    if (filters.cep) count++;
+    if (filters.website) count++;
+    if (filters.instagram) count++;
+    if (filters.produtos_fornecidos) count++;
+    if (filters.proxima_acao_tipo !== 'all') count++;
+    if (contactsPipelineFilter !== 'all') count++;
+    return count;
+  }, [filters, contactsPipelineFilter]);
+
+  function clearAllFilters() {
+    resetAll();
+    setContactsPipelineFilter('all');
+  }
+
   const hiddenCount = contacts.length - visibleContacts.length;
   const pipelineStages = currentPipeline?.stages && currentPipeline.stages.length > 0 ? currentPipeline.stages : null;
 
@@ -336,6 +371,26 @@ function ContactsPageContent() {
 
       {/* Filters */}
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-3 sm:p-4">
+        {/* Filter header with count + clear button */}
+        {activeFilterCount > 0 && (
+          <div className="flex items-center justify-between mb-3 pb-2 border-b border-purple-800/20">
+            <span className="flex items-center gap-2 text-xs text-purple-300/70">
+              <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              <span className="font-medium text-emerald-400">{activeFilterCount}</span> filtro{activeFilterCount !== 1 ? 's' : ''} ativo{activeFilterCount !== 1 ? 's' : ''}
+            </span>
+            <button
+              onClick={clearAllFilters}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/30 transition-all"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Limpar filtros
+            </button>
+          </div>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
           <div className="relative col-span-1 sm:col-span-2 lg:col-span-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>

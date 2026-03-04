@@ -619,6 +619,7 @@ export default function KanbanPage() {
   // Active filter count
   const activeFilterCount = useMemo(() => {
     let count = 0;
+    if (search) count++;
     if (tipoFilter) count++;
     if (responsavelFilter) count++;
     if (temperaturaFilter) count++;
@@ -628,7 +629,7 @@ export default function KanbanPage() {
     if (proximaAcaoFilter) count++;
     Object.values(advSearch).forEach(v => { if (v) count++; });
     return count;
-  }, [tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
+  }, [search, tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
 
   function clearAllFilters() {
     setTipoFilter('');
@@ -964,8 +965,19 @@ export default function KanbanPage() {
 
         {/* Active filter chips inline */}
         {activeFilterCount > 0 && (
-          <div className="mt-1.5 overflow-x-auto scrollbar-hide">
-            <FilterChips filters={filterState} onFilterChange={handleFilterChange} userMap={userMap} />
+          <div className="mt-1.5 flex items-center gap-2 overflow-x-auto scrollbar-hide">
+            <div className="shrink-0">
+              <FilterChips filters={filterState} onFilterChange={handleFilterChange} userMap={userMap} />
+            </div>
+            <button
+              onClick={clearAllFilters}
+              className="shrink-0 flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/30 transition-all"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+              Limpar filtros
+            </button>
           </div>
         )}
       </div>
