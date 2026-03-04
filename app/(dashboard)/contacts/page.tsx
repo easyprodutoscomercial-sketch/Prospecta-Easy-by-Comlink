@@ -119,18 +119,8 @@ function ContactsPageContent() {
     fetchUsersAndMe();
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadContacts(); }, [JSON.stringify(filters), contactsPipelineFilter]);
-
-  // Refresh ao voltar para a aba/página
-  useEffect(() => {
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
-        loadContacts();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibility);
-    return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, []);
 
   // Load all contacts for map view (no pagination)
   useEffect(() => {
@@ -201,6 +191,21 @@ function ContactsPageContent() {
       setMapContacts(data.contacts || []);
     } catch (e: any) { if (e.name === 'AbortError') return; }
   };
+
+  // Ref para sempre ter a versão mais recente de loadContacts (evita stale closure)
+  const loadContactsRef = useRef(loadContacts);
+  loadContactsRef.current = loadContacts;
+
+  // Refresh ao voltar para a aba/página (usa ref para pegar page/filtros atuais)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadContactsRef.current();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   const handleSort = (field: SortField) => {
     if (filters.sortBy === field) {

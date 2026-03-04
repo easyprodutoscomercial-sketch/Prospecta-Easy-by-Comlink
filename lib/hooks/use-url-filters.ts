@@ -35,49 +35,47 @@ export function useUrlFilters<T extends FilterDefs>(defs: T) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  // Safe initial values from URL params only (works during SSR)
-  const getValuesFromUrl = (): FilterValues<T> => {
+  // Restore initial values: URL params > sessionStorage > defaults
+  // Done synchronously in initializer to avoid race conditions with effects
+  const getInitialValues = (): FilterValues<T> => {
+    const hasUrlParams = Array.from(searchParams.keys()).some((k) => k in defs);
+
+    // If URL has filter params, use them
+    if (hasUrlParams) {
+      const vals = {} as FilterValues<T>;
+      for (const key in defs) {
+        const fromUrl = searchParams.get(key);
+        (vals as any)[key] = fromUrl !== null ? fromUrl : defs[key].default;
+      }
+      return vals;
+    }
+
+    // Otherwise, try sessionStorage
+    const stored = loadFromSession(pathname);
+    if (stored) {
+      let hasNonDefault = false;
+      const restored = {} as FilterValues<T>;
+      for (const key in defs) {
+        const val = stored[key] ?? defs[key].default;
+        (restored as any)[key] = val;
+        if (val !== defs[key].default) hasNonDefault = true;
+      }
+      if (hasNonDefault) return restored;
+    }
+
+    // Fallback to defaults
     const vals = {} as FilterValues<T>;
     for (const key in defs) {
-      const fromUrl = searchParams.get(key);
-      (vals as any)[key] = fromUrl !== null ? fromUrl : defs[key].default;
+      (vals as any)[key] = defs[key].default;
     }
     return vals;
   };
 
-  const [values, setValues] = useState<FilterValues<T>>(getValuesFromUrl);
-  const [inputValues, setInputValues] = useState<FilterValues<T>>(getValuesFromUrl);
+  const [values, setValues] = useState<FilterValues<T>>(getInitialValues);
+  const [inputValues, setInputValues] = useState<FilterValues<T>>(getInitialValues);
 
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const lastUrlRef = useRef<string>('');
-  const restoredRef = useRef(false);
-
-  // After mount on client: restore from sessionStorage if URL has no filter params
-  useEffect(() => {
-    if (restoredRef.current) return;
-    restoredRef.current = true;
-
-    const hasUrlParams = Array.from(searchParams.keys()).some((k) => k in defs);
-    if (hasUrlParams) return; // URL already has filters, no need to restore
-
-    const stored = loadFromSession(pathname);
-    if (!stored) return;
-
-    // Check if stored has any non-default values
-    let hasNonDefault = false;
-    const restored = {} as FilterValues<T>;
-    for (const key in defs) {
-      const val = stored[key] ?? defs[key].default;
-      (restored as any)[key] = val;
-      if (val !== defs[key].default) hasNonDefault = true;
-    }
-
-    if (hasNonDefault) {
-      setValues(restored);
-      setInputValues(restored);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Sync URL + sessionStorage on every values change
   useEffect(() => {
