@@ -2,14 +2,14 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Prospecta Easy",
+  title: "Controlei CRM",
   description: "Sistema inteligente para gestao de contatos, pipeline de vendas e controle comercial.",
-  applicationName: "Prospecta Easy",
+  applicationName: "Controlei CRM",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Prospecta Easy",
+    title: "Controlei CRM",
     startupImage: [
       {
         url: "/splash/iphone-15-pro-max.png",
@@ -54,15 +54,15 @@ export const metadata: Metadata = {
     ],
   },
   openGraph: {
-    title: "Prospecta Easy",
+    title: "Controlei CRM",
     description: "Sistema inteligente para gestao de contatos, pipeline de vendas e controle comercial.",
     type: "website",
     locale: "pt_BR",
-    siteName: "Prospecta Easy by Comlink",
+    siteName: "Controlei CRM",
   },
   twitter: {
     card: "summary",
-    title: "Prospecta Easy",
+    title: "Controlei CRM",
     description: "Sistema inteligente para gestao de contatos e pipeline de vendas.",
   },
 };

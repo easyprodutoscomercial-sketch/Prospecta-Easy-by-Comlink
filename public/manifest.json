@@ -1,7 +1,7 @@
 {
   "id": "/dashboard",
-  "name": "Prospecta Easy by Comlink",
-  "short_name": "Prospecta Easy",
+  "name": "Controlei CRM",
+  "short_name": "Controlei",
   "description": "Sistema inteligente para gestao de contatos, pipeline de vendas e controle comercial.",
   "start_url": "/dashboard",
   "scope": "/",

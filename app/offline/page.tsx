@@ -119,7 +119,7 @@ export default function OfflinePage() {
           <p className="text-[10px] text-purple-300/30">Aguardando conexao...</p>
         </div>
 
-        <p className="text-[10px] text-purple-300/30 mt-4">Prospecta Easy</p>
+        <p className="text-[10px] text-purple-300/30 mt-4">Controlei CRM</p>
       </div>
     </div>
   );

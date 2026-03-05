@@ -709,7 +709,7 @@ export default function LeadCapturePage() {
       {/* Footer */}
       <div className="px-4 py-3 text-center border-t border-purple-800/20">
         <p className="text-[10px] text-purple-300/30">
-          Powered by Prospecta Easy
+          Powered by Controlei CRM
         </p>
       </div>
     </div>

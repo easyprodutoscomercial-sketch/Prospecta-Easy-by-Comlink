@@ -189,7 +189,7 @@ export default function PortalPage() {
       {/* Footer */}
       <footer className="border-t border-purple-800/10 mt-8">
         <div className="max-w-4xl mx-auto px-4 py-4 text-center">
-          <p className="text-[10px] text-neutral-600">Portal de Suporte - Prospecta Easy</p>
+          <p className="text-[10px] text-neutral-600">Portal de Suporte - Controlei CRM</p>
         </div>
       </footer>
     </div>

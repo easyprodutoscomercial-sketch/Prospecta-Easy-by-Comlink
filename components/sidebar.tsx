@@ -202,7 +202,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
       {/* Logo + Bell */}
       <div className="flex items-center justify-between py-5 px-4">
         <Link href="/dashboard" className="flex items-center">
-          <Image src="/logo.png" alt="Prospecta Easy" width={180} height={52} priority />
+          <Image src="/logo.png" alt="Controlei CRM" width={180} height={52} priority />
         </Link>
         <div data-tour="notifications">
           <NotificationBell />
@@ -303,7 +303,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <Image src="/logo.png" alt="Prospecta Easy" width={180} height={50} className="ml-3" priority />
+          <Image src="/logo.png" alt="Controlei CRM" width={180} height={50} className="ml-3" priority />
         </div>
         <NotificationBell />
       </div>

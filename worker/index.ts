@@ -20,7 +20,7 @@ self.addEventListener('push', (event) => {
       renotify: true,
     };
 
-    event.waitUntil(self.registration.showNotification(title || 'Prospecta Easy', options));
+    event.waitUntil(self.registration.showNotification(title || 'Controlei CRM', options));
   } catch (err) {
     console.error('[SW] Push parse error:', err);
   }
