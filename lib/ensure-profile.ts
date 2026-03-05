@@ -33,13 +33,13 @@ export async function ensureProfile(supabase: SupabaseClient, user: { id: string
 
   const { data: newProfile, error: profileError } = await admin
     .from('profiles')
-    .insert({
+    .upsert({
       user_id: user.id,
       organization_id: org.id,
       name: user.user_metadata?.name || user.email?.split('@')[0] || 'Usuário',
       email: user.email || '',
       role: 'admin',
-    })
+    }, { onConflict: 'user_id' })
     .select()
     .single();
 

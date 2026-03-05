@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MOTIVO_GANHO_LABELS, MOTIVO_PERDIDO_LABELS } from '@/lib/utils/labels';
 
 interface MotivoModalProps {
@@ -26,24 +26,27 @@ export default function MotivoModal({
     ? 'Por que este contato foi convertido?'
     : 'Por que este contato foi perdido?';
 
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    },
-    [onClose]
-  );
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
+  // Reset motivo only when modal opens (not on every parent re-render)
   useEffect(() => {
-    if (isOpen) {
-      setMotivo('');
-      document.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden';
-    }
+    if (isOpen) setMotivo('');
+  }, [isOpen]);
+
+  // Keyboard + scroll lock (uses ref to avoid re-running on onClose identity change)
+  useEffect(() => {
+    if (!isOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current();
+    };
+    document.addEventListener('keydown', handler);
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handler);
       document.body.style.overflow = '';
     };
-  }, [isOpen, handleKeyDown]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

@@ -135,16 +135,17 @@ export async function POST(request: Request) {
       userId = authData.user.id;
     }
 
-    // Create profile linked to the same organization as the admin
+    // Create/update profile linked to the same organization as the admin
+    // Uses upsert because the on_auth_user_created trigger may have already created a profile
     const { data: newProfile, error: profileError } = await admin
       .from('profiles')
-      .insert({
+      .upsert({
         user_id: userId,
         organization_id: profile.organization_id,
         name,
         email,
         role: 'user',
-      })
+      }, { onConflict: 'user_id' })
       .select()
       .single();
 
