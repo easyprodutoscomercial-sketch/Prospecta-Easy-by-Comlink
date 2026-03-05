@@ -489,3 +489,63 @@ export const SUPPORT_KANBAN_COLUMNS = [
   { id: 'RESOLVIDO', label: 'Resolvido', color: '#10b981' },
   { id: 'FECHADO', label: 'Fechado', color: '#6b7280' },
 ];
+
+// ============================================
+// Pedidos & Cotacoes Labels & Colors
+// ============================================
+
+export const PC_CLIENT_STATUS_LABELS: Record<string, string> = {
+  SIM: 'Sim',
+  NAO: 'Nao',
+  AGUARDANDO_ACEITE: 'Aguardando Aceite',
+  PRE_CADASTRO: 'Pre-Cadastro',
+};
+
+export const PC_CLIENT_STATUS_COLORS: Record<string, string> = {
+  SIM: 'bg-emerald-500/20 text-emerald-400',
+  NAO: 'bg-red-500/20 text-red-400',
+  AGUARDANDO_ACEITE: 'bg-amber-500/20 text-amber-400',
+  PRE_CADASTRO: 'bg-blue-500/20 text-blue-400',
+};
+
+export const PC_COTACAO_RESPOSTA_LABELS: Record<string, string> = {
+  RESPONDEU: 'Respondeu',
+  NAO_RESPONDEU: 'Nao Respondeu',
+};
+
+export const PC_COTACAO_RESPOSTA_COLORS: Record<string, string> = {
+  RESPONDEU: 'bg-emerald-500/20 text-emerald-400',
+  NAO_RESPONDEU: 'bg-red-500/20 text-red-400',
+};
+
+export const PC_PEDIDO_SITUACAO_LABELS: Record<string, string> = {
+  PENDENTE: 'Pendente',
+  ACEITO: 'Aceito',
+  RECUSADO: 'Recusado',
+  EM_ANDAMENTO: 'Em Andamento',
+  FINALIZADO: 'Finalizado',
+};
+
+export const PC_PEDIDO_SITUACAO_COLORS: Record<string, string> = {
+  PENDENTE: 'bg-amber-500/20 text-amber-400',
+  ACEITO: 'bg-emerald-500/20 text-emerald-400',
+  RECUSADO: 'bg-red-500/20 text-red-400',
+  EM_ANDAMENTO: 'bg-blue-500/20 text-blue-400',
+  FINALIZADO: 'bg-purple-500/20 text-purple-400',
+};
+
+export const PC_PEDIDO_SITUACAO_BORDER_COLORS: Record<string, string> = {
+  PENDENTE: 'border-l-amber-500',
+  ACEITO: 'border-l-emerald-500',
+  RECUSADO: 'border-l-red-500',
+  EM_ANDAMENTO: 'border-l-blue-500',
+  FINALIZADO: 'border-l-purple-500',
+};
+
+export const PC_PEDIDO_KANBAN_COLUMNS = [
+  { id: 'PENDENTE', label: 'Pendente', color: '#f59e0b' },
+  { id: 'EM_ANDAMENTO', label: 'Em Andamento', color: '#3b82f6' },
+  { id: 'ACEITO', label: 'Aceito', color: '#10b981' },
+  { id: 'RECUSADO', label: 'Recusado', color: '#ef4444' },
+  { id: 'FINALIZADO', label: 'Finalizado', color: '#8b5cf6' },
+];

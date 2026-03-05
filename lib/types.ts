@@ -514,5 +514,94 @@ export interface SupportAttachment {
   public_url?: string;
 }
 
+// ============================================
+// Pedidos & Cotacoes
+// ============================================
+
+export type PcClientStatus = 'SIM' | 'NAO' | 'AGUARDANDO_ACEITE' | 'PRE_CADASTRO';
+
+export type PcCotacaoResposta = 'RESPONDEU' | 'NAO_RESPONDEU';
+
+export type PcPedidoSituacao = 'PENDENTE' | 'ACEITO' | 'RECUSADO' | 'EM_ANDAMENTO' | 'FINALIZADO';
+
+export interface PcClient {
+  id: string;
+  organization_id: string;
+  cnpj: string | null;
+  cnpj_digits: string | null;
+  fornecedor: string;
+  contato: string | null;
+  email: string | null;
+  status_sac: PcClientStatus;
+  filhos_count: number;
+  contato_data: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PcCotacao {
+  id: string;
+  organization_id: string;
+  cotacao_numero: string;
+  cotacao_nome: string | null;
+  fornecedor: string;
+  cnpj: string | null;
+  informe: string | null;
+  resposta: PcCotacaoResposta;
+  pc_client_id: string | null;
+  valor: number | null;
+  prazo_entrega: string | null;
+  condicoes_pagamento: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PcPedido {
+  id: string;
+  organization_id: string;
+  pedido_numero: string;
+  empresa: string;
+  situacao: PcPedidoSituacao;
+  informe: string | null;
+  pc_client_id: string | null;
+  cotacao_id: string | null;
+  valor: number | null;
+  prazo_entrega: string | null;
+  condicoes_pagamento: string | null;
+  finalizado: boolean;
+  finalizado_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PcAlert {
+  type: 'warning' | 'danger';
+  message: string;
+  entity: 'cotacao' | 'pedido';
+  entity_id: string;
+  days_old: number;
+}
+
+export interface PcStats {
+  total_clients: number;
+  total_cotacoes: number;
+  total_pedidos: number;
+  clients_by_status: Record<string, number>;
+  cotacoes_responderam: number;
+  cotacoes_nao_responderam: number;
+  pedidos_by_situacao: Record<string, number>;
+  pedidos_finalizados: number;
+  recent_cotacoes: PcCotacao[];
+  recent_pedidos: PcPedido[];
+  top_fornecedores: { name: string; count: number }[];
+  pedidos_ativos: number;
+  taxa_resposta_pct: number;
+  alerts: PcAlert[];
+}
+
 // Re-export AI types for convenience
 export type { Notification, RiskAlert, ActionSuggestion, PipelineHealth } from '@/lib/ai/types';

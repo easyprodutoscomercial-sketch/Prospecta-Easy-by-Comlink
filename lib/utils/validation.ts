@@ -263,3 +263,81 @@ export const supportProjectUpdateSchema = z.object({
 export const supportCommentSchema = z.object({
   content: z.string().min(1, 'Comentario e obrigatorio').max(5000),
 });
+
+// ============================================
+// Pedidos & Cotacoes
+// ============================================
+
+export const pcClientSchema = z.object({
+  cnpj: z.string().optional().nullable(),
+  fornecedor: z.string().min(1, 'Fornecedor e obrigatorio').max(200),
+  contato: z.string().max(200).optional().nullable(),
+  email: z.string().email('Email invalido').optional().nullable().or(z.literal('')),
+  status_sac: z.enum(['SIM', 'NAO', 'AGUARDANDO_ACEITE', 'PRE_CADASTRO']).default('PRE_CADASTRO'),
+  filhos_count: z.number().int().min(0).default(0),
+  contato_data: z.string().optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export const pcClientUpdateSchema = z.object({
+  cnpj: z.string().optional().nullable(),
+  fornecedor: z.string().min(1).max(200).optional(),
+  contato: z.string().max(200).optional().nullable(),
+  email: z.string().email('Email invalido').optional().nullable().or(z.literal('')),
+  status_sac: z.enum(['SIM', 'NAO', 'AGUARDANDO_ACEITE', 'PRE_CADASTRO']).optional(),
+  filhos_count: z.number().int().min(0).optional(),
+  contato_data: z.string().optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+});
+
+export const pcCotacaoSchema = z.object({
+  cotacao_numero: z.string().min(1, 'Numero da cotacao e obrigatorio').max(50),
+  cotacao_nome: z.string().max(200).optional().nullable(),
+  fornecedor: z.string().min(1, 'Fornecedor e obrigatorio').max(200),
+  cnpj: z.string().optional().nullable(),
+  informe: z.string().max(2000).optional().nullable(),
+  resposta: z.enum(['RESPONDEU', 'NAO_RESPONDEU']).default('NAO_RESPONDEU'),
+  pc_client_id: z.string().uuid().optional().nullable(),
+  valor: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
+  prazo_entrega: z.string().optional().nullable(),
+  condicoes_pagamento: z.string().max(2000).optional().nullable(),
+});
+
+export const pcCotacaoUpdateSchema = z.object({
+  cotacao_numero: z.string().min(1).max(50).optional(),
+  cotacao_nome: z.string().max(200).optional().nullable(),
+  fornecedor: z.string().min(1).max(200).optional(),
+  cnpj: z.string().optional().nullable(),
+  informe: z.string().max(2000).optional().nullable(),
+  resposta: z.enum(['RESPONDEU', 'NAO_RESPONDEU']).optional(),
+  pc_client_id: z.string().uuid().optional().nullable(),
+  valor: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
+  prazo_entrega: z.string().optional().nullable(),
+  condicoes_pagamento: z.string().max(2000).optional().nullable(),
+});
+
+export const pcPedidoSchema = z.object({
+  pedido_numero: z.string().min(1, 'Numero do pedido e obrigatorio').max(50),
+  empresa: z.string().min(1, 'Empresa e obrigatoria').max(200),
+  situacao: z.enum(['PENDENTE', 'ACEITO', 'RECUSADO', 'EM_ANDAMENTO', 'FINALIZADO']).default('PENDENTE'),
+  informe: z.string().max(2000).optional().nullable(),
+  pc_client_id: z.string().uuid().optional().nullable(),
+  cotacao_id: z.string().uuid().optional().nullable(),
+  finalizado: z.boolean().default(false),
+  valor: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
+  prazo_entrega: z.string().optional().nullable(),
+  condicoes_pagamento: z.string().max(2000).optional().nullable(),
+});
+
+export const pcPedidoUpdateSchema = z.object({
+  pedido_numero: z.string().min(1).max(50).optional(),
+  empresa: z.string().min(1).max(200).optional(),
+  situacao: z.enum(['PENDENTE', 'ACEITO', 'RECUSADO', 'EM_ANDAMENTO', 'FINALIZADO']).optional(),
+  informe: z.string().max(2000).optional().nullable(),
+  pc_client_id: z.string().uuid().optional().nullable(),
+  cotacao_id: z.string().uuid().optional().nullable(),
+  finalizado: z.boolean().optional(),
+  valor: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
+  prazo_entrega: z.string().optional().nullable(),
+  condicoes_pagamento: z.string().max(2000).optional().nullable(),
+});

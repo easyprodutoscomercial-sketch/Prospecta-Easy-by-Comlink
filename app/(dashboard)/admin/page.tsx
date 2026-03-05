@@ -16,6 +16,7 @@ const MENU_OPTIONS = [
   { key: 'kanban', label: 'Pipeline' },
   { key: 'focus', label: 'Modo Foco' },
   { key: 'suporte', label: 'Suporte' },
+  { key: 'pedidos', label: 'Pedidos & Cotacoes' },
   { key: 'calendar', label: 'Calendario' },
   { key: 'ai', label: 'Assistente IA' },
   { key: 'reports', label: 'Relatorios' },
