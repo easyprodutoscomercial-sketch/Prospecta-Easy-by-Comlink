@@ -17,6 +17,7 @@ import {
   ACTIVITY_TEMPLATES,
   formatInteractionType,
 } from '@/lib/utils/labels';
+import { useToast } from '@/lib/toast-context';
 
 interface ContactPreviewDrawerProps {
   contactId: string | null;
@@ -69,21 +70,34 @@ export default function ContactPreviewDrawer({
   const [formNote, setFormNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Track previous contactId to detect re-opens
+  const [lastFetchedId, setLastFetchedId] = useState<string | null>(null);
+
   // Fetch contact details + interactions
   const fetchDrawerData = useCallback((cId: string) => {
     setLoading(true);
+    setLastFetchedId(cId);
     Promise.all([
       fetch(`/api/contacts/${cId}`).then(r => r.ok ? r.json() : null),
-      fetch(`/api/interactions?contact_id=${cId}&limit=5`).then(r => r.ok ? r.json() : null),
+      fetch(`/api/interactions?contact_id=${cId}&limit=50`).then(r => r.ok ? r.json() : null),
     ]).then(([contactData, intData]) => {
       if (contactData?.contact) setContact(contactData.contact);
-      if (intData?.interactions) setInteractions(intData.interactions.slice(0, 5));
+      if (intData?.interactions) setInteractions(intData.interactions);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    if (!contactId) { setContact(null); setInteractions([]); setShowForm(false); return; }
+    if (!contactId) { setContact(null); setInteractions([]); setShowForm(false); setLastFetchedId(null); return; }
     fetchDrawerData(contactId);
+  }, [contactId, fetchDrawerData]);
+
+  // Re-fetch when window regains focus and drawer is open
+  useEffect(() => {
+    const handleFocus = () => {
+      if (contactId) fetchDrawerData(contactId);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, [contactId, fetchDrawerData]);
 
   // Escape key
@@ -100,6 +114,8 @@ export default function ContactPreviewDrawer({
     // no-op in preview, show only
   }, []);
 
+  const toast = useToast();
+
   // Submit interaction (quick template or form)
   async function submitInteraction(type: string, outcome: string, note: string) {
     if (!contact) return;
@@ -110,12 +126,17 @@ export default function ContactPreviewDrawer({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contact_id: contact.id, type, outcome, note: note || undefined }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({ error: 'Erro ao registrar interacao' }));
+        toast.error(d.error || 'Erro ao registrar interacao');
+        return;
+      }
+      toast.success('Interacao registrada');
       // Refresh interactions list
-      const intRes = await fetch(`/api/interactions?contact_id=${contact.id}&limit=5`);
+      const intRes = await fetch(`/api/interactions?contact_id=${contact.id}&limit=50`);
       if (intRes.ok) {
         const intData = await intRes.json();
-        setInteractions((intData.interactions || []).slice(0, 5));
+        setInteractions(intData.interactions || []);
       }
       // Reset form
       setFormNote('');
@@ -123,7 +144,7 @@ export default function ContactPreviewDrawer({
       // Notify parent to refresh board
       onInteractionAdded?.();
     } catch {
-      // silently fail
+      toast.error('Erro ao registrar interacao');
     } finally {
       setSubmitting(false);
     }

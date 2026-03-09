@@ -54,6 +54,23 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   useEffect(() => { loadContact(); loadCurrentUser(); loadScore(); }, [id]);
 
+  // Re-fetch interactions when page regains focus (e.g., returning from pipeline)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (!loading && id) {
+        fetch(`/api/interactions?contact_id=${id}`).then(r => r.ok ? r.json() : null).then(data => {
+          if (data?.interactions) setInteractions(data.interactions);
+        }).catch(() => {});
+        fetch(`/api/meetings?contact_id=${id}`).then(r => r.ok ? r.json() : null).then(data => {
+          if (data?.meetings) setMeetings(data.meetings);
+          else if (Array.isArray(data)) setMeetings(data);
+        }).catch(() => {});
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [id, loading]);
+
   const loadCurrentUser = async () => { try { const r = await fetch('/api/me'); if (r.ok) setCurrentUser(await r.json()); } catch {} };
 
   const loadScore = async () => {
