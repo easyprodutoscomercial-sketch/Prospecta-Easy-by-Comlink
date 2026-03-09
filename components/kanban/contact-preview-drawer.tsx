@@ -16,6 +16,7 @@ import {
   INTERACTION_OUTCOME_LABELS,
   ACTIVITY_TEMPLATES,
   formatInteractionType,
+  SEGMENTO_COLORS,
 } from '@/lib/utils/labels';
 import { useToast } from '@/lib/toast-context';
 
@@ -200,6 +201,18 @@ export default function ContactPreviewDrawer({
                         {TEMPERATURA_LABELS[contact.temperatura] || contact.temperatura}
                       </span>
                     )}
+                    {contact.segmento && (
+                      <span
+                        className="text-[10px] px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-1"
+                        style={{
+                          backgroundColor: SEGMENTO_COLORS[contact.segmento].stripe + '25',
+                          color: SEGMENTO_COLORS[contact.segmento].stripe,
+                        }}
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: SEGMENTO_COLORS[contact.segmento].stripe }} />
+                        {contact.segmento}
+                      </span>
+                    )}
                   </div>
                   {contact.valor_estimado != null && contact.valor_estimado > 0 && (
                     <p className="text-sm font-bold text-emerald-400 mt-1">
@@ -301,6 +314,9 @@ export default function ContactPreviewDrawer({
                   )}
                   {contact.classe && (
                     <InfoRow label="Classe" value={CLASSE_LABELS[contact.classe] || contact.classe} />
+                  )}
+                  {contact.segmento && (
+                    <InfoRow label="Segmento" value={contact.segmento} />
                   )}
                   {contact.referencia && (
                     <InfoRow label="Referencia" value={contact.referencia} />
