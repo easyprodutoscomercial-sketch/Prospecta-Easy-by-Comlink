@@ -73,17 +73,19 @@ export default function ContactPreviewDrawer({
   // Track previous contactId to detect re-opens
   const [lastFetchedId, setLastFetchedId] = useState<string | null>(null);
 
-  // Fetch contact details + interactions
+  // Fetch contact details + interactions (uses /api/contacts/{id} which returns interactions together)
   const fetchDrawerData = useCallback((cId: string) => {
     setLoading(true);
     setLastFetchedId(cId);
-    Promise.all([
-      fetch(`/api/contacts/${cId}`).then(r => r.ok ? r.json() : null),
-      fetch(`/api/interactions?contact_id=${cId}&limit=50`).then(r => r.ok ? r.json() : null),
-    ]).then(([contactData, intData]) => {
-      if (contactData?.contact) setContact(contactData.contact);
-      if (intData?.interactions) setInteractions(intData.interactions);
-    }).catch(() => {}).finally(() => setLoading(false));
+    fetch(`/api/contacts/${cId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.contact) setContact(data.contact);
+        if (data?.interactions) setInteractions(data.interactions);
+        else setInteractions([]);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -132,8 +134,8 @@ export default function ContactPreviewDrawer({
         return;
       }
       toast.success('Interacao registrada');
-      // Refresh interactions list
-      const intRes = await fetch(`/api/interactions?contact_id=${contact.id}&limit=50`);
+      // Refresh interactions list from contact endpoint (same source as contacts page)
+      const intRes = await fetch(`/api/contacts/${contact.id}`);
       if (intRes.ok) {
         const intData = await intRes.json();
         setInteractions(intData.interactions || []);
