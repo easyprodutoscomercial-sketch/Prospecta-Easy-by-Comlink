@@ -127,6 +127,16 @@ const navItems = [
     ),
   },
   {
+    key: 'quiz-feira',
+    href: '/quiz-feira',
+    label: 'Quiz Feira',
+    icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.5 18.75h-9m9 0a3 3 0 013 3h-15a3 3 0 013-3m9 0v-4.5A3.375 3.375 0 0019.875 10.875 3.375 3.375 0 0016.5 7.5h-9A3.375 3.375 0 004.125 10.875 3.375 3.375 0 007.5 14.25v4.5m9-13.5V3m-9 2.25V3m4.5 0v2.25M12 3v2.25" />
+      </svg>
+    ),
+  },
+  {
     key: 'settings',
     href: '/settings',
     label: 'Configuracoes',

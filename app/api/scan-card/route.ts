@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Allow large image uploads (default is 1MB)
+export const runtime = 'nodejs';
+export const maxDuration = 30;
+
 // POST /api/scan-card - Extrai dados de cartao de visita via IA (sem auth - publico)
 export async function POST(request: NextRequest) {
   try {

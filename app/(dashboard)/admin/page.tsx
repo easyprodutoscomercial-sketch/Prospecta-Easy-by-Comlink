@@ -21,6 +21,7 @@ const MENU_OPTIONS = [
   { key: 'ai', label: 'Assistente IA' },
   { key: 'reports', label: 'Relatorios' },
   { key: 'requests', label: 'Solicitacoes' },
+  { key: 'quiz-feira', label: 'Quiz Feira' },
   { key: 'settings', label: 'Configuracoes' },
 ] as const;
 
@@ -123,6 +124,11 @@ export default function AdminPage() {
   const [menuSelection, setMenuSelection] = useState<string[]>([]);
   const [savingMenus, setSavingMenus] = useState(false);
 
+  // Quiz Feira
+  const [quizAtivo, setQuizAtivo] = useState(false);
+  const [quizLoaded, setQuizLoaded] = useState(false);
+  const [savingQuiz, setSavingQuiz] = useState(false);
+
   // Check if user is admin
   useEffect(() => {
     const checkRole = async () => {
@@ -191,10 +197,43 @@ export default function AdminPage() {
     }
   };
 
+  const fetchQuizStatus = async () => {
+    try {
+      const res = await fetch('/api/quiz/config');
+      if (res.ok) {
+        const data = await res.json();
+        setQuizAtivo(!!data.config?.quiz_ativo);
+        setQuizLoaded(true);
+      }
+    } catch { /* silent */ }
+  };
+
+  const handleToggleQuiz = async () => {
+    setSavingQuiz(true);
+    const newState = !quizAtivo;
+    try {
+      const res = await fetch('/api/quiz/config', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quiz_ativo: newState }),
+      });
+      if (res.ok) {
+        setQuizAtivo(newState);
+        setUserResult({ type: 'success', message: newState ? 'Quiz Feira ativado!' : 'Quiz Feira desativado.' });
+      } else {
+        setUserResult({ type: 'error', message: 'Erro ao alterar quiz' });
+      }
+    } catch {
+      setUserResult({ type: 'error', message: 'Erro de conexão' });
+    }
+    setSavingQuiz(false);
+  };
+
   useEffect(() => {
     if (!checkingRole && currentRole === 'admin') {
       fetchUsers();
       fetchPipelineSettings();
+      fetchQuizStatus();
     }
   }, [checkingRole, currentRole]);
 
@@ -928,6 +967,44 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quiz Feira Section */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">Quiz Feira</h2>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-neutral-100 mb-1">Habilitar Quiz Feira</h3>
+              <p className="text-xs text-purple-300/60">
+                Quando ativado, o quiz fica disponivel para participantes via link publico e aparece no menu lateral.
+              </p>
+            </div>
+            <button
+              onClick={handleToggleQuiz}
+              disabled={savingQuiz || !quizLoaded}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-[#1e0f35] disabled:opacity-40 ${
+                quizAtivo ? 'bg-emerald-500' : 'bg-purple-800/50'
+              }`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                quizAtivo ? 'translate-x-5' : 'translate-x-0'
+              }`} />
+            </button>
+          </div>
+          <div className="mt-4 pt-4 border-t border-purple-800/20">
+            <Link
+              href="/quiz-feira"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Configurar Quiz Feira
+            </Link>
           </div>
         </div>
       </div>
