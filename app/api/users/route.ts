@@ -22,7 +22,7 @@ export async function GET() {
     let users;
     const { data: usersData, error: usersError } = await admin
       .from('profiles')
-      .select('user_id, name, email, role, avatar_url, created_at')
+      .select('user_id, name, email, role, avatar_url, visible_menus, created_at')
       .eq('organization_id', profile.organization_id)
       .order('created_at', { ascending: true });
 
@@ -30,7 +30,7 @@ export async function GET() {
       // avatar_url column may not exist yet, try without it
       const { data: usersBasic, error: basicError } = await admin
         .from('profiles')
-        .select('user_id, name, email, role, created_at')
+        .select('user_id, name, email, role, visible_menus, created_at')
         .eq('organization_id', profile.organization_id)
         .order('created_at', { ascending: true });
 

@@ -111,7 +111,7 @@ export async function PATCH(
     // Retornar profile atualizado
     const { data: updatedProfile } = await admin
       .from('profiles')
-      .select('user_id, name, email, role, avatar_url, created_at')
+      .select('user_id, name, email, role, avatar_url, visible_menus, created_at')
       .eq('user_id', id)
       .single();
 
