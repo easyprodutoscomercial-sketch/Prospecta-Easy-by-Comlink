@@ -4,6 +4,17 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { usePipeline } from '@/lib/pipeline-context';
 import { INTERACTION_TYPE_LABELS } from '@/lib/utils/labels';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  Cell,
+} from 'recharts';
 
 interface PipelineDashboardProps {
   contacts: any[];
@@ -165,6 +176,70 @@ export default function PipelineDashboard({
       .sort((a, b) => (b.contacts + b.interactions + b.meetings) - (a.contacts + a.interactions + a.meetings));
   }, [pipelineContacts, pipelineInteractions, pipelineMeetings, profiles, monthStart, monthEnd]);
 
+  // ── Funnel Conversion Data ─────────────────────────────────────
+  const funnelData = useMemo(() => {
+    if (stages.length === 0) return [];
+    const sorted = [...stages].sort((a, b) => a.position - b.position);
+    const nonTerminal = sorted.filter((s) => !s.is_terminal);
+    return nonTerminal.map((stage) => ({
+      name: stage.name,
+      count: stageDistribution.countMap[stage.id] || 0,
+      color: stage.color || '#10b981',
+    }));
+  }, [stages, stageDistribution]);
+
+  // ── Stage Velocity (avg days per stage) ───────────────────────
+  const stageVelocity = useMemo(() => {
+    if (stages.length === 0) return [];
+    const sorted = [...stages].sort((a, b) => a.position - b.position);
+    const nonTerminal = sorted.filter((s) => !s.is_terminal);
+
+    return nonTerminal.map((stage) => {
+      const stageContacts = pipelineContacts.filter((c) => c.stage_id === stage.id);
+      if (stageContacts.length === 0) return { name: stage.name, days: 0, color: stage.color || '#10b981' };
+
+      const totalDays = stageContacts.reduce((sum, c) => {
+        const updated = c.updated_at ? new Date(c.updated_at).getTime() : Date.now();
+        const created = new Date(c.created_at).getTime();
+        const diffDays = Math.max(0, (updated - created) / (1000 * 60 * 60 * 24));
+        return sum + diffDays;
+      }, 0);
+
+      return {
+        name: stage.name,
+        days: Math.round((totalDays / stageContacts.length) * 10) / 10,
+        color: stage.color || '#10b981',
+      };
+    });
+  }, [stages, pipelineContacts]);
+
+  // ── Daily Interaction Trend (current month) ───────────────────
+  const dailyInteractionTrend = useMemo(() => {
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayDay = now.getDate();
+
+    // Build day buckets for the entire month up to today
+    const dayMap: Record<number, number> = {};
+    for (let d = 1; d <= Math.min(todayDay, daysInMonth); d++) {
+      dayMap[d] = 0;
+    }
+
+    const monthInts = pipelineInteractions.filter(
+      (i) => i.created_at >= monthStart && i.created_at < monthEnd,
+    );
+    for (const i of monthInts) {
+      const day = new Date(i.created_at).getDate();
+      if (dayMap[day] !== undefined) dayMap[day]++;
+    }
+
+    return Object.entries(dayMap).map(([day, count]) => ({
+      day: `${String(day).padStart(2, '0')}`,
+      count,
+    }));
+  }, [pipelineInteractions, monthStart, monthEnd, now]);
+
   // ── Contact-name map ───────────────────────────────────────────
   const contactMap = useMemo(() => {
     const map = new Map<string, any>();
@@ -207,6 +282,46 @@ export default function PipelineDashboard({
         <KpiCard label="Novos no Mes" value={kpis.novosEsteMes.toString()} accentColor="cyan" />
       </div>
 
+      {/* ── Funnel Conversion Chart ───────────────────────────── */}
+      {funnelData.length > 0 && (
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3.5 sm:p-5">
+          <h3 className="text-xs sm:text-sm font-semibold text-white mb-3 sm:mb-4">
+            Funil de Conversao
+          </h3>
+          <div className="w-full" style={{ height: Math.max(funnelData.length * 44, 120) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={funnelData} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                <XAxis type="number" hide />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={90}
+                  tick={{ fill: '#c4b5fd', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1e0f35',
+                    border: '1px solid rgba(139,92,246,0.3)',
+                    borderRadius: 8,
+                    color: '#e5e5e5',
+                    fontSize: 12,
+                  }}
+                  cursor={{ fill: 'rgba(139,92,246,0.08)' }}
+                  formatter={(value) => [value ?? 0, 'Contatos']}
+                />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={28}>
+                  {funnelData.map((entry, index) => (
+                    <Cell key={`funnel-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* ── Distribuicao por Etapa ──────────────────────────────── */}
       {stages.length > 0 && (
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3.5 sm:p-5">
@@ -241,6 +356,55 @@ export default function PipelineDashboard({
             <span className="text-red-400 font-semibold">{kpis.lost} perdidos</span>
             <span>|</span>
             <span>{stageDistribution.total} total</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tempo Medio por Etapa ────────────────────────────── */}
+      {stageVelocity.length > 0 && stageVelocity.some((s) => s.days > 0) && (
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3.5 sm:p-5">
+          <h3 className="text-xs sm:text-sm font-semibold text-white mb-1">
+            Tempo medio por etapa
+          </h3>
+          <p className="text-[10px] text-purple-300/50 mb-3 sm:mb-4">
+            Media aproximada de dias que contatos permanecem em cada etapa
+          </p>
+          <div className="w-full" style={{ height: Math.max(stageVelocity.length * 44, 120) }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={stageVelocity} layout="vertical" margin={{ top: 0, right: 30, left: 0, bottom: 0 }}>
+                <XAxis
+                  type="number"
+                  tick={{ fill: '#a78bfa', fontSize: 10 }}
+                  axisLine={false}
+                  tickLine={false}
+                  unit=" d"
+                />
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  width={90}
+                  tick={{ fill: '#c4b5fd', fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1e0f35',
+                    border: '1px solid rgba(139,92,246,0.3)',
+                    borderRadius: 8,
+                    color: '#e5e5e5',
+                    fontSize: 12,
+                  }}
+                  cursor={{ fill: 'rgba(139,92,246,0.08)' }}
+                  formatter={(value) => [`${value ?? 0} dias`, 'Tempo medio']}
+                />
+                <Bar dataKey="days" radius={[0, 6, 6, 0]} maxBarSize={28}>
+                  {stageVelocity.map((entry, index) => (
+                    <Cell key={`velocity-${index}`} fill={entry.color} opacity={0.85} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       )}
@@ -280,6 +444,58 @@ export default function PipelineDashboard({
               <p className="text-xs sm:text-sm text-purple-300/40 py-8 text-center">
                 Nenhuma interacao este mes
               </p>
+            )}
+
+            {/* ── Daily Interaction Trend Mini-Chart ──────── */}
+            {dailyInteractionTrend.length > 1 && (
+              <div className="mt-4 pt-3 border-t border-purple-800/20">
+                <p className="text-[9px] sm:text-[10px] text-purple-300/50 uppercase tracking-widest font-semibold mb-2">
+                  Interacoes diarias no mes
+                </p>
+                <div className="w-full h-[100px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={dailyInteractionTrend} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="interactionGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <XAxis
+                        dataKey="day"
+                        tick={{ fill: '#a78bfa', fontSize: 9 }}
+                        axisLine={false}
+                        tickLine={false}
+                        interval="preserveStartEnd"
+                      />
+                      <YAxis
+                        tick={{ fill: '#a78bfa', fontSize: 9 }}
+                        axisLine={false}
+                        tickLine={false}
+                        allowDecimals={false}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1e0f35',
+                          border: '1px solid rgba(139,92,246,0.3)',
+                          borderRadius: 8,
+                          color: '#e5e5e5',
+                          fontSize: 11,
+                        }}
+                        formatter={(value) => [value ?? 0, 'Interacoes']}
+                        labelFormatter={(label) => `Dia ${label}`}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fill="url(#interactionGradient)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -465,7 +681,7 @@ function KpiCard({ label, value, accentColor, small }: {
   }[accentColor];
 
   return (
-    <div className={`bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3 sm:p-5 border-l-4 ${colors.border} min-w-0`}>
+    <div className={`kpi-card bg-[#1e0f35] border border-purple-800/30 rounded-xl p-3 sm:p-5 border-l-4 ${colors.border} min-w-0`}>
       <p className="text-[8px] sm:text-[10px] text-purple-300/60 uppercase tracking-wider sm:tracking-widest font-semibold truncate">
         {label}
       </p>

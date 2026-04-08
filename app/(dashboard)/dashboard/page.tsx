@@ -23,7 +23,7 @@ export default async function DashboardPage() {
 
   // Fetch all data in parallel (4 queries)
   const [contactsResult, interactionsResult, meetingsResult, profilesResult] = await Promise.all([
-    admin.from('contacts').select('id, name, email, phone, company, status, stage_id, pipeline_id, valor_estimado, created_at, created_by_user_id').eq('organization_id', orgId),
+    admin.from('contacts').select('id, name, email, phone, company, status, stage_id, pipeline_id, valor_estimado, created_at, updated_at, created_by_user_id').eq('organization_id', orgId),
     admin.from('interactions').select('contact_id, type, outcome, created_by_user_id, created_at').eq('organization_id', orgId),
     admin.from('meetings').select('id, title, meeting_at, status, contact_id, created_by_user_id').eq('organization_id', orgId),
     admin.from('profiles').select('user_id, name, avatar_url').eq('organization_id', orgId),

@@ -6,6 +6,8 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Contact, PipelineStage, PipelineType } from '@/lib/types';
 import { KanbanCard, type UserInfo } from './kanban-card';
 import { normalizeSearch } from '@/lib/utils/normalize';
+import { TEMPERATURA_LABELS, ORIGEM_LABELS } from '@/lib/utils/labels';
+import type { SwimlaneBy } from './kanban-board';
 
 interface KanbanColumnProps {
   stage: PipelineStage;
@@ -32,6 +34,7 @@ interface KanbanColumnProps {
   onCardClick?: (contactId: string) => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+  swimlaneBy?: SwimlaneBy;
 }
 
 const SLUG_ICONS: Record<string, string> = {
@@ -103,7 +106,7 @@ function abbreviateValue(value: number): string {
   return value.toString();
 }
 
-export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsed, onToggleCollapse }: KanbanColumnProps) {
+export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsed, onToggleCollapse, swimlaneBy }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const [filter, setFilter] = useState('');
   const color = stage.color || '#a3a3a3';
@@ -123,6 +126,86 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
     }
     return result;
   }, [contacts, filter, userMap, hiddenContactIds]);
+
+  // Swimlane collapsed state per group key
+  const [collapsedSwimlanes, setCollapsedSwimlanes] = useState<Set<string>>(new Set());
+
+  const toggleSwimlane = (key: string) => {
+    setCollapsedSwimlanes(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  // Swimlane groups
+  const swimlaneGroups = useMemo(() => {
+    if (!swimlaneBy) return null;
+
+    const groups: { key: string; label: string; color: string; contacts: Contact[] }[] = [];
+    const groupMap = new Map<string, Contact[]>();
+    const groupOrder: string[] = [];
+
+    for (const c of filtered) {
+      let key: string;
+      if (swimlaneBy === 'responsible') {
+        key = c.assigned_to_user_id || '_none';
+      } else if (swimlaneBy === 'temperatura') {
+        key = c.temperatura || '_none';
+      } else {
+        key = c.origem || '_none';
+      }
+      if (!groupMap.has(key)) {
+        groupMap.set(key, []);
+        groupOrder.push(key);
+      }
+      groupMap.get(key)!.push(c);
+    }
+
+    // Sort: named groups first, _none last
+    groupOrder.sort((a, b) => {
+      if (a === '_none') return 1;
+      if (b === '_none') return -1;
+      return a.localeCompare(b);
+    });
+
+    for (const key of groupOrder) {
+      let label: string;
+      let groupColor: string;
+
+      if (swimlaneBy === 'responsible') {
+        if (key === '_none') {
+          label = 'Sem responsavel';
+          groupColor = '#6b7280';
+        } else {
+          const user = userMap[key];
+          label = user?.name || 'Desconhecido';
+          groupColor = user?.color?.bg || '#6b7280';
+        }
+      } else if (swimlaneBy === 'temperatura') {
+        if (key === '_none') {
+          label = 'Sem temperatura';
+          groupColor = '#6b7280';
+        } else {
+          label = TEMPERATURA_LABELS[key] || key;
+          groupColor = key === 'QUENTE' ? '#ef4444' : key === 'MORNO' ? '#f59e0b' : key === 'FRIO' ? '#3b82f6' : '#6b7280';
+        }
+      } else {
+        if (key === '_none') {
+          label = 'Sem origem';
+          groupColor = '#6b7280';
+        } else {
+          label = ORIGEM_LABELS[key] || key;
+          groupColor = '#8b5cf6';
+        }
+      }
+
+      groups.push({ key, label, color: groupColor, contacts: groupMap.get(key)! });
+    }
+
+    return groups;
+  }, [filtered, swimlaneBy, userMap]);
 
   // === COLLAPSED VIEW ===
   if (collapsed) {
@@ -273,32 +356,101 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
         className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[80px] sm:min-h-[120px] max-h-[50vh] sm:max-h-[calc(100vh-280px)]"
       >
         <SortableContext items={filtered.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-          {filtered.map((contact) => (
-            <KanbanCard
-              key={contact.id}
-              contact={contact}
-              userMap={userMap}
-              currentUserId={currentUserId}
-              onClaimContact={onClaimContact}
-              onRequestContact={onRequestContact}
-              hasPendingRequest={pendingRequestContactIds?.has(contact.id)}
-              onJumpForward={onJumpForward}
-              onJumpBackward={onJumpBackward}
-              onScheduleMeeting={onScheduleMeeting}
-              hasMeeting={contactsWithMeeting?.has(contact.id)}
-              showScheduleMeeting={stage.allow_meeting === true || /reuniao/i.test(stage.slug) || /reuni[aã]o/i.test(stage.name)}
-              lastInteractionAt={lastInteractionMap?.[contact.id] || null}
-              bulkMode={bulkMode}
-              bulkSelected={bulkSelectedIds?.has(contact.id)}
-              onBulkToggle={onBulkToggle}
-              pipelineType={pipelineType}
-              attachmentCount={attachmentCountMap?.[contact.id] || 0}
-              isDimmed={dimmedContactIds?.has(contact.id)}
-              isStuck={stuckContactIds?.has(contact.id)}
-              compact={compact}
-              onCardClick={onCardClick}
-            />
-          ))}
+          {swimlaneGroups ? (
+            /* === SWIMLANE MODE === */
+            swimlaneGroups.map((group) => {
+              const isGroupCollapsed = collapsedSwimlanes.has(group.key);
+              return (
+                <div key={group.key} className="mb-1">
+                  {/* Swimlane header */}
+                  <button
+                    onClick={() => toggleSwimlane(group.key)}
+                    className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-md hover:bg-purple-800/15 transition-colors group"
+                  >
+                    <svg
+                      className={`w-3 h-3 text-purple-400/50 transition-transform duration-150 ${isGroupCollapsed ? '-rotate-90' : ''}`}
+                      fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: group.color }}
+                    />
+                    <span className="text-[10px] font-semibold text-neutral-300 truncate">
+                      {group.label}
+                    </span>
+                    <span
+                      className="text-[9px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center ml-auto"
+                      style={{ backgroundColor: `${group.color}25`, color: group.color }}
+                    >
+                      {group.contacts.length}
+                    </span>
+                  </button>
+
+                  {/* Swimlane cards */}
+                  {!isGroupCollapsed && (
+                    <div className="space-y-2 mt-1 ml-1 pl-2 border-l-2 border-purple-800/15" style={{ borderColor: `${group.color}20` }}>
+                      {group.contacts.map((contact) => (
+                        <KanbanCard
+                          key={contact.id}
+                          contact={contact}
+                          userMap={userMap}
+                          currentUserId={currentUserId}
+                          onClaimContact={onClaimContact}
+                          onRequestContact={onRequestContact}
+                          hasPendingRequest={pendingRequestContactIds?.has(contact.id)}
+                          onJumpForward={onJumpForward}
+                          onJumpBackward={onJumpBackward}
+                          onScheduleMeeting={onScheduleMeeting}
+                          hasMeeting={contactsWithMeeting?.has(contact.id)}
+                          showScheduleMeeting={stage.allow_meeting === true || /reuniao/i.test(stage.slug) || /reuni[aã]o/i.test(stage.name)}
+                          lastInteractionAt={lastInteractionMap?.[contact.id] || null}
+                          bulkMode={bulkMode}
+                          bulkSelected={bulkSelectedIds?.has(contact.id)}
+                          onBulkToggle={onBulkToggle}
+                          pipelineType={pipelineType}
+                          attachmentCount={attachmentCountMap?.[contact.id] || 0}
+                          isDimmed={dimmedContactIds?.has(contact.id)}
+                          isStuck={stuckContactIds?.has(contact.id)}
+                          compact={compact}
+                          onCardClick={onCardClick}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            /* === NORMAL MODE (no swimlanes) === */
+            filtered.map((contact) => (
+              <KanbanCard
+                key={contact.id}
+                contact={contact}
+                userMap={userMap}
+                currentUserId={currentUserId}
+                onClaimContact={onClaimContact}
+                onRequestContact={onRequestContact}
+                hasPendingRequest={pendingRequestContactIds?.has(contact.id)}
+                onJumpForward={onJumpForward}
+                onJumpBackward={onJumpBackward}
+                onScheduleMeeting={onScheduleMeeting}
+                hasMeeting={contactsWithMeeting?.has(contact.id)}
+                showScheduleMeeting={stage.allow_meeting === true || /reuniao/i.test(stage.slug) || /reuni[aã]o/i.test(stage.name)}
+                lastInteractionAt={lastInteractionMap?.[contact.id] || null}
+                bulkMode={bulkMode}
+                bulkSelected={bulkSelectedIds?.has(contact.id)}
+                onBulkToggle={onBulkToggle}
+                pipelineType={pipelineType}
+                attachmentCount={attachmentCountMap?.[contact.id] || 0}
+                isDimmed={dimmedContactIds?.has(contact.id)}
+                isStuck={stuckContactIds?.has(contact.id)}
+                compact={compact}
+                onCardClick={onCardClick}
+              />
+            ))
+          )}
         </SortableContext>
 
         {filtered.length === 0 && (

@@ -29,13 +29,13 @@ export default function Pagination({ page, totalPages, total, limit, onPageChang
   }
 
   const btnBase = 'px-3 py-1.5 text-sm rounded-lg transition-colors';
-  const btnActive = 'bg-neutral-900 text-white font-medium';
-  const btnInactive = 'text-neutral-600 hover:bg-neutral-100';
-  const btnDisabled = 'text-neutral-300 cursor-not-allowed';
+  const btnActive = 'bg-emerald-600 text-white font-medium shadow-md shadow-emerald-600/20';
+  const btnInactive = 'text-purple-200/60 hover:bg-purple-800/20 hover:text-white';
+  const btnDisabled = 'text-purple-300/20 cursor-not-allowed';
 
   return (
-    <div className="flex items-center justify-between mt-4 px-1">
-      <p className="text-xs text-neutral-500">
+    <nav className="flex items-center justify-between mt-4 px-1" aria-label="Paginacao de contatos">
+      <p className="text-xs text-purple-300/50">
         Mostrando {start}-{end} de {total} contatos
       </p>
       <div className="flex items-center gap-1">
@@ -43,17 +43,20 @@ export default function Pagination({ page, totalPages, total, limit, onPageChang
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
           className={`${btnBase} ${page === 1 ? btnDisabled : btnInactive}`}
+          aria-label="Pagina anterior"
         >
           Anterior
         </button>
         {pages.map((p, i) =>
           p === '...' ? (
-            <span key={`ellipsis-${i}`} className="px-2 text-sm text-neutral-400">...</span>
+            <span key={`ellipsis-${i}`} className="px-2 text-sm text-purple-400/30" aria-hidden="true">...</span>
           ) : (
             <button
               key={p}
               onClick={() => onPageChange(p)}
               className={`${btnBase} ${p === page ? btnActive : btnInactive}`}
+              aria-label={`Pagina ${p}`}
+              aria-current={p === page ? 'page' : undefined}
             >
               {p}
             </button>
@@ -63,10 +66,11 @@ export default function Pagination({ page, totalPages, total, limit, onPageChang
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
           className={`${btnBase} ${page === totalPages ? btnDisabled : btnInactive}`}
+          aria-label="Proxima pagina"
         >
-          Próximo
+          Proximo
         </button>
       </div>
-    </div>
+    </nav>
   );
 }

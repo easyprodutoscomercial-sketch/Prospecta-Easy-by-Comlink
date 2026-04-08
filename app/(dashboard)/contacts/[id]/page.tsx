@@ -15,6 +15,7 @@ import { ScoreBadge } from '@/components/lead-score/score-badge';
 import { ScoreBreakdownChart } from '@/components/lead-score/score-breakdown';
 import { ScoreTrend } from '@/components/lead-score/score-trend';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
+import Breadcrumbs from '@/components/ui/breadcrumbs';
 import { useToast } from '@/lib/toast-context';
 
 interface CurrentUser { user_id: string; role: string; name: string; }
@@ -247,7 +248,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   if (isEditing) {
     return (
       <div className="max-w-3xl mx-auto space-y-4">
-        <button onClick={() => setIsEditing(false)} className="text-sm text-neutral-400 hover:text-white transition-colors">&larr; Voltar</button>
+        <Breadcrumbs items={[{ label: 'Contatos', href: '/contacts' }, { label: contact.name, href: `/contacts/${id}` }, { label: 'Editar' }]} />
         <h1 className="text-xl font-bold text-white">Editar Contato</h1>
         <ContactForm mode="edit" initialData={contact} onSubmit={handleEditSubmit} onCancel={() => setIsEditing(false)} loading={editLoading} error={editError} />
       </div>
@@ -256,12 +257,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="space-y-4">
-      {/* Back */}
-      <button onClick={() => window.history.length > 1 ? window.history.back() : window.location.href = '/contacts'}
-        className="inline-flex items-center gap-1 text-sm text-emerald-400/70 hover:text-emerald-400 transition-colors">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
-        Voltar para contatos
-      </button>
+      {/* Breadcrumbs */}
+      <Breadcrumbs items={[{ label: 'Contatos', href: '/contacts' }, { label: contact.name }]} />
 
       {/* 2-column layout */}
       <div className="flex flex-col lg:flex-row gap-6">

@@ -149,6 +149,10 @@ export default function KanbanPage() {
   const [collapsedColumns, setCollapsedColumns] = useState<Set<string>>(new Set());
   const [collapsedColumnsInitialized, setCollapsedColumnsInitialized] = useState(false);
 
+  // Swimlane grouping
+  const [swimlaneBy, setSwimlaneBy] = useState<'' | 'responsible' | 'temperatura' | 'origem'>('');
+  const [swimlaneDropdownOpen, setSwimlaneDropdownOpen] = useState(false);
+
   const handleChipFiltersChange = useCallback((dimmed: Set<string>, hidden: Set<string>, stuck: Set<string>) => {
     setDimmedContactIds(dimmed);
     setHiddenContactIds(hidden);
@@ -961,6 +965,59 @@ export default function KanbanPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
             </svg>
           </button>
+
+          {/* Swimlane grouping dropdown */}
+          {viewMode !== 'list' && (
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setSwimlaneDropdownOpen(p => !p)}
+                className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-all whitespace-nowrap ${
+                  swimlaneBy
+                    ? 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'
+                    : 'bg-[#1e0f35] text-purple-300/60 border border-purple-700/20 hover:text-purple-200 hover:border-purple-600/30'
+                }`}
+                title="Agrupar por raias"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                <span className="hidden sm:inline">Agrupar</span>
+                {swimlaneBy && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                )}
+              </button>
+              {swimlaneDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setSwimlaneDropdownOpen(false)} />
+                  <div className="absolute top-full left-0 mt-1 z-50 bg-[#1e0f35] border border-purple-700/30 rounded-lg shadow-xl shadow-purple-900/40 py-1 min-w-[160px]">
+                    {[
+                      { value: '' as const, label: 'Sem agrupamento' },
+                      { value: 'responsible' as const, label: 'Por Responsavel' },
+                      { value: 'temperatura' as const, label: 'Por Temperatura' },
+                      { value: 'origem' as const, label: 'Por Origem' },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => { setSwimlaneBy(opt.value); setSwimlaneDropdownOpen(false); }}
+                        className={`w-full text-left px-3 py-1.5 text-[11px] transition-colors ${
+                          swimlaneBy === opt.value
+                            ? 'text-cyan-400 bg-cyan-500/10'
+                            : 'text-purple-200/70 hover:text-purple-100 hover:bg-purple-700/20'
+                        }`}
+                      >
+                        {swimlaneBy === opt.value && (
+                          <svg className="w-3 h-3 inline mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Active filter chips inline */}
@@ -1046,6 +1103,7 @@ export default function KanbanPage() {
               onCardClick={handleCardClick}
               collapsedColumns={collapsedColumns}
               onToggleCollapse={handleToggleCollapse}
+              swimlaneBy={swimlaneBy}
             />
           ) : (
           <DndContext
@@ -1081,6 +1139,7 @@ export default function KanbanPage() {
               onCardClick={handleCardClick}
               collapsedColumns={collapsedColumns}
               onToggleCollapse={handleToggleCollapse}
+              swimlaneBy={swimlaneBy}
             />
           </DndContext>
           )

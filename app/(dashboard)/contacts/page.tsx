@@ -18,6 +18,7 @@ import ContactCard from '@/components/contacts/contact-card';
 import ContactsToolbar from '@/components/contacts/contacts-toolbar';
 import ContactsMapView from '@/components/contacts/contacts-map-view';
 import ContactsImportView from '@/components/contacts/contacts-import-view';
+import EmptyState from '@/components/ui/empty-state';
 
 interface UserInfo {
   user_id: string;
@@ -88,6 +89,21 @@ function ContactsPageContent() {
   const [total, setTotal] = useState(0);
   const limit = 20;
 
+  // Faceted search counters (counts per filter value across ALL contacts)
+  const [facetCounts, setFacetCounts] = useState<{
+    statusCounts: Record<string, number>;
+    tipoCounts: Record<string, number>;
+    temperaturaCounts: Record<string, number>;
+    origemCounts: Record<string, number>;
+    classeCounts: Record<string, number>;
+  }>({
+    statusCounts: {},
+    tipoCounts: {},
+    temperaturaCounts: {},
+    origemCounts: {},
+    classeCounts: {},
+  });
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
@@ -118,6 +134,25 @@ function ContactsPageContent() {
     }
     fetchUsersAndMe();
   }, []);
+
+  // Fetch faceted counts for filter dropdowns (all contacts, no filters)
+  const loadFacets = useCallback(async () => {
+    try {
+      const res = await fetch('/api/contacts/facets');
+      if (res.ok) {
+        const data = await res.json();
+        setFacetCounts({
+          statusCounts: data.statusCounts || {},
+          tipoCounts: data.tipoCounts || {},
+          temperaturaCounts: data.temperaturaCounts || {},
+          origemCounts: data.origemCounts || {},
+          classeCounts: data.classeCounts || {},
+        });
+      }
+    } catch { /* silent */ }
+  }, []);
+
+  useEffect(() => { loadFacets(); }, [loadFacets]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadContacts(); }, [JSON.stringify(filters), contactsPipelineFilter]);
@@ -174,6 +209,8 @@ function ContactsPageContent() {
       setTotalPages(data.totalPages || 1);
     } catch (e: any) { if (e.name === 'AbortError') return; }
     setLoading(false);
+    // Refresh facet counts alongside contact list
+    loadFacets();
   };
 
   const loadMapContacts = async () => {
@@ -403,17 +440,17 @@ function ContactsPageContent() {
           </div>
           <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)} className={selectCls}>
             <option value="all">Status</option>
-            <option value="NOVO">Novo</option>
-            <option value="EM_PROSPECCAO">Em Prospecao</option>
-            <option value="CONTATADO">Contatado</option>
-            <option value="REUNIAO_MARCADA">Reuniao Marcada</option>
-            <option value="CONVERTIDO">Convertido</option>
-            <option value="PERDIDO">Perdido</option>
+            <option value="NOVO">Novo ({facetCounts.statusCounts['NOVO'] || 0})</option>
+            <option value="EM_PROSPECCAO">Em Prospecao ({facetCounts.statusCounts['EM_PROSPECCAO'] || 0})</option>
+            <option value="CONTATADO">Contatado ({facetCounts.statusCounts['CONTATADO'] || 0})</option>
+            <option value="REUNIAO_MARCADA">Reuniao Marcada ({facetCounts.statusCounts['REUNIAO_MARCADA'] || 0})</option>
+            <option value="CONVERTIDO">Convertido ({facetCounts.statusCounts['CONVERTIDO'] || 0})</option>
+            <option value="PERDIDO">Perdido ({facetCounts.statusCounts['PERDIDO'] || 0})</option>
           </select>
           <select value={filters.tipo} onChange={(e) => setFilter('tipo', e.target.value)} className={selectCls}>
             <option value="all">Tipo</option>
-            <option value="FORNECEDOR">Fornecedor</option>
-            <option value="COMPRADOR">Comprador</option>
+            <option value="FORNECEDOR">Fornecedor ({facetCounts.tipoCounts['FORNECEDOR'] || 0})</option>
+            <option value="COMPRADOR">Comprador ({facetCounts.tipoCounts['COMPRADOR'] || 0})</option>
           </select>
           <select value={filters.assigned} onChange={(e) => setFilter('assigned', e.target.value)} className={selectCls}>
             <option value="all">Responsavel</option>
@@ -423,7 +460,7 @@ function ContactsPageContent() {
           <select value={filters.temperatura} onChange={(e) => setFilter('temperatura', e.target.value)} className={selectCls}>
             <option value="all">Temperatura</option>
             {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
+              <option key={key} value={key}>{label} ({facetCounts.temperaturaCounts[key] || 0})</option>
             ))}
           </select>
           <select value={contactsPipelineFilter} onChange={(e) => setContactsPipelineFilter(e.target.value)} className={selectCls}>
@@ -435,15 +472,15 @@ function ContactsPageContent() {
           <select value={filters.origem} onChange={(e) => setFilter('origem', e.target.value)} className={selectCls}>
             <option value="all">Origem</option>
             {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label}</option>
+              <option key={key} value={key}>{label} ({facetCounts.origemCounts[key] || 0})</option>
             ))}
           </select>
           <select value={filters.classe} onChange={(e) => setFilter('classe', e.target.value)} className={selectCls}>
             <option value="all">Classe</option>
-            <option value="A">Classe A</option>
-            <option value="B">Classe B</option>
-            <option value="C">Classe C</option>
-            <option value="D">Classe D</option>
+            <option value="A">Classe A ({facetCounts.classeCounts['A'] || 0})</option>
+            <option value="B">Classe B ({facetCounts.classeCounts['B'] || 0})</option>
+            <option value="C">Classe C ({facetCounts.classeCounts['C'] || 0})</option>
+            <option value="D">Classe D ({facetCounts.classeCounts['D'] || 0})</option>
           </select>
           <input type="text" placeholder="Telefone..." value={inputValues.telefone} onChange={(e) => setFilter('telefone', e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
           <input type="text" placeholder="Cidade..." value={inputValues.cidade} onChange={(e) => setFilter('cidade', e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
@@ -502,21 +539,26 @@ function ContactsPageContent() {
       ) : loading ? (
         <SkeletonTable rows={6} cols={4} />
       ) : contacts.length === 0 ? (
-        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 text-center py-16">
-          <svg className="mx-auto w-12 h-12 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-          <p className="text-sm text-neutral-400 mt-3">Nenhum contato encontrado</p>
-          <p className="text-xs text-neutral-600 mt-1 mb-4">Tente ajustar os filtros ou comece a prospectar</p>
-          <div className="flex items-center justify-center gap-3">
-            <Link href="/contacts/new" className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-              Criar Contato
-            </Link>
-            <button onClick={() => prefs.setActiveView('import')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-neutral-300 bg-[#2a1245] border border-purple-700/30 rounded-lg hover:bg-purple-800/30 hover:text-white transition-all">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-              Importar CSV
-            </button>
-          </div>
-        </div>
+        activeFilterCount > 0 ? (
+          <EmptyState
+            icon="search"
+            title="Nenhum contato encontrado"
+            description="Nenhum contato corresponde aos filtros aplicados. Tente ajustar os criterios de busca ou limpe os filtros."
+            actions={[
+              { label: 'Limpar filtros', onClick: clearAllFilters, variant: 'primary', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> },
+            ]}
+          />
+        ) : (
+          <EmptyState
+            icon="contacts"
+            title="Comece adicionando seus contatos"
+            description="Adicione contatos manualmente ou importe uma planilha CSV para comecar a gerenciar suas oportunidades."
+            actions={[
+              { label: 'Criar Contato', href: '/contacts/new', variant: 'primary', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg> },
+              { label: 'Importar CSV', onClick: () => prefs.setActiveView('import'), variant: 'secondary', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg> },
+            ]}
+          />
+        )
       ) : (
         <>
           {/* Sort + select all */}

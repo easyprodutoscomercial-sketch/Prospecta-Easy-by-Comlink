@@ -174,9 +174,11 @@ export default function ContactForm({
 
   const inputClass = (field?: string) =>
     `w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-colors ${
-      field && validationErrors[field] ? 'border-red-500/50' : 'border-purple-700/30'
+      field && validationErrors[field] ? 'border-red-500/50 ring-1 ring-red-500/30' : 'border-purple-700/30'
     }`;
   const labelClass = 'block text-sm font-medium text-purple-200/80 mb-1';
+  const errorClass = 'flex items-center gap-1 text-xs text-red-400 mt-1';
+  const errorIcon = <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -225,20 +227,24 @@ export default function ContactForm({
         <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Dados Básicos</h2>
         <div className="space-y-4">
           <div>
-            <label className={labelClass}>Nome *</label>
+            <label htmlFor="contact-name" className={labelClass}>Nome *</label>
             <input
+              id="contact-name"
               type="text"
               required
               value={formData.name}
               onChange={(e) => update('name', e.target.value)}
               className={inputClass('name')}
+              aria-invalid={!!validationErrors.name}
+              aria-describedby={validationErrors.name ? 'name-error' : undefined}
             />
-            {validationErrors.name && <p className="text-xs text-red-500 mt-1">{validationErrors.name}</p>}
+            {validationErrors.name && <p id="name-error" className={errorClass}>{errorIcon}{validationErrors.name}</p>}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Telefone</label>
+              <label htmlFor="contact-phone" className={labelClass}>Telefone</label>
               <input
+                id="contact-phone"
                 type="text"
                 value={formData.phone}
                 onChange={(e) => update('phone', formatPhone(e.target.value))}
@@ -247,32 +253,39 @@ export default function ContactForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Email</label>
+              <label htmlFor="contact-email" className={labelClass}>Email</label>
               <input
+                id="contact-email"
                 type="text"
                 value={formData.email}
                 onChange={(e) => update('email', e.target.value)}
                 className={inputClass('email')}
+                aria-invalid={!!validationErrors.email}
+                aria-describedby={validationErrors.email ? 'email-error' : undefined}
               />
-              {validationErrors.email && <p className="text-xs text-red-500 mt-1">{validationErrors.email}</p>}
+              {validationErrors.email && <p id="email-error" className={errorClass}>{errorIcon}{validationErrors.email}</p>}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>CPF {!formData.sem_documento && <>{' *'} <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></>}</label>
+              <label htmlFor="contact-cpf" className={labelClass}>CPF {!formData.sem_documento && <>{' *'} <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></>}</label>
               <input
+                id="contact-cpf"
                 type="text"
                 value={formData.cpf}
                 onChange={(e) => update('cpf', formatCPF(e.target.value))}
                 className={inputClass('cpf')}
                 placeholder="000.000.000-00"
                 disabled={formData.sem_documento}
+                aria-invalid={!!validationErrors.cpf}
+                aria-describedby={validationErrors.cpf ? 'cpf-error' : undefined}
               />
-              {validationErrors.cpf && <p className="text-xs text-red-500 mt-1">{validationErrors.cpf}</p>}
+              {validationErrors.cpf && <p id="cpf-error" className={errorClass}>{errorIcon}{validationErrors.cpf}</p>}
             </div>
             <div>
-              <label className={labelClass}>CNPJ {!formData.sem_documento && <>{' *'} <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></>}</label>
+              <label htmlFor="contact-cnpj" className={labelClass}>CNPJ {!formData.sem_documento && <>{' *'} <span className="text-purple-300/40 text-[10px] font-normal">(preencha pelo menos um)</span></>}</label>
               <input
+                id="contact-cnpj"
                 type="text"
                 value={formData.cnpj}
                 onChange={(e) => update('cnpj', formatCNPJ(e.target.value))}
@@ -302,8 +315,9 @@ export default function ContactForm({
             Não possui CPF/CNPJ
           </label>
           <div>
-            <label className={labelClass}>Empresa</label>
+            <label htmlFor="contact-company" className={labelClass}>Empresa</label>
             <input
+              id="contact-company"
               type="text"
               value={formData.company}
               onChange={(e) => update('company', e.target.value)}
@@ -342,8 +356,9 @@ export default function ContactForm({
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Referência</label>
+              <label htmlFor="contact-referencia" className={labelClass}>Referência</label>
               <input
+                id="contact-referencia"
                 type="text"
                 value={formData.referencia}
                 onChange={(e) => update('referencia', e.target.value)}
@@ -352,8 +367,9 @@ export default function ContactForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Classe</label>
+              <label htmlFor="contact-classe" className={labelClass}>Classe</label>
               <select
+                id="contact-classe"
                 value={formData.classe}
                 onChange={(e) => update('classe', e.target.value)}
                 className={inputClass()}
@@ -375,8 +391,9 @@ export default function ContactForm({
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>Temperatura</label>
+              <label htmlFor="contact-temperatura" className={labelClass}>Temperatura</label>
               <select
+                id="contact-temperatura"
                 value={formData.temperatura}
                 onChange={(e) => update('temperatura', e.target.value)}
                 className={inputClass()}
@@ -388,8 +405,9 @@ export default function ContactForm({
               </select>
             </div>
             <div>
-              <label className={labelClass}>Segmento</label>
+              <label htmlFor="contact-segmento" className={labelClass}>Segmento</label>
               <input
+                id="contact-segmento"
                 type="text"
                 value={formData.segmento || ''}
                 onChange={(e) => update('segmento', e.target.value)}
@@ -398,8 +416,9 @@ export default function ContactForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Origem</label>
+              <label htmlFor="contact-origem" className={labelClass}>Origem</label>
               <select
+                id="contact-origem"
                 value={formData.origem}
                 onChange={(e) => update('origem', e.target.value)}
                 className={inputClass()}
@@ -413,8 +432,9 @@ export default function ContactForm({
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className={labelClass}>Próxima Ação</label>
+              <label htmlFor="contact-proxima-acao" className={labelClass}>Próxima Ação</label>
               <select
+                id="contact-proxima-acao"
                 value={formData.proxima_acao_tipo}
                 onChange={(e) => update('proxima_acao_tipo', e.target.value)}
                 className={inputClass()}
@@ -427,8 +447,9 @@ export default function ContactForm({
             </div>
             {formData.proxima_acao_tipo && (
               <div>
-                <label className={labelClass}>Data da Próxima Ação</label>
+                <label htmlFor="contact-proxima-acao-data" className={labelClass}>Data da Próxima Ação</label>
                 <input
+                  id="contact-proxima-acao-data"
                   type="datetime-local"
                   value={formData.proxima_acao_data}
                   onChange={(e) => update('proxima_acao_data', e.target.value)}
@@ -438,8 +459,9 @@ export default function ContactForm({
             )}
           </div>
           <div>
-            <label className={labelClass}>Valor Estimado (R$)</label>
+            <label htmlFor="contact-valor" className={labelClass}>Valor Estimado (R$)</label>
             <input
+              id="contact-valor"
               type="number"
               step="0.01"
               min="0"
@@ -457,8 +479,9 @@ export default function ContactForm({
         <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Pessoa de Contato</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Nome do Contato</label>
+            <label htmlFor="contact-contato-nome" className={labelClass}>Nome do Contato</label>
             <input
+              id="contact-contato-nome"
               type="text"
               value={formData.contato_nome}
               onChange={(e) => update('contato_nome', e.target.value)}
@@ -466,8 +489,9 @@ export default function ContactForm({
             />
           </div>
           <div>
-            <label className={labelClass}>Cargo</label>
+            <label htmlFor="contact-cargo" className={labelClass}>Cargo</label>
             <input
+              id="contact-cargo"
               type="text"
               value={formData.cargo}
               onChange={(e) => update('cargo', e.target.value)}
@@ -482,8 +506,9 @@ export default function ContactForm({
         <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Endereço</h2>
         <div className="space-y-4">
           <div>
-            <label className={labelClass}>Endereço</label>
+            <label htmlFor="contact-endereco" className={labelClass}>Endereço</label>
             <input
+              id="contact-endereco"
               type="text"
               value={formData.endereco}
               onChange={(e) => update('endereco', e.target.value)}
@@ -493,8 +518,9 @@ export default function ContactForm({
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className={labelClass}>Cidade</label>
+              <label htmlFor="contact-cidade" className={labelClass}>Cidade</label>
               <input
+                id="contact-cidade"
                 type="text"
                 value={formData.cidade}
                 onChange={(e) => update('cidade', e.target.value)}
@@ -502,8 +528,9 @@ export default function ContactForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Estado</label>
+              <label htmlFor="contact-estado" className={labelClass}>Estado</label>
               <select
+                id="contact-estado"
                 value={formData.estado}
                 onChange={(e) => update('estado', e.target.value)}
                 className={inputClass()}
@@ -515,8 +542,9 @@ export default function ContactForm({
               </select>
             </div>
             <div>
-              <label className={labelClass}>CEP</label>
+              <label htmlFor="contact-cep" className={labelClass}>CEP</label>
               <input
+                id="contact-cep"
                 type="text"
                 value={formData.cep}
                 onChange={(e) => update('cep', formatCEP(e.target.value))}
@@ -533,8 +561,9 @@ export default function ContactForm({
         <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Presença Digital</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className={labelClass}>Website</label>
+            <label htmlFor="contact-website" className={labelClass}>Website</label>
             <input
+              id="contact-website"
               type="text"
               value={formData.website}
               onChange={(e) => update('website', e.target.value)}
@@ -543,8 +572,9 @@ export default function ContactForm({
             />
           </div>
           <div>
-            <label className={labelClass}>Instagram</label>
+            <label htmlFor="contact-instagram" className={labelClass}>Instagram</label>
             <input
+              id="contact-instagram"
               type="text"
               value={formData.instagram}
               onChange={(e) => update('instagram', e.target.value)}
@@ -553,8 +583,9 @@ export default function ContactForm({
             />
           </div>
           <div>
-            <label className={labelClass}>WhatsApp</label>
+            <label htmlFor="contact-whatsapp" className={labelClass}>WhatsApp</label>
             <input
+              id="contact-whatsapp"
               type="text"
               value={formData.whatsapp}
               onChange={(e) => update('whatsapp', formatPhone(e.target.value))}
@@ -570,8 +601,9 @@ export default function ContactForm({
         <h2 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Produtos e Observações</h2>
         <div className="space-y-4">
           <div>
-            <label className={labelClass}>Produtos Fornecidos</label>
+            <label htmlFor="contact-produtos" className={labelClass}>Produtos Fornecidos</label>
             <input
+              id="contact-produtos"
               type="text"
               value={formData.produtos_fornecidos}
               onChange={(e) => update('produtos_fornecidos', e.target.value)}
@@ -580,8 +612,9 @@ export default function ContactForm({
             />
           </div>
           <div>
-            <label className={labelClass}>Observações</label>
+            <label htmlFor="contact-notes" className={labelClass}>Observações</label>
             <textarea
+              id="contact-notes"
               rows={4}
               value={formData.notes}
               onChange={(e) => update('notes', e.target.value)}

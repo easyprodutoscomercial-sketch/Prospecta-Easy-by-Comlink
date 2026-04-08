@@ -6,6 +6,79 @@ import { normalizeContactData } from '@/lib/utils/normalize';
 import { ensureProfile } from '@/lib/ensure-profile';
 // Visibility is now handled by pipeline membership (members see all contacts in their pipelines)
 
+// Supabase limita a 1000 rows por request
+const SUPABASE_MAX_ROWS = 1000;
+
+// Aplica todos os filtros de busca a uma query de contatos
+function applyContactFilters(
+  query: any,
+  filters: {
+    search?: string;
+    status?: string | null;
+    tipo?: string | null;
+    pipeline_id?: string | null;
+    stage_id?: string | null;
+    assigned?: string | null;
+    userId?: string;
+    allowedPipelineIds?: string[] | null;
+    temperatura?: string | null;
+    origem?: string | null;
+    classe?: string | null;
+    cidade?: string | null;
+    estado?: string | null;
+    telefone?: string | null;
+    cpf?: string | null;
+    cnpj?: string | null;
+    whatsapp?: string | null;
+    empresa?: string | null;
+    referencia?: string | null;
+    contato_nome?: string | null;
+    cargo?: string | null;
+    endereco?: string | null;
+    cep?: string | null;
+    website?: string | null;
+    instagram?: string | null;
+    proxima_acao_tipo?: string | null;
+    produtos_fornecidos?: string | null;
+  }
+) {
+  // Filtrar por pipelines permitidas (non-admin)
+  if (filters.allowedPipelineIds !== null && filters.allowedPipelineIds !== undefined && filters.allowedPipelineIds.length > 0) {
+    query = query.in('pipeline_id', filters.allowedPipelineIds);
+  }
+
+  if (filters.search) {
+    query = query.or(`name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,company.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
+  }
+  if (filters.status && filters.status !== 'all') query = query.eq('status', filters.status);
+  if (filters.tipo && filters.tipo !== 'all') query = query.contains('tipo', [filters.tipo]);
+  if (filters.pipeline_id) query = query.eq('pipeline_id', filters.pipeline_id);
+  if (filters.stage_id) query = query.eq('stage_id', filters.stage_id);
+  if (filters.assigned === 'me' && filters.userId) query = query.eq('assigned_to_user_id', filters.userId);
+  else if (filters.assigned === 'unassigned') query = query.is('assigned_to_user_id', null);
+  if (filters.temperatura && filters.temperatura !== 'all') query = query.eq('temperatura', filters.temperatura);
+  if (filters.origem && filters.origem !== 'all') query = query.eq('origem', filters.origem);
+  if (filters.classe && filters.classe !== 'all') query = query.eq('classe', filters.classe);
+  if (filters.cidade) query = query.ilike('cidade', `%${filters.cidade}%`);
+  if (filters.estado && filters.estado !== 'all') query = query.eq('estado', filters.estado);
+  if (filters.telefone) query = query.ilike('phone', `%${filters.telefone}%`);
+  if (filters.cpf) query = query.ilike('cpf', `%${filters.cpf}%`);
+  if (filters.cnpj) query = query.ilike('cnpj', `%${filters.cnpj}%`);
+  if (filters.whatsapp) query = query.ilike('whatsapp', `%${filters.whatsapp}%`);
+  if (filters.empresa) query = query.ilike('company', `%${filters.empresa}%`);
+  if (filters.referencia) query = query.ilike('referencia', `%${filters.referencia}%`);
+  if (filters.contato_nome) query = query.ilike('contato_nome', `%${filters.contato_nome}%`);
+  if (filters.cargo) query = query.ilike('cargo', `%${filters.cargo}%`);
+  if (filters.endereco) query = query.ilike('endereco', `%${filters.endereco}%`);
+  if (filters.cep) query = query.ilike('cep', `%${filters.cep}%`);
+  if (filters.website) query = query.ilike('website', `%${filters.website}%`);
+  if (filters.instagram) query = query.ilike('instagram', `%${filters.instagram}%`);
+  if (filters.proxima_acao_tipo && filters.proxima_acao_tipo !== 'all') query = query.eq('proxima_acao_tipo', filters.proxima_acao_tipo);
+  if (filters.produtos_fornecidos) query = query.ilike('produtos_fornecidos', `%${filters.produtos_fornecidos}%`);
+
+  return query;
+}
+
 // GET /api/contacts - Listar contatos com filtros
 export async function GET(request: NextRequest) {
   try {
@@ -24,10 +97,6 @@ export async function GET(request: NextRequest) {
 
     const admin = getAdminClient();
     const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get('search') || '';
-    const status = searchParams.get('status');
-    const tipo = searchParams.get('tipo'); // 'FORNECEDOR' | 'COMPRADOR'
-    const assigned = searchParams.get('assigned'); // 'me' | 'unassigned' | 'all'
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = (page - 1) * limit;
@@ -47,163 +116,99 @@ export async function GET(request: NextRequest) {
       allowedPipelineIds = (myMemberships || []).map((m: any) => m.pipeline_id);
     }
 
-    let query = admin
-      .from('contacts')
-      .select('*', { count: 'exact' })
-      .eq('organization_id', profile.organization_id);
-
-    // Filtrar por pipelines permitidas (non-admin)
-    // Membros do pipeline veem todos os contatos daquele pipeline
-    if (allowedPipelineIds !== null && allowedPipelineIds.length > 0) {
-      query = query.in('pipeline_id', allowedPipelineIds);
-    } else if (allowedPipelineIds !== null && allowedPipelineIds.length === 0) {
+    if (allowedPipelineIds !== null && allowedPipelineIds.length === 0) {
       // Sem membership em nenhum pipeline — nao retorna contatos
       return NextResponse.json({ contacts: [], total: 0, page, limit, totalPages: 0 });
     }
 
-    // Filtro de busca
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,company.ilike.%${search}%,notes.ilike.%${search}%`);
+    // Montar objeto de filtros a partir dos search params
+    const filters = {
+      search: searchParams.get('search') || '',
+      status: searchParams.get('status'),
+      tipo: searchParams.get('tipo'),
+      pipeline_id: searchParams.get('pipeline_id'),
+      stage_id: searchParams.get('stage_id'),
+      assigned: searchParams.get('assigned'),
+      userId: user.id,
+      allowedPipelineIds,
+      temperatura: searchParams.get('temperatura'),
+      origem: searchParams.get('origem'),
+      classe: searchParams.get('classe'),
+      cidade: searchParams.get('cidade'),
+      estado: searchParams.get('estado'),
+      telefone: searchParams.get('telefone'),
+      cpf: searchParams.get('cpf'),
+      cnpj: searchParams.get('cnpj'),
+      whatsapp: searchParams.get('whatsapp'),
+      empresa: searchParams.get('empresa'),
+      referencia: searchParams.get('referencia'),
+      contato_nome: searchParams.get('contato_nome'),
+      cargo: searchParams.get('cargo'),
+      endereco: searchParams.get('endereco'),
+      cep: searchParams.get('cep'),
+      website: searchParams.get('website'),
+      instagram: searchParams.get('instagram'),
+      proxima_acao_tipo: searchParams.get('proxima_acao_tipo'),
+      produtos_fornecidos: searchParams.get('produtos_fornecidos'),
+    };
+
+    // Helper para criar query filtrada
+    const buildQuery = (withCount: boolean) => {
+      let q = admin
+        .from('contacts')
+        .select('*', withCount ? { count: 'exact' } : {})
+        .eq('organization_id', profile.organization_id);
+      return applyContactFilters(q, filters);
+    };
+
+    // Se cabe em uma unica request, buscar direto
+    if (limit <= SUPABASE_MAX_ROWS) {
+      const { data: contacts, error, count } = await buildQuery(true)
+        .order(sortField, { ascending: sortDir })
+        .range(offset, offset + limit - 1);
+
+      if (error) throw error;
+
+      return NextResponse.json({
+        contacts,
+        total: count,
+        page,
+        limit,
+        totalPages: Math.ceil((count || 0) / limit),
+      });
     }
 
-    // Filtro de status
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
+    // limit > 1000: buscar em lotes sequenciais
+    let allContacts: any[] = [];
+    let totalCount: number | null = null;
+    let currentOffset = offset;
+
+    while (true) {
+      const remaining = limit - allContacts.length;
+      if (remaining <= 0) break;
+      const batchSize = Math.min(SUPABASE_MAX_ROWS, remaining);
+
+      const isFirstBatch = currentOffset === offset;
+      const { data: batch, error: batchError, count: batchCount } = await buildQuery(isFirstBatch)
+        .order(sortField, { ascending: sortDir })
+        .range(currentOffset, currentOffset + batchSize - 1);
+
+      if (batchError) throw batchError;
+      if (isFirstBatch && batchCount !== undefined) totalCount = batchCount;
+
+      allContacts.push(...(batch || []));
+
+      // Se retornou menos que o pedido, nao tem mais dados
+      if (!batch || batch.length < batchSize) break;
+      currentOffset += batch.length;
     }
-
-    // Filtro de tipo
-    if (tipo && tipo !== 'all') {
-      query = query.contains('tipo', [tipo]);
-    }
-
-    // Filtro de pipeline
-    const pipeline_id = searchParams.get('pipeline_id');
-    if (pipeline_id) {
-      query = query.eq('pipeline_id', pipeline_id);
-    }
-
-    // Filtro de stage
-    const stage_id = searchParams.get('stage_id');
-    if (stage_id) {
-      query = query.eq('stage_id', stage_id);
-    }
-
-    // Filtro de atribuição
-    if (assigned === 'me') {
-      query = query.eq('assigned_to_user_id', user.id);
-    } else if (assigned === 'unassigned') {
-      query = query.is('assigned_to_user_id', null);
-    }
-
-    // Filtros adicionais
-    const temperatura = searchParams.get('temperatura');
-    if (temperatura && temperatura !== 'all') {
-      query = query.eq('temperatura', temperatura);
-    }
-
-    const origem = searchParams.get('origem');
-    if (origem && origem !== 'all') {
-      query = query.eq('origem', origem);
-    }
-
-    const classe = searchParams.get('classe');
-    if (classe && classe !== 'all') {
-      query = query.eq('classe', classe);
-    }
-
-    const cidade = searchParams.get('cidade');
-    if (cidade) {
-      query = query.ilike('cidade', `%${cidade}%`);
-    }
-
-    const estado = searchParams.get('estado');
-    if (estado && estado !== 'all') {
-      query = query.eq('estado', estado);
-    }
-
-    const telefone = searchParams.get('telefone');
-    if (telefone) {
-      query = query.ilike('phone', `%${telefone}%`);
-    }
-
-    const cpf = searchParams.get('cpf');
-    if (cpf) {
-      query = query.ilike('cpf', `%${cpf}%`);
-    }
-
-    const cnpj = searchParams.get('cnpj');
-    if (cnpj) {
-      query = query.ilike('cnpj', `%${cnpj}%`);
-    }
-
-    const whatsapp = searchParams.get('whatsapp');
-    if (whatsapp) {
-      query = query.ilike('whatsapp', `%${whatsapp}%`);
-    }
-
-    const empresa = searchParams.get('empresa');
-    if (empresa) {
-      query = query.ilike('company', `%${empresa}%`);
-    }
-
-    const referencia = searchParams.get('referencia');
-    if (referencia) {
-      query = query.ilike('referencia', `%${referencia}%`);
-    }
-
-    const contato_nome = searchParams.get('contato_nome');
-    if (contato_nome) {
-      query = query.ilike('contato_nome', `%${contato_nome}%`);
-    }
-
-    const cargo = searchParams.get('cargo');
-    if (cargo) {
-      query = query.ilike('cargo', `%${cargo}%`);
-    }
-
-    const endereco = searchParams.get('endereco');
-    if (endereco) {
-      query = query.ilike('endereco', `%${endereco}%`);
-    }
-
-    const cep = searchParams.get('cep');
-    if (cep) {
-      query = query.ilike('cep', `%${cep}%`);
-    }
-
-    const website = searchParams.get('website');
-    if (website) {
-      query = query.ilike('website', `%${website}%`);
-    }
-
-    const instagram = searchParams.get('instagram');
-    if (instagram) {
-      query = query.ilike('instagram', `%${instagram}%`);
-    }
-
-    const proxima_acao_tipo = searchParams.get('proxima_acao_tipo');
-    if (proxima_acao_tipo && proxima_acao_tipo !== 'all') {
-      query = query.eq('proxima_acao_tipo', proxima_acao_tipo);
-    }
-
-    const produtos_fornecidos = searchParams.get('produtos_fornecidos');
-    if (produtos_fornecidos) {
-      query = query.ilike('produtos_fornecidos', `%${produtos_fornecidos}%`);
-    }
-
-    // Paginação e ordenação
-    const { data: contacts, error, count } = await query
-      .order(sortField, { ascending: sortDir })
-      .range(offset, offset + limit - 1);
-
-    if (error) throw error;
 
     return NextResponse.json({
-      contacts,
-      total: count,
+      contacts: allContacts,
+      total: totalCount,
       page,
       limit,
-      totalPages: Math.ceil((count || 0) / limit),
+      totalPages: Math.ceil((totalCount || 0) / limit),
     });
 
   } catch (error: any) {

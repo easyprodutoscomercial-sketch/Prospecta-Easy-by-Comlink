@@ -7,6 +7,8 @@ import { KanbanColumn } from './kanban-column';
 import { KanbanCard, type UserInfo } from './kanban-card';
 import { useIsMobile } from '@/lib/hooks/use-is-mobile';
 
+export type SwimlaneBy = '' | 'responsible' | 'temperatura' | 'origem';
+
 interface KanbanBoardProps {
   stages: PipelineStage[];
   grouped: Record<string, Contact[]>;
@@ -34,9 +36,10 @@ interface KanbanBoardProps {
   onCardClick?: (contactId: string) => void;
   collapsedColumns?: Set<string>;
   onToggleCollapse?: (stageId: string) => void;
+  swimlaneBy?: SwimlaneBy;
 }
 
-export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsedColumns, onToggleCollapse }: KanbanBoardProps) {
+export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, pipelineSettings, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsedColumns, onToggleCollapse, swimlaneBy }: KanbanBoardProps) {
   const colCount = stages.length;
   const isMobile = useIsMobile();
 
@@ -79,6 +82,7 @@ export function KanbanBoard({ stages, grouped, activeContact, userMap, currentUs
             onCardClick={onCardClick}
             collapsed={collapsedColumns?.has(stage.id) ?? false}
             onToggleCollapse={onToggleCollapse ? () => onToggleCollapse(stage.id) : undefined}
+            swimlaneBy={swimlaneBy}
           />
         ))}
       </div>

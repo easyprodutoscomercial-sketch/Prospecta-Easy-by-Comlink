@@ -234,7 +234,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-2 space-y-1">
+      <nav className="flex-1 px-3 py-2 space-y-1" aria-label="Menu principal">
         {filteredNavItems.map((item) => (
           <Link
             key={item.href}
@@ -294,7 +294,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
             </div>
           </div>
           <form action={signOutAction}>
-            <button type="submit" className="text-xs text-purple-300/50 hover:text-emerald-400 font-medium transition-colors">
+            <button type="submit" className="text-xs text-purple-300/50 hover:text-emerald-400 font-medium transition-colors" aria-label="Sair da conta">
               Sair
             </button>
           </form>

@@ -19,6 +19,7 @@ export default function MotivoModal({
   loading = false,
 }: MotivoModalProps) {
   const [motivo, setMotivo] = useState('');
+  const modalRef = useRef<HTMLDivElement>(null);
 
   const labels = tipo === 'CONVERTIDO' ? MOTIVO_GANHO_LABELS : MOTIVO_PERDIDO_LABELS;
   const title = tipo === 'CONVERTIDO' ? 'Motivo do Ganho' : 'Motivo da Perda';
@@ -34,11 +35,25 @@ export default function MotivoModal({
     if (isOpen) setMotivo('');
   }, [isOpen]);
 
-  // Keyboard + scroll lock (uses ref to avoid re-running on onClose identity change)
+  // Keyboard + scroll lock + focus trap
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
+      // Focus trap
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = modalRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+          if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+      }
     };
     document.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
@@ -51,13 +66,16 @@ export default function MotivoModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-[#1e0f35] border border-purple-800/30 rounded-lg shadow-xl max-w-md w-full mx-4 p-6 animate-fade-in">
-        <h3 className="text-lg font-semibold text-emerald-400 mb-1">{title}</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="motivo-modal-title">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm animate-fade-in" onClick={onClose} aria-hidden="true" />
+      <div
+        ref={modalRef}
+        className="relative bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 max-w-md w-full mx-4 p-6 animate-modal-enter"
+      >
+        <h3 id="motivo-modal-title" className="text-lg font-semibold text-emerald-400 mb-1">{title}</h3>
         <p className="text-sm text-purple-300/60 mb-4">{subtitle}</p>
 
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-4" role="group" aria-label="Motivos rapidos">
           {Object.entries(labels).map(([key, label]) => (
             <button
               key={key}
@@ -74,7 +92,9 @@ export default function MotivoModal({
           ))}
         </div>
 
+        <label htmlFor="motivo-textarea" className="sr-only">Descreva o motivo</label>
         <textarea
+          id="motivo-textarea"
           rows={3}
           value={motivo}
           onChange={(e) => setMotivo(e.target.value)}

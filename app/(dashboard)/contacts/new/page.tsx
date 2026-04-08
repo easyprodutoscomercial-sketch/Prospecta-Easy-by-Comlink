@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ContactForm from '@/components/contacts/contact-form';
+import Breadcrumbs from '@/components/ui/breadcrumbs';
 import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
 
@@ -55,14 +56,9 @@ export default function NewContactPage() {
 
   return (
     <div className="max-w-3xl mx-auto">
-      <div className="mb-6">
-        <button onClick={() => window.history.length > 1 ? window.history.back() : window.location.href = '/contacts'}
-          className="text-sm text-neutral-500 hover:text-neutral-900">
-          &larr; Voltar para contatos
-        </button>
-      </div>
+      <Breadcrumbs items={[{ label: 'Contatos', href: '/contacts' }, { label: 'Novo Contato' }]} />
 
-      <h1 className="text-2xl font-semibold text-neutral-900 mb-6">Novo Contato</h1>
+      <h1 className="text-2xl font-semibold text-emerald-400 mb-6">Novo Contato</h1>
 
       <ContactForm
         mode="create"
