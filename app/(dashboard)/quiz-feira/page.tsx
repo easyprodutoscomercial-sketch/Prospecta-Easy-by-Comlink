@@ -5,6 +5,13 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 type Tab = 'dashboard' | 'participantes' | 'configuracoes';
 
+interface DiaConfig {
+  dia: number;
+  valor_exato: number;
+  descricao?: string;
+  telefone_vip?: string;
+}
+
 interface QuizConfig {
   id: string;
   quiz_ativo: boolean;
@@ -16,6 +23,10 @@ interface QuizConfig {
   pipeline_id: string | null;
   crm_tag: string;
   crm_ativo: boolean;
+  telefone_vip: string | null;
+  data_inicio: string | null;
+  dias_feira: number;
+  dias_config: DiaConfig[];
 }
 
 interface Pipeline {
@@ -31,6 +42,7 @@ interface Participante {
   palpite: number;
   evento_nome: string;
   created_at: string;
+  dia_feira: number | null;
 }
 
 interface Stats {
@@ -68,6 +80,10 @@ export default function QuizFeiraPage() {
   const [loadingVencedor, setLoadingVencedor] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteMsg, setDeleteMsg] = useState('');
+  const [diaSelecionado, setDiaSelecionado] = useState<string>('todos');
 
   // Form state for config
   const [formConfig, setFormConfig] = useState<Partial<QuizConfig>>({});
@@ -86,13 +102,15 @@ export default function QuizFeiraPage() {
 
   const fetchStats = useCallback(async () => {
     try {
-      const res = await fetch('/api/quiz/stats');
+      const params = new URLSearchParams();
+      if (diaSelecionado !== 'todos') params.set('dia', diaSelecionado);
+      const res = await fetch(`/api/quiz/stats?${params}`);
       if (res.ok) {
         const data = await res.json();
         setStats(data);
       }
     } catch { /* silent */ }
-  }, []);
+  }, [diaSelecionado]);
 
   const fetchParticipantes = useCallback(async () => {
     try {
@@ -100,6 +118,7 @@ export default function QuizFeiraPage() {
       if (search) params.set('search', search);
       if (dateFrom) params.set('date_from', dateFrom);
       if (dateTo) params.set('date_to', dateTo);
+      if (diaSelecionado !== 'todos') params.set('dia', diaSelecionado);
 
       const res = await fetch(`/api/quiz/participantes?${params}`);
       if (res.ok) {
@@ -108,7 +127,7 @@ export default function QuizFeiraPage() {
         setTotalParticipantes(data.total || 0);
       }
     } catch { /* silent */ }
-  }, [page, search, dateFrom, dateTo]);
+  }, [page, search, dateFrom, dateTo, diaSelecionado]);
 
   useEffect(() => {
     const init = async () => {
@@ -124,6 +143,11 @@ export default function QuizFeiraPage() {
       fetchParticipantes();
     }
   }, [tab, fetchParticipantes]);
+
+  // Refetch stats when day selection changes
+  useEffect(() => {
+    if (tab === 'dashboard') fetchStats();
+  }, [diaSelecionado, tab, fetchStats]);
 
   // Auto-refresh stats every 30s on dashboard tab
   useEffect(() => {
@@ -168,7 +192,9 @@ export default function QuizFeiraPage() {
   const handleRevealVencedor = async () => {
     setLoadingVencedor(true);
     try {
-      const res = await fetch('/api/quiz/participantes/vencedor');
+      const params = new URLSearchParams();
+      if (diaSelecionado !== 'todos') params.set('dia', diaSelecionado);
+      const res = await fetch(`/api/quiz/participantes/vencedor?${params}`);
       if (res.ok) {
         const data = await res.json();
         setVencedorData(data);
@@ -176,6 +202,26 @@ export default function QuizFeiraPage() {
       }
     } catch { /* silent */ }
     setLoadingVencedor(false);
+  };
+
+  const handleDeleteAll = async () => {
+    setDeleting(true);
+    try {
+      const params = new URLSearchParams();
+      if (diaSelecionado !== 'todos') params.set('dia', diaSelecionado);
+      const res = await fetch(`/api/quiz/participantes?${params}`, { method: 'DELETE' });
+      if (res.ok) {
+        const data = await res.json();
+        setShowDeleteModal(false);
+        setDeleteMsg(`${data.deleted} participante(s) removido(s)!`);
+        setTimeout(() => setDeleteMsg(''), 4000);
+        setParticipantes([]);
+        setTotalParticipantes(0);
+        setPage(1);
+        fetchStats();
+      }
+    } catch { /* silent */ }
+    setDeleting(false);
   };
 
   const copyPublicLink = () => {
@@ -232,6 +278,30 @@ export default function QuizFeiraPage() {
           </button>
         ))}
       </div>
+
+      {/* Day selector (shown on dashboard and participantes tabs when multi-day is configured) */}
+      {config && config.dias_feira > 1 && (tab === 'dashboard' || tab === 'participantes') && (
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-xs text-purple-300/50">Dia:</span>
+          <div className="flex gap-1 bg-[#1e0f35] p-1 rounded-lg">
+            <button
+              onClick={() => { setDiaSelecionado('todos'); setPage(1); }}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${diaSelecionado === 'todos' ? 'bg-emerald-500/20 text-emerald-400' : 'text-purple-300/60 hover:text-purple-200'}`}
+            >
+              Todos
+            </button>
+            {Array.from({ length: config.dias_feira }, (_, i) => i + 1).map((dia) => (
+              <button
+                key={dia}
+                onClick={() => { setDiaSelecionado(String(dia)); setPage(1); }}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${diaSelecionado === String(dia) ? 'bg-emerald-500/20 text-emerald-400' : 'text-purple-300/60 hover:text-purple-200'}`}
+              >
+                Dia {dia}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Dashboard Tab */}
       {tab === 'dashboard' && stats && (
@@ -343,7 +413,19 @@ export default function QuizFeiraPage() {
             >
               {loadingVencedor ? 'Calculando...' : 'Revelar Vencedor'}
             </button>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              disabled={totalParticipantes === 0}
+              className="px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-30"
+            >
+              Limpar Todos
+            </button>
           </div>
+
+          {/* Delete success message */}
+          {deleteMsg && (
+            <p className="text-sm text-emerald-400">{deleteMsg}</p>
+          )}
 
           {/* Results count */}
           <p className="text-xs text-purple-300/40">{totalParticipantes} participante(s) encontrado(s)</p>
@@ -357,13 +439,14 @@ export default function QuizFeiraPage() {
                   <th className="p-4 font-medium">Empresa</th>
                   <th className="p-4 font-medium">Telefone</th>
                   <th className="p-4 font-medium">Palpite</th>
+                  {config && config.dias_feira > 1 && <th className="p-4 font-medium">Dia</th>}
                   <th className="p-4 font-medium">Data</th>
                 </tr>
               </thead>
               <tbody>
                 {participantes.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-purple-300/40">Nenhum participante encontrado.</td>
+                    <td colSpan={config && config.dias_feira > 1 ? 6 : 5} className="p-8 text-center text-purple-300/40">Nenhum participante encontrado.</td>
                   </tr>
                 ) : (
                   participantes.map((p) => (
@@ -372,6 +455,7 @@ export default function QuizFeiraPage() {
                       <td className="p-4 text-purple-200/70">{p.empresa}</td>
                       <td className="p-4 text-purple-200/70 font-mono">{p.telefone}</td>
                       <td className="p-4 text-emerald-400 font-mono font-bold">{p.palpite}</td>
+                      {config && config.dias_feira > 1 && <td className="p-4 text-purple-300/50">{p.dia_feira || '-'}</td>}
                       <td className="p-4 text-purple-300/50">{formatDate(p.created_at)}</td>
                     </tr>
                   ))
@@ -474,6 +558,119 @@ export default function QuizFeiraPage() {
 
             <hr className="border-purple-700/20" />
 
+            <h3 className="text-lg font-medium text-white">Multi-dia (Feira)</h3>
+            <p className="text-xs text-purple-300/50 -mt-2">Configure para feiras que duram vários dias com sorteios independentes.</p>
+
+            {/* Data de Início */}
+            <div>
+              <label className="block text-sm text-white font-medium mb-1">Data de Início da Feira</label>
+              <input
+                type="date"
+                value={formConfig.data_inicio || ''}
+                onChange={(e) => setFormConfig({ ...formConfig, data_inicio: e.target.value || null })}
+                className="w-full bg-[#120826] border border-purple-700/30 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              />
+            </div>
+
+            {/* Dias de Feira */}
+            <div>
+              <label className="block text-sm text-white font-medium mb-1">Dias de Feira</label>
+              <input
+                type="number"
+                min={1}
+                max={30}
+                value={formConfig.dias_feira || 1}
+                onChange={(e) => {
+                  const dias = Math.max(1, parseInt(e.target.value) || 1);
+                  const currentConfig = formConfig.dias_config || [];
+                  // Auto-generate day configs if expanding
+                  const newDiasConfig = Array.from({ length: dias }, (_, i) => ({
+                    dia: i + 1,
+                    valor_exato: currentConfig[i]?.valor_exato || formConfig.valor_exato || 0,
+                    descricao: currentConfig[i]?.descricao || '',
+                  }));
+                  setFormConfig({ ...formConfig, dias_feira: dias, dias_config: newDiasConfig });
+                }}
+                className="w-full bg-[#120826] border border-purple-700/30 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+              />
+              <p className="text-xs text-purple-300/40 mt-1">Quantos dias dura a feira (1 = sem multi-dia)</p>
+            </div>
+
+            {/* Config por dia */}
+            {(formConfig.dias_feira || 1) > 1 && (
+              <div>
+                <label className="block text-sm text-white font-medium mb-2">Configuração por Dia</label>
+                <div className="space-y-2">
+                  {(formConfig.dias_config || []).map((dc, i) => (
+                    <div key={i} className="bg-[#120826] p-3 rounded-lg border border-purple-700/20 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-purple-300/60 font-bold w-12 shrink-0">Dia {i + 1}</span>
+                        <div className="flex-1">
+                          <input
+                            type="number"
+                            value={dc.valor_exato || ''}
+                            onChange={(e) => {
+                              const updated = [...(formConfig.dias_config || [])];
+                              updated[i] = { ...updated[i], valor_exato: parseInt(e.target.value) || 0 };
+                              setFormConfig({ ...formConfig, dias_config: updated });
+                            }}
+                            placeholder="Valor exato"
+                            className="w-full bg-[#1e0f35] border border-purple-700/30 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
+                          />
+                        </div>
+                        <div className="flex-[2]">
+                          <input
+                            type="text"
+                            value={dc.descricao || ''}
+                            onChange={(e) => {
+                              const updated = [...(formConfig.dias_config || [])];
+                              updated[i] = { ...updated[i], descricao: e.target.value };
+                              setFormConfig({ ...formConfig, dias_config: updated });
+                            }}
+                            placeholder="Descrição do desafio (opcional)"
+                            className="w-full bg-[#1e0f35] border border-purple-700/30 rounded px-2 py-1.5 text-sm text-white placeholder-purple-300/30 focus:outline-none focus:border-emerald-500/50"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3 pl-12">
+                        <div className="flex-1">
+                          <input
+                            type="tel"
+                            value={dc.telefone_vip || ''}
+                            onChange={(e) => {
+                              const updated = [...(formConfig.dias_config || [])];
+                              updated[i] = { ...updated[i], telefone_vip: e.target.value || undefined };
+                              setFormConfig({ ...formConfig, dias_config: updated });
+                            }}
+                            placeholder="Telefone VIP do dia (opcional)"
+                            className="w-full bg-[#1e0f35] border border-purple-700/30 rounded px-2 py-1.5 text-sm text-white placeholder-purple-300/30 focus:outline-none focus:border-emerald-500/50"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-purple-300/40 mt-1">Valor exato, descrição e telefone VIP para cada dia</p>
+              </div>
+            )}
+
+            {/* Telefone VIP (only shown for single-day quiz) */}
+            {(formConfig.dias_feira || 1) <= 1 && (
+            <div>
+              <label className="block text-sm text-white font-medium mb-1">Telefone VIP</label>
+              <input
+                type="tel"
+                value={formConfig.telefone_vip || ''}
+                onChange={(e) => setFormConfig({ ...formConfig, telefone_vip: e.target.value || null })}
+                placeholder="(00) 00000-0000"
+                className="w-full bg-[#120826] border border-purple-700/30 rounded-lg px-3 py-2.5 text-sm text-white placeholder-purple-300/30 focus:outline-none focus:border-emerald-500/50"
+              />
+              <p className="text-xs text-purple-300/40 mt-1">Este telefone terá o palpite ajustado automaticamente para o valor correto</p>
+            </div>
+            )}
+
+            <hr className="border-purple-700/20" />
+
             <h3 className="text-lg font-medium text-white">Destino dos Contatos</h3>
             <p className="text-xs text-purple-300/50 -mt-2">Cada participante do quiz é criado automaticamente como contato no CRM.</p>
 
@@ -539,6 +736,36 @@ export default function QuizFeiraPage() {
               {saveMsg && (
                 <span className="text-sm text-emerald-400">{saveMsg}</span>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => !deleting && setShowDeleteModal(false)}>
+          <div className="bg-[#1e0f35] rounded-2xl p-8 max-w-md w-full mx-4 border border-purple-700/30 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-xl font-bold text-red-400 mb-2">Limpar Participantes</h2>
+            <p className="text-sm text-purple-200/70 mb-6">
+              Tem certeza? Isso vai deletar <span className="text-white font-bold">{totalParticipantes}</span> participante(s).
+              <br />
+              <span className="text-purple-300/50">Os contatos no CRM serao mantidos.</span>
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                disabled={deleting}
+                className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+              >
+                {deleting ? 'Deletando...' : 'Sim, Limpar Tudo'}
+              </button>
             </div>
           </div>
         </div>

@@ -165,6 +165,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
   const [pendingCount, setPendingCount] = useState(0);
   const [tasksCount, setTasksCount] = useState(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [quizDia, setQuizDia] = useState<{ dia: number; total: number } | null>(null);
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard';
@@ -172,6 +173,29 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
   };
 
   useEffect(() => {
+    const fetchQuizDia = async () => {
+      try {
+        const res = await fetch('/api/quiz/config');
+        if (res.ok) {
+          const data = await res.json();
+          const cfg = data.config;
+          if (cfg && cfg.data_inicio && cfg.dias_feira > 1) {
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const inicio = new Date(cfg.data_inicio + 'T00:00:00');
+            const diffMs = hoje.getTime() - inicio.getTime();
+            const dia = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+            if (dia >= 1 && dia <= cfg.dias_feira) {
+              setQuizDia({ dia, total: cfg.dias_feira });
+            } else {
+              setQuizDia(null);
+            }
+          } else {
+            setQuizDia(null);
+          }
+        }
+      } catch { /* silent */ }
+    };
     const fetchData = async () => {
       try {
         const [countRes, meRes, tasksRes] = await Promise.all([
@@ -185,6 +209,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
       } catch { /* silent */ }
     };
     fetchData();
+    fetchQuizDia();
     const interval = setInterval(async () => {
       try {
         const [res, tasksRes] = await Promise.all([
@@ -251,6 +276,11 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
             {'badge' in item && item.badge && pendingCount > 0 && (
               <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-emerald-500 text-white rounded-full min-w-[18px] text-center animate-pulse">
                 {pendingCount}
+              </span>
+            )}
+            {item.href === '/quiz-feira' && quizDia && (
+              <span className="ml-auto px-1.5 py-0.5 text-[10px] font-bold bg-purple-600/50 text-purple-200 rounded-full min-w-[18px] text-center">
+                Dia {quizDia.dia}/{quizDia.total}
               </span>
             )}
             {item.href === '/dashboard' && tasksCount > 0 && (

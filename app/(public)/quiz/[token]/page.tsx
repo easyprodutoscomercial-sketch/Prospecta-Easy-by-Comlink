@@ -13,6 +13,9 @@ interface QuizConfig {
   descricao_desafio: string;
   mensagem_pausa: string;
   total_participantes: number;
+  dia_feira: number | null;
+  dias_feira: number | null;
+  descricao_dia: string | null;
 }
 
 /* Components defined OUTSIDE to avoid remount on every keystroke */
@@ -434,6 +437,11 @@ export default function QuizPublicPage() {
             </defs>
           </svg>
         </div>
+
+        {/* Day indicator */}
+        {config?.dia_feira && config?.dias_feira && (
+          <div className="qz-day-badge">Dia {config.dia_feira} de {config.dias_feira}</div>
+        )}
 
         {/* Event name */}
         <h1 className="qz-welcome-title">{config?.nome_evento || 'Quiz'}</h1>
@@ -1178,6 +1186,20 @@ const styles = `
     color: rgba(196, 181, 253, 0.5);
     font-size: 13px;
     background: rgba(0,0,0,0.8);
+  }
+
+  /* Day badge */
+  .qz-day-badge {
+    display: inline-block;
+    padding: 6px 16px;
+    margin-bottom: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #a78bfa;
+    background: rgba(124, 58, 237, 0.12);
+    border: 1px solid rgba(124, 58, 237, 0.25);
+    border-radius: 100px;
+    letter-spacing: 0.5px;
   }
 
   /* Responsive */

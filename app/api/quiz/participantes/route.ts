@@ -27,12 +27,17 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get('search') || '';
     const dateFrom = searchParams.get('date_from') || '';
     const dateTo = searchParams.get('date_to') || '';
+    const diaParam = searchParams.get('dia') || '';
 
     let query = admin
       .from('quiz_participantes')
       .select('*', { count: 'exact' })
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false });
+
+    if (diaParam) {
+      query = query.eq('dia_feira', parseInt(diaParam));
+    }
 
     if (search) {
       query = query.or(`nome.ilike.%${search}%,empresa.ilike.%${search}%,telefone.ilike.%${search}%`);
@@ -64,6 +69,53 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     console.error('Error fetching participants:', error);
+    return NextResponse.json({ error: error.message || 'Erro interno' }, { status: 500 });
+  }
+}
+
+// DELETE /api/quiz/participantes — Delete participants (admin only)
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+    }
+
+    const profile = await ensureProfile(supabase, user);
+    if (!profile || profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Acesso negado' }, { status: 403 });
+    }
+
+    const admin = getAdminClient();
+    const orgId = profile.organization_id;
+    const diaParam = request.nextUrl.searchParams.get('dia');
+
+    // Count before deleting
+    let countQuery = admin
+      .from('quiz_participantes')
+      .select('*', { count: 'exact', head: true })
+      .eq('organization_id', orgId);
+    if (diaParam) countQuery = countQuery.eq('dia_feira', parseInt(diaParam));
+    const { count } = await countQuery;
+
+    // Delete participants (filtered by day if specified)
+    let deleteQuery = admin
+      .from('quiz_participantes')
+      .delete()
+      .eq('organization_id', orgId);
+    if (diaParam) deleteQuery = deleteQuery.eq('dia_feira', parseInt(diaParam));
+    const { error } = await deleteQuery;
+
+    if (error) {
+      console.error('Error deleting participants:', error);
+      return NextResponse.json({ error: 'Erro ao deletar participantes' }, { status: 500 });
+    }
+
+    return NextResponse.json({ deleted: count || 0 });
+  } catch (error: any) {
+    console.error('Error deleting participants:', error);
     return NextResponse.json({ error: error.message || 'Erro interno' }, { status: 500 });
   }
 }

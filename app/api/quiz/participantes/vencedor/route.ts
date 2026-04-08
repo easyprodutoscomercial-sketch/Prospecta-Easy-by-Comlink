@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/quiz/participantes/vencedor — Reveal winner (auth required)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -20,11 +20,12 @@ export async function GET() {
 
     const admin = getAdminClient();
     const orgId = profile.organization_id;
+    const diaParam = request.nextUrl.searchParams.get('dia');
 
     // Get quiz config to know the exact value
     const { data: config } = await admin
       .from('quiz_configuracoes')
-      .select('valor_exato')
+      .select('valor_exato, dias_config')
       .eq('organization_id', orgId)
       .single();
 
@@ -32,14 +33,29 @@ export async function GET() {
       return NextResponse.json({ error: 'Quiz não configurado' }, { status: 404 });
     }
 
-    const valorExato = config.valor_exato;
+    // Determine valor_exato for the day
+    let valorExato = config.valor_exato;
+    const diasConfig: any[] = config.dias_config || [];
+    if (diaParam) {
+      const dia = parseInt(diaParam);
+      const dayConfig = diasConfig[dia - 1];
+      if (dayConfig && dayConfig.valor_exato) {
+        valorExato = dayConfig.valor_exato;
+      }
+    }
 
-    // Get all participants ordered by closest guess
-    const { data: participantes, error } = await admin
+    // Get participants (filtered by day if specified)
+    let query = admin
       .from('quiz_participantes')
       .select('*')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: true });
+
+    if (diaParam) {
+      query = query.eq('dia_feira', parseInt(diaParam));
+    }
+
+    const { data: participantes, error } = await query;
 
     if (error || !participantes || participantes.length === 0) {
       return NextResponse.json({

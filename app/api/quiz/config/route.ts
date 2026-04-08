@@ -79,6 +79,7 @@ export async function PUT(request: NextRequest) {
     const allowedFields = [
       'quiz_ativo', 'valor_exato', 'nome_evento', 'descricao_desafio',
       'mensagem_pausa', 'pipeline_id', 'crm_tag', 'crm_ativo',
+      'telefone_vip', 'data_inicio', 'dias_feira', 'dias_config',
     ];
 
     const updateData: Record<string, any> = { updated_at: new Date().toISOString() };

@@ -1,10 +1,10 @@
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 // GET /api/quiz/stats — Dashboard stats (auth required)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -20,30 +20,44 @@ export async function GET() {
 
     const admin = getAdminClient();
     const orgId = profile.organization_id;
+    const diaParam = request.nextUrl.searchParams.get('dia');
+
+    const addDiaFilter = (query: any) => {
+      if (diaParam) {
+        return query.eq('dia_feira', parseInt(diaParam));
+      }
+      return query;
+    };
 
     // Total participants
-    const { count: total } = await admin
+    let totalQuery = admin
       .from('quiz_participantes')
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', orgId);
+    totalQuery = addDiaFilter(totalQuery);
+    const { count: total } = await totalQuery;
 
     // Today's participants
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
-    const { count: hoje } = await admin
+    let hojeQuery = admin
       .from('quiz_participantes')
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', orgId)
       .gte('created_at', todayStart.toISOString());
+    hojeQuery = addDiaFilter(hojeQuery);
+    const { count: hoje } = await hojeQuery;
 
     // Participants by hour (last 24h) for chart
     const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const { data: recentParticipants } = await admin
+    let chartQuery = admin
       .from('quiz_participantes')
       .select('created_at')
       .eq('organization_id', orgId)
       .gte('created_at', last24h.toISOString())
       .order('created_at', { ascending: true });
+    chartQuery = addDiaFilter(chartQuery);
+    const { data: recentParticipants } = await chartQuery;
 
     // Group by hour
     const porHora: Record<string, number> = {};
@@ -62,18 +76,22 @@ export async function GET() {
     }));
 
     // Last 10 participants
-    const { data: ultimos } = await admin
+    let ultimosQuery = admin
       .from('quiz_participantes')
-      .select('id, nome, empresa, telefone, palpite, created_at')
+      .select('id, nome, empresa, telefone, palpite, created_at, dia_feira')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
       .limit(10);
+    ultimosQuery = addDiaFilter(ultimosQuery);
+    const { data: ultimos } = await ultimosQuery;
 
     // Average guess
-    const { data: allGuesses } = await admin
+    let guessQuery = admin
       .from('quiz_participantes')
       .select('palpite')
       .eq('organization_id', orgId);
+    guessQuery = addDiaFilter(guessQuery);
+    const { data: allGuesses } = await guessQuery;
 
     let mediaPalpite = 0;
     let menorPalpite = 0;

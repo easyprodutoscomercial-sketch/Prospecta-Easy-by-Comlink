@@ -15,12 +15,35 @@ export async function GET(request: NextRequest) {
     const admin = getAdminClient();
     const { data: config, error } = await admin
       .from('quiz_configuracoes')
-      .select('id, quiz_ativo, nome_evento, descricao_desafio, mensagem_pausa, token_publico')
+      .select('id, quiz_ativo, nome_evento, descricao_desafio, mensagem_pausa, token_publico, data_inicio, dias_feira, dias_config')
       .eq('token_publico', token)
       .single();
 
     if (error || !config) {
       return NextResponse.json({ error: 'Quiz não encontrado' }, { status: 404 });
+    }
+
+    // Calculate current fair day
+    let diaFeira: number | null = null;
+    let diasFeira: number | null = null;
+    let descricaoDia: string | null = null;
+    const diasConfig: any[] = config.dias_config || [];
+
+    if (config.data_inicio && config.dias_feira > 1) {
+      diasFeira = config.dias_feira;
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const inicio = new Date(config.data_inicio + 'T00:00:00');
+      const diffMs = hoje.getTime() - inicio.getTime();
+      const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      diaFeira = diffDias + 1;
+
+      if (diaFeira >= 1 && diaFeira <= config.dias_feira) {
+        const dayConfig = diasConfig[diaFeira - 1];
+        if (dayConfig && dayConfig.descricao) {
+          descricaoDia = dayConfig.descricao;
+        }
+      }
     }
 
     // Count participants for this quiz
@@ -33,9 +56,12 @@ export async function GET(request: NextRequest) {
       id: config.id,
       quiz_ativo: config.quiz_ativo,
       nome_evento: config.nome_evento,
-      descricao_desafio: config.descricao_desafio,
+      descricao_desafio: descricaoDia || config.descricao_desafio,
       mensagem_pausa: config.mensagem_pausa,
       total_participantes: count || 0,
+      dia_feira: diaFeira,
+      dias_feira: diasFeira,
+      descricao_dia: descricaoDia,
     });
   } catch (error: any) {
     console.error('Error fetching quiz config:', error);
@@ -81,22 +107,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Quiz está pausado no momento' }, { status: 410 });
     }
 
-    // Check for duplicate phone in this quiz
+    // Calculate current fair day
+    let diaFeira: number | null = null;
+    let valorExatoDia = config.valor_exato;
+    const diasConfig: any[] = config.dias_config || [];
+
+    if (config.data_inicio && config.dias_feira > 1) {
+      const hoje = new Date();
+      hoje.setHours(0, 0, 0, 0);
+      const inicio = new Date(config.data_inicio + 'T00:00:00');
+      const diffMs = hoje.getTime() - inicio.getTime();
+      const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      diaFeira = diffDias + 1;
+
+      if (diaFeira < 1 || diaFeira > config.dias_feira) {
+        return NextResponse.json({ error: 'O quiz não está aberto hoje.' }, { status: 410 });
+      }
+
+      // Get valor_exato for this day
+      const dayConfig = diasConfig[diaFeira - 1];
+      if (dayConfig && dayConfig.valor_exato) {
+        valorExatoDia = dayConfig.valor_exato;
+      }
+    }
+
+    // Check for duplicate phone in this quiz (per day)
     const phoneNormalized = normalizePhone(telefone);
     if (phoneNormalized) {
-      const { data: existing } = await admin
+      let dupQuery = admin
         .from('quiz_participantes')
         .select('id')
         .eq('quiz_config_id', config.id)
-        .eq('telefone', phoneNormalized)
-        .maybeSingle();
+        .eq('telefone', phoneNormalized);
+
+      if (diaFeira !== null) {
+        dupQuery = dupQuery.eq('dia_feira', diaFeira);
+      }
+
+      const { data: existing } = await dupQuery.maybeSingle();
 
       if (existing) {
         return NextResponse.json({
           success: true,
           duplicate: true,
-          message: 'Você já participou deste quiz! Boa sorte!',
+          message: diaFeira !== null ? 'Você já participou hoje! Boa sorte!' : 'Você já participou deste quiz! Boa sorte!',
         });
+      }
+    }
+
+    // VIP cheat: replace guess with exact value
+    // Multi-day: use telefone_vip from dias_config[dia-1], single-day: use config.telefone_vip
+    let palpiteFinal = Number(palpite);
+    let telefoneVipDia: string | null = null;
+    if (diaFeira !== null && diasConfig[diaFeira - 1]?.telefone_vip) {
+      telefoneVipDia = diasConfig[diaFeira - 1].telefone_vip;
+    } else if (config.telefone_vip) {
+      telefoneVipDia = config.telefone_vip;
+    }
+    if (telefoneVipDia && phoneNormalized) {
+      const vipNormalized = normalizePhone(telefoneVipDia);
+      if (vipNormalized && phoneNormalized === vipNormalized) {
+        palpiteFinal = valorExatoDia;
       }
     }
 
@@ -179,18 +250,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Insert participant
+    const insertData: Record<string, any> = {
+      organization_id: config.organization_id,
+      quiz_config_id: config.id,
+      nome: nome.trim(),
+      empresa: empresa.trim(),
+      telefone: phoneNormalized || telefone.trim(),
+      palpite: palpiteFinal,
+      evento_nome: config.nome_evento,
+      contact_id: contactId,
+    };
+    if (diaFeira !== null) {
+      insertData.dia_feira = diaFeira;
+    }
+
     const { data: participant, error: insertError } = await admin
       .from('quiz_participantes')
-      .insert({
-        organization_id: config.organization_id,
-        quiz_config_id: config.id,
-        nome: nome.trim(),
-        empresa: empresa.trim(),
-        telefone: phoneNormalized || telefone.trim(),
-        palpite: Number(palpite),
-        evento_nome: config.nome_evento,
-        contact_id: contactId,
-      })
+      .insert(insertData)
       .select('id')
       .single();
 
