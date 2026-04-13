@@ -1,6 +1,7 @@
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
+import { processStageChangeAutomations } from '@/lib/automations/engine';
 
 // GET /api/lead-capture?token=xxx - Info publica do link (sem auth)
 export async function GET(request: NextRequest) {
@@ -221,6 +222,7 @@ export async function POST(request: NextRequest) {
         tipo: [],
         pipeline_id: link.pipeline_id,
         stage_id: firstStage.id,
+        event_id: event_id,
         assigned_to_user_id: link.user_id,
         created_by_user_id: link.user_id,
       };
@@ -266,6 +268,20 @@ export async function POST(request: NextRequest) {
           .from('event_booths')
           .update({ status: 'VISITADO' })
           .eq('id', booth_id);
+
+        // Dispara automações do stage inicial (tratamos como entrada de null → firstStage).
+        // Se falhar, não quebra o fluxo — lead já está salvo.
+        try {
+          await processStageChangeAutomations(
+            admin,
+            link.organization_id,
+            newContact.id,
+            null,
+            firstStage.id,
+          );
+        } catch (e) {
+          console.error('Error running automations for new lead (event flow):', e);
+        }
       }
 
       // Incrementar leads_count
@@ -365,20 +381,40 @@ export async function POST(request: NextRequest) {
     };
 
     // Tenta com todos os campos primeiro
-    let { error: insertError } = await admin
+    let { data: createdContact, error: insertError } = await admin
       .from('contacts')
-      .insert({ ...baseContactData, ...optionalFields });
+      .insert({ ...baseContactData, ...optionalFields })
+      .select('id')
+      .single();
 
     // Se falhou (coluna inexistente), tenta sem os opcionais
     if (insertError) {
       console.warn('Insert with optional fields failed, retrying without:', insertError.message);
-      const { error: retryError } = await admin
+      const { data: retryContact, error: retryError } = await admin
         .from('contacts')
-        .insert(baseContactData);
+        .insert(baseContactData)
+        .select('id')
+        .single();
 
       if (retryError) {
         console.error('Error creating lead via QR:', retryError);
         throw retryError;
+      }
+      createdContact = retryContact;
+    }
+
+    // Dispara automações do stage inicial. Se falhar, não quebra o fluxo.
+    if (createdContact?.id) {
+      try {
+        await processStageChangeAutomations(
+          admin,
+          link.organization_id,
+          createdContact.id,
+          null,
+          firstStage.id,
+        );
+      } catch (e) {
+        console.error('Error running automations for new lead (plain flow):', e);
       }
     }
 
