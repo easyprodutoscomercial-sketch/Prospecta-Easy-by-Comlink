@@ -338,21 +338,25 @@ CREATE POLICY "..." ON <tabela> FOR <op>
 
 ### Migrations
 
-⚠️ **ESTADO FRÁGIL:** o schema tem dois caminhos de atualização:
+⚠️ **ESTADO FRÁGIL:** o schema tem três caminhos de atualização:
 
-1. **Oficial:** `supabase/migrations/*.sql` (4 arquivos atualmente)
+1. **Oficial (supabase/migrations/):**
    - `20250304_pedidos_cotacoes.sql`
    - `20250305_pc_features_v2.sql`
    - `20260312_quiz_feira.sql`
    - `20260408_quiz_multidia.sql`
 
-2. **Manual:** `scripts/migration-*.sql` rodados via `scripts/run-migration-*.mjs` usando `pg` direto
+2. **Manual por pg (scripts/migration-*.sql via scripts/run-migration-*.mjs):**
    - `migration-events.sql`
    - `migration-cover-image.sql`
    - `migration-event-map.sql`
    - `migration-contact-event.sql`
 
-**Risco:** não há tabela `schema_migrations` confiável. Para subir um banco novo, é necessário rodar TUDO de `supabase/migrations/` **e mais** os scripts manuais na ordem certa. Ver `/docs/DECISOES_TECNICAS.md` para plano de consolidação.
+3. **Raiz do repo (schema-migration-v*.sql):** ~24 arquivos históricos `v1` até `v24`. Rodar via Supabase Management API (`POST /v1/projects/{ref}/database/query` com token `sbp_*`).
+
+**Estado real em produção (auditado em 2026-04-13):** todas as migrations v1-v24 e as 4 oficiais foram conferidas coluna a coluna. Neste dia foram rodadas as que faltavam: v21 (lead-scoring), v22 (automations), v23 (onboarding-roles) e 20260408 (quiz_multidia). Tabelas novas criadas: `lead_score_history`, `automation_rules`, `automation_executions`, `audit_log`, `push_subscriptions`, `onboarding_checklist`. Isso destravou: automações do kanban, histórico de lead score, audit log admin, push notifications, onboarding checklist, quiz multi-dia.
+
+**Risco remanescente:** não há tabela `schema_migrations` confiável. Antes de rodar qualquer SQL novo, auditar o estado real via `scripts/db-audit.mjs` ou query direta no `information_schema`. Ver `/docs/DECISOES_TECNICAS.md` para plano de consolidação.
 
 ---
 
@@ -1017,8 +1021,8 @@ Ver `docs/DECISOES_TECNICAS.md` para o plano completo.
 
 ### Armadilhas
 
-1. **Schema do banco "fantasma"**
-   Há 4 migrations oficiais + ~18 scripts manuais. Ninguém sabe com certeza o estado real. Antes de qualquer mudança grande no schema, rodar `scripts/db-audit.mjs`. Ver `DECISOES_TECNICAS.md`.
+1. **Schema do banco "fantasma" (parcialmente melhor)**
+   Há 3 caminhos de migration (ver seção 4). Em 2026-04-13 auditamos tudo via Management API e rodamos as pendentes (v21/v22/v23/quiz_multidia). Ainda assim, **não há tabela `schema_migrations`** — antes de rodar SQL novo, validar colunas/tabelas esperadas contra o `information_schema`. Ver `DECISOES_TECNICAS.md`.
 
 2. **Custo OpenAI sem teto**
    Cada OCR de cartão e cada análise de pipeline bate na OpenAI sem cache. Uma feira grande pode custar R$ centenas em horas. Implementar cache por hash de imagem / throttle por usuário.
