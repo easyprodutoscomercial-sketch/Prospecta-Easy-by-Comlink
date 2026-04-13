@@ -126,25 +126,41 @@ export async function POST(
     const phoneNorm = normalizePhone(contactPhone);
     const emailNorm = normalizeEmail(contactEmail);
 
-    // Tenta encontrar duplicata na mesma org por phone/email normalizado.
-    // IMPORTANTE: query builder do supabase-js e imutavel — cada .eq() retorna
-    // um novo builder. Por isso a gente reatribui em q = q.eq(...). O bug
-    // antigo mutava o original e o filtro sumia, fazendo maybeSingle() explodir
-    // com "mais de uma linha" em orgs com varios contatos.
+    // Tenta encontrar duplicata na mesma org por phone OU email normalizado.
+    // Busca os 2 em paralelo e pega o primeiro match. Antes, o codigo usava
+    // if/else if (phone else email) — se o usuario preenchesse os 2 e existisse
+    // outro contato com o mesmo email (mas telefone diferente), a busca por
+    // phone falhava e o codigo tentava INSERT, explodindo na UNIQUE constraint
+    // idx_contacts_unique_email (23505).
     let createdContact: any = null;
     if (phoneNorm || emailNorm) {
       step = 'dedupQuery';
-      let q = admin
-        .from('contacts')
-        .select('id, phone, email, event_id, name')
-        .eq('organization_id', profile.organization_id)
-        .limit(1);
+      const queries: Promise<any>[] = [];
       if (phoneNorm) {
-        q = q.eq('phone_normalized', phoneNorm);
-      } else if (emailNorm) {
-        q = q.eq('email_normalized', emailNorm);
+        queries.push(
+          admin
+            .from('contacts')
+            .select('id, phone, email, event_id, name')
+            .eq('organization_id', profile.organization_id)
+            .eq('phone_normalized', phoneNorm)
+            .limit(1)
+            .maybeSingle()
+        );
       }
-      const { data: dup, error: dupErr } = await q.maybeSingle();
+      if (emailNorm) {
+        queries.push(
+          admin
+            .from('contacts')
+            .select('id, phone, email, event_id, name')
+            .eq('organization_id', profile.organization_id)
+            .eq('email_normalized', emailNorm)
+            .limit(1)
+            .maybeSingle()
+        );
+      }
+      const results = await Promise.all(queries);
+      const dup = results.find(r => r?.data?.id)?.data || null;
+      const dupErr = results.find(r => r?.error)?.error || null;
       if (dupErr) {
         console.error('[walk-in] dedup query error:', dupErr);
         // Nao trava o fluxo — segue e cria contato novo.
