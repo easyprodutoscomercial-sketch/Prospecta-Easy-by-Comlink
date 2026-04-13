@@ -3366,10 +3366,27 @@ function WalkInForm({
       } else if (result.response) {
         // Erro HTTP — tenta ler a mensagem
         let errMsg = 'Erro ao enviar. Tente novamente.';
+        let fullBody: any = null;
         try {
-          const data = await result.response.json();
-          if (data?.error) errMsg = data.error;
+          fullBody = await result.response.json();
+          if (fullBody?.error) errMsg = fullBody.error;
         } catch { /* ignora */ }
+        // DEBUG TEMPORARIO: mostra tudo do body num alert pra diagnostico.
+        // Remover apos encontrar a causa do 500.
+        if (result.response.status === 500 && fullBody) {
+          const lines = [
+            `STATUS: ${result.response.status}`,
+            `STEP: ${fullBody.step || '-'}`,
+            `ERROR: ${fullBody.error || '-'}`,
+            `CODE: ${fullBody.code || '-'}`,
+            `NAME: ${fullBody.name || '-'}`,
+            `DETAILS: ${fullBody.details || '-'}`,
+            `HINT: ${fullBody.hint || '-'}`,
+            `STACK:`,
+            (fullBody.stack || '-'),
+          ];
+          try { alert(lines.join('\n')); } catch {}
+        }
         setSuccessMsg(errMsg);
         setTimeout(() => setSuccessMsg(null), 3000);
       }
