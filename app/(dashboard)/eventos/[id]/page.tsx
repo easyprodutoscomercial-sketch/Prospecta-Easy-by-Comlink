@@ -6,6 +6,7 @@ import Link from 'next/link';
 import type { FairEvent, EventBooth, BoothVisit } from '@/lib/types';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS, BOOTH_STATUS_COLORS, PROSPECT_TYPE_LABELS, PROSPECT_TYPE_COLORS } from '@/lib/utils/labels';
 import { enqueueOrSend, fileToBase64 } from '@/lib/offline/queue';
+import EditEventModal from '@/components/eventos/edit-event-modal';
 
 // Parser seguro de data ISO vinda do banco. Aceita tanto 'YYYY-MM-DD' quanto
 // 'YYYY-MM-DDT...' (com tempo/zona), sempre fixando ao meio-dia local pra
@@ -124,6 +125,17 @@ export default function EventDetailPage() {
             Fazer Check-in
           </button>
           <StatusToggle event={event} onUpdate={fetchEvent} />
+          <a
+            href={`/api/events/${id}/export-contacts`}
+            download
+            className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded-lg text-xs font-medium hover:bg-emerald-500/15 hover:border-emerald-400 transition-colors flex items-center gap-1.5"
+            title="Baixar planilha Excel com todos os leads capturados neste evento"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Exportar Leads
+          </a>
           <button
             onClick={() => setShowEdit(true)}
             className="px-3 py-1.5 bg-purple-800/30 text-purple-200/70 border border-purple-700/30 rounded-lg text-xs font-medium hover:bg-purple-800/50 hover:text-white transition-colors flex items-center gap-1.5"
@@ -251,7 +263,7 @@ export default function EventDetailPage() {
       )}
 
       {/* Tab content */}
-      {tab === 'dashboard' && <DashboardTab eventId={id} />}
+      {tab === 'dashboard' && <DashboardTab eventId={id} event={event} />}
       {tab === 'stands' && (
         <StandsTab
           eventId={id}
@@ -289,176 +301,6 @@ export default function EventDetailPage() {
 }
 
 // --- Edit Event Modal ---
-function EditEventModal({ event, onClose, onSaved }: { event: FairEvent; onClose: () => void; onSaved: () => void }) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [form, setForm] = useState({
-    name: event.name,
-    location: event.location || '',
-    start_date: event.start_date,
-    end_date: event.end_date,
-    pipeline_id: event.pipeline_id || '',
-    stage_id: event.stage_id || '',
-  });
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreview, setCoverPreview] = useState<string | null>(event.cover_image_url || null);
-  const [pipelines, setPipelines] = useState<any[]>([]);
-  const [stages, setStages] = useState<any[]>([]);
-
-  useEffect(() => {
-    fetch('/api/pipelines').then((r) => r.json()).then((d) => setPipelines(d.pipelines || d || [])).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    if (form.pipeline_id) {
-      const p = pipelines.find((p: any) => p.id === form.pipeline_id);
-      setStages(p?.stages || []);
-    } else {
-      setStages([]);
-    }
-  }, [form.pipeline_id, pipelines]);
-
-  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setCoverFile(file);
-      setCoverPreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.name || !form.start_date || !form.end_date) {
-      setError('Preencha nome e datas');
-      return;
-    }
-    if (!form.pipeline_id) {
-      setError('Selecione uma pipeline');
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      if (coverFile) {
-        const formData = new FormData();
-        formData.append('name', form.name);
-        formData.append('location', form.location);
-        formData.append('start_date', form.start_date);
-        formData.append('end_date', form.end_date);
-        formData.append('pipeline_id', form.pipeline_id);
-        formData.append('stage_id', form.stage_id);
-        formData.append('cover_image', coverFile);
-        const res = await fetch(`/api/events/${event.id}`, { method: 'PUT', body: formData });
-        if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Erro'); }
-      } else {
-        const res = await fetch(`/api/events/${event.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(form),
-        });
-        if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Erro'); }
-      }
-      onSaved();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-bold text-white mb-4">Editar Evento</h2>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm mb-4">{error}</div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Cover image */}
-          <div>
-            <label className="block text-sm font-medium text-purple-200/80 mb-1">Capa do Evento</label>
-            <div className="relative">
-              {coverPreview ? (
-                <div className="relative h-36 rounded-lg overflow-hidden border border-purple-700/30">
-                  <img src={coverPreview} alt="Capa" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => { setCoverFile(null); setCoverPreview(null); }}
-                    className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white hover:bg-black/70"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ) : (
-                <label className="flex flex-col items-center justify-center h-36 border-2 border-dashed border-purple-700/30 rounded-lg cursor-pointer hover:border-emerald-500/30 transition-colors">
-                  <svg className="w-8 h-8 text-purple-500/30 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                  <span className="text-xs text-purple-300/40">Clique para adicionar capa</span>
-                  <input type="file" accept="image/*" className="hidden" onChange={handleCoverChange} />
-                </label>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-purple-200/80 mb-1">Nome *</label>
-            <input type="text" required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputClass} />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-purple-200/80 mb-1">Local</label>
-            <input type="text" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} className={inputClass} />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-purple-200/80 mb-1">Data Inicio *</label>
-              <input type="date" required value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className={inputClass} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-purple-200/80 mb-1">Data Fim *</label>
-              <input type="date" required value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} className={inputClass} />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-purple-200/80 mb-1">Pipeline <span className="text-red-400">*</span></label>
-            <select value={form.pipeline_id} onChange={(e) => setForm((f) => ({ ...f, pipeline_id: e.target.value, stage_id: '' }))} className={inputClass} required>
-              <option value="">Selecione uma pipeline</option>
-              {pipelines.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
-          </div>
-
-          {stages.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-purple-200/80 mb-1">Estagio Inicial</label>
-              <select value={form.stage_id} onChange={(e) => setForm((f) => ({ ...f, stage_id: e.target.value }))} className={inputClass}>
-                {stages.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
-            </div>
-          )}
-
-          <div className="flex gap-3 pt-2">
-            <button type="submit" disabled={loading} className="flex-1 px-4 py-2.5 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 disabled:opacity-50 text-sm">
-              {loading ? 'Salvando...' : 'Salvar'}
-            </button>
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-purple-800/30 text-purple-200 rounded-lg font-medium hover:bg-purple-800/50 text-sm">
-              Cancelar
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 // --- Status Toggle ---
 function StatusToggle({ event, onUpdate }: { event: FairEvent; onUpdate: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -501,7 +343,159 @@ function StatusToggle({ event, onUpdate }: { event: FairEvent; onUpdate: () => v
 }
 
 // --- Dashboard Tab ---
-function DashboardTab({ eventId }: { eventId: string }) {
+// --- Meta + Urgência Card ---
+// Mostra "quanto falta pra bater a meta de visitar todos os stands" com
+// indicador visual de urgência baseado em quantos dias restam no evento.
+// Só aparece se o evento está ATIVO e tem stands cadastrados.
+function MetaUrgenciaCard({ event, stats }: { event: FairEvent; stats: any }) {
+  if (event.status !== 'ATIVO') return null;
+  const total = stats.total_booths || 0;
+  if (total === 0) return null;
+
+  const visited = stats.visited_booths || 0;
+  const pending = total - visited;
+  const progressPct = Math.round((visited / total) * 100);
+
+  // Calcula dias do evento e dias restantes
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const startDate = new Date(event.start_date.slice(0, 10) + 'T00:00:00');
+  const endDate = new Date(event.end_date.slice(0, 10) + 'T00:00:00');
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const totalDays = Math.max(1, Math.floor((endDate.getTime() - startDate.getTime()) / msPerDay) + 1);
+  const daysElapsed = Math.max(0, Math.floor((today.getTime() - startDate.getTime()) / msPerDay) + 1);
+  const daysRemaining = Math.max(0, Math.floor((endDate.getTime() - today.getTime()) / msPerDay) + 1);
+
+  const eventNotStarted = today < startDate;
+  const eventEnded = today > endDate;
+
+  // Velocidade requerida (stands/dia) pra bater 100% até o fim
+  const requiredPerDay = daysRemaining > 0 ? Math.ceil(pending / daysRemaining) : pending;
+
+  // Se o evento tá no meio do caminho, compara progresso esperado vs real
+  // esperado = (daysElapsed / totalDays) * 100
+  const expectedPct = Math.min(100, Math.round((Math.max(1, daysElapsed) / totalDays) * 100));
+  const delta = progressPct - expectedPct; // positivo = à frente, negativo = atrás
+
+  // Determina urgência
+  let urgencia: 'ok' | 'atencao' | 'critico' | 'concluido' | 'aguardando' = 'ok';
+  let mensagem = '';
+  let cor = { bg: '', border: '', text: '', barFrom: '', barTo: '', icon: '' };
+
+  if (eventNotStarted) {
+    urgencia = 'aguardando';
+    mensagem = `Evento começa em ${Math.floor((startDate.getTime() - today.getTime()) / msPerDay)} dia(s). Prepare os stands!`;
+    cor = {
+      bg: 'bg-purple-500/10', border: 'border-purple-500/30', text: 'text-purple-300',
+      barFrom: 'from-purple-600', barTo: 'to-purple-400', icon: 'text-purple-400',
+    };
+  } else if (eventEnded) {
+    if (progressPct === 100) {
+      urgencia = 'concluido';
+      mensagem = `Evento encerrado com cobertura total! 🎯`;
+      cor = {
+        bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300',
+        barFrom: 'from-emerald-600', barTo: 'to-emerald-400', icon: 'text-emerald-400',
+      };
+    } else {
+      urgencia = 'critico';
+      mensagem = `Evento encerrado. ${pending} stand(s) ficaram sem visita.`;
+      cor = {
+        bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-300',
+        barFrom: 'from-red-600', barTo: 'to-red-400', icon: 'text-red-400',
+      };
+    }
+  } else if (progressPct >= 100) {
+    urgencia = 'concluido';
+    mensagem = `🎯 Todos os stands visitados! Faltam ${daysRemaining} dia(s) pra fechar.`;
+    cor = {
+      bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300',
+      barFrom: 'from-emerald-600', barTo: 'to-emerald-400', icon: 'text-emerald-400',
+    };
+  } else if (delta < -15) {
+    urgencia = 'critico';
+    mensagem = `🚨 Atrasado: faltam ${pending} stands em ${daysRemaining} dia(s). Ritmo necessário: ${requiredPerDay}/dia.`;
+    cor = {
+      bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-300',
+      barFrom: 'from-red-600', barTo: 'to-red-400', icon: 'text-red-400',
+    };
+  } else if (delta < 0) {
+    urgencia = 'atencao';
+    mensagem = `⚠️ Ritmo apertado: faltam ${pending} stands em ${daysRemaining} dia(s). Necessário ${requiredPerDay}/dia.`;
+    cor = {
+      bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-300',
+      barFrom: 'from-amber-600', barTo: 'to-amber-400', icon: 'text-amber-400',
+    };
+  } else {
+    urgencia = 'ok';
+    mensagem = `✅ No ritmo: ${pending} stand(s) restante(s) em ${daysRemaining} dia(s).`;
+    cor = {
+      bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300',
+      barFrom: 'from-emerald-600', barTo: 'to-emerald-400', icon: 'text-emerald-400',
+    };
+  }
+
+  return (
+    <div className={`rounded-xl border-2 p-5 ${cor.bg} ${cor.border} transition-all`}>
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className={`shrink-0 w-10 h-10 rounded-lg flex items-center justify-center ${cor.bg}`}>
+            <svg className={`w-5 h-5 ${cor.icon}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-bold uppercase tracking-widest opacity-60 mb-0.5">Meta do Evento</div>
+            <div className={`text-base font-bold ${cor.text}`}>{mensagem}</div>
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className={`text-3xl font-black ${cor.text} leading-none`}>{progressPct}%</div>
+          <div className="text-[10px] opacity-60 mt-0.5">
+            {visited}/{total} stands
+          </div>
+        </div>
+      </div>
+
+      {/* Barra de progresso + ticks de expectativa */}
+      <div className="relative w-full bg-purple-900/40 rounded-full h-4 overflow-hidden">
+        <div
+          className={`h-4 rounded-full bg-gradient-to-r ${cor.barFrom} ${cor.barTo} transition-all`}
+          style={{ width: `${progressPct}%` }}
+        />
+        {/* Marcador de progresso esperado (linha vertical branca) */}
+        {!eventNotStarted && !eventEnded && expectedPct > 0 && expectedPct < 100 && (
+          <div
+            className="absolute top-0 bottom-0 w-0.5 bg-white/70"
+            style={{ left: `${expectedPct}%` }}
+            title={`Progresso esperado: ${expectedPct}%`}
+          />
+        )}
+      </div>
+
+      {/* Footer com dias e ritmo */}
+      {!eventNotStarted && !eventEnded && (
+        <div className="flex items-center justify-between mt-3 text-[11px] opacity-70">
+          <span>
+            <strong className={cor.text}>Dia {Math.min(daysElapsed, totalDays)}</strong> de {totalDays}
+          </span>
+          <span>
+            {daysRemaining > 0
+              ? <>Faltam <strong className={cor.text}>{daysRemaining}</strong> dia(s)</>
+              : <>Último dia</>}
+          </span>
+          {progressPct < 100 && daysRemaining > 0 && (
+            <span>
+              Ritmo: <strong className={cor.text}>{requiredPerDay}/dia</strong>
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DashboardTab({ eventId, event }: { eventId: string; event: FairEvent }) {
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [expandedDay, setExpandedDay] = useState<string | null>(null);
@@ -562,6 +556,9 @@ function DashboardTab({ eventId }: { eventId: string }) {
         <StatCard label="Dias com Visitas" value={stats.days_with_visits} color="emerald" />
         <StatCard label="Media/Dia" value={stats.avg_visits_per_day} color="cyan" />
       </div>
+
+      {/* Meta + Urgência visual — só aparece se evento está ATIVO com datas */}
+      <MetaUrgenciaCard event={event} stats={stats} />
 
       {/* Progress bar */}
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
@@ -3162,7 +3159,14 @@ function MapTab({
   const mapFileInputRef = useRef<HTMLInputElement>(null);
   const importFileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ created: number; skipped: number; errors: number } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    created: number;
+    skipped: number;
+    errors: number;
+    total_rows?: number;
+    rejected_sample?: Array<{ row_number: number; reason: string; preview: string }>;
+  } | null>(null);
+  const [showRejectedDetails, setShowRejectedDetails] = useState(false);
 
   // Live presence
   const [livePresence, setLivePresence] = useState<{
@@ -3289,6 +3293,7 @@ function MapTab({
   const handleImportCSV = async (file: File) => {
     setImporting(true);
     setImportResult(null);
+    setShowRejectedDetails(false);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -3298,7 +3303,13 @@ function MapTab({
       });
       const data = await res.json();
       if (res.ok) {
-        setImportResult({ created: data.created || 0, skipped: data.skipped || 0, errors: data.errors || 0 });
+        setImportResult({
+          created: data.created || 0,
+          skipped: data.skipped || 0,
+          errors: data.errors || 0,
+          total_rows: data.total_rows,
+          rejected_sample: data.rejected_sample || [],
+        });
         fetchBooths();
       } else {
         setImportResult({ created: 0, skipped: 0, errors: 1 });
@@ -3307,7 +3318,13 @@ function MapTab({
       setImportResult({ created: 0, skipped: 0, errors: 1 });
     } finally {
       setImporting(false);
-      setTimeout(() => setImportResult(null), 6000);
+      // Auto-dismiss só quando não há rejeições (se tiver, o usuário precisa ler com calma)
+      setTimeout(() => {
+        setImportResult((prev) => {
+          if (prev && (prev.errors > 0 || prev.skipped > 0)) return prev;
+          return null;
+        });
+      }, 6000);
     }
   };
 
@@ -3632,16 +3649,70 @@ function MapTab({
         </div>
       )}
 
-      {/* Feedback de import */}
+      {/* Feedback de import — detalhado com lista de rejeições */}
       {importResult && (
-        <div className={`p-3 rounded-lg text-sm border ${
+        <div className={`rounded-lg border ${
           importResult.errors > 0 && importResult.created === 0
             ? 'bg-red-500/10 border-red-500/30 text-red-300'
+            : importResult.skipped > 0 || importResult.errors > 0
+            ? 'bg-amber-500/10 border-amber-500/30 text-amber-200'
             : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
         }`}>
-          ✓ Import concluído: <strong>{importResult.created}</strong> stands criados
-          {importResult.skipped > 0 && <> · {importResult.skipped} duplicados ignorados</>}
-          {importResult.errors > 0 && <> · {importResult.errors} erros</>}
+          <div className="p-3 flex items-start justify-between gap-3">
+            <div className="flex-1 text-sm">
+              <div className="font-semibold mb-0.5">
+                {importResult.created > 0 ? '✓ ' : '⚠️ '}
+                Import concluído
+                {importResult.total_rows != null && (
+                  <span className="font-normal opacity-70"> · {importResult.total_rows} linha(s) lidas</span>
+                )}
+              </div>
+              <div className="text-xs opacity-90">
+                <strong>{importResult.created}</strong> stands criados
+                {importResult.skipped > 0 && <> · <strong>{importResult.skipped}</strong> duplicados ignorados</>}
+                {importResult.errors > 0 && <> · <strong>{importResult.errors}</strong> com erro</>}
+              </div>
+            </div>
+            {importResult.rejected_sample && importResult.rejected_sample.length > 0 && (
+              <button
+                onClick={() => setShowRejectedDetails((v) => !v)}
+                className="shrink-0 px-2.5 py-1 text-xs font-semibold rounded-md bg-white/10 hover:bg-white/15 transition-colors"
+              >
+                {showRejectedDetails ? 'Ocultar detalhes' : 'Ver detalhes'}
+              </button>
+            )}
+            <button
+              onClick={() => setImportResult(null)}
+              className="shrink-0 p-1 opacity-60 hover:opacity-100 transition-opacity"
+              aria-label="Fechar"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {showRejectedDetails && importResult.rejected_sample && importResult.rejected_sample.length > 0 && (
+            <div className="border-t border-current/20 px-3 py-2 text-xs">
+              <div className="mb-1.5 opacity-70">Linhas não importadas (até 20):</div>
+              <div className="space-y-1 max-h-64 overflow-y-auto">
+                {importResult.rejected_sample.map((r, i) => (
+                  <div key={i} className="flex items-baseline gap-2 font-mono text-[11px]">
+                    <span className="shrink-0 opacity-60">
+                      {r.row_number > 0 ? `Linha ${r.row_number}:` : '—'}
+                    </span>
+                    <span className="shrink-0 font-semibold">{r.reason}</span>
+                    <span className="opacity-60 truncate">{r.preview}</span>
+                  </div>
+                ))}
+              </div>
+              {((importResult.skipped + importResult.errors) > importResult.rejected_sample.length) && (
+                <div className="mt-2 opacity-60 italic">
+                  ... e mais {(importResult.skipped + importResult.errors) - importResult.rejected_sample.length} linha(s) não mostradas
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

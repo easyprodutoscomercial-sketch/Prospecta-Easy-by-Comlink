@@ -102,20 +102,41 @@ export async function POST(
     let errors = 0;
     const toInsert: any[] = [];
     const seenInBatch = new Set<string>();
+    // Amostra das linhas rejeitadas pra mostrar feedback ao usuário (máximo 20)
+    const MAX_REJECTED_SAMPLE = 20;
+    const rejectedSample: Array<{ row_number: number; reason: string; preview: string }> = [];
 
-    for (const row of rows) {
+    const addRejected = (rowNumber: number, reason: string, row: any) => {
+      if (rejectedSample.length >= MAX_REJECTED_SAMPLE) return;
+      const preview = Object.entries(row)
+        .filter(([_, v]) => v !== '' && v !== null && v !== undefined)
+        .slice(0, 4)
+        .map(([k, v]) => `${k}: ${String(v).slice(0, 40)}`)
+        .join(' | ');
+      rejectedSample.push({ row_number: rowNumber, reason, preview: preview || '(vazia)' });
+    };
+
+    rows.forEach((row, idx) => {
+      const rowNumber = idx + 2; // +2 porque linha 1 é header, e humanos contam a partir de 1
       const company_name = pickField(row, companyKeys);
       if (!company_name) {
         errors++;
-        continue;
+        addRejected(rowNumber, 'Sem nome da empresa', row);
+        return;
       }
       const booth_number = pickField(row, boothKeys) || null;
       const sector = pickField(row, sectorKeys) || null;
 
       const dedupeKey = `${normalize(company_name)}|${normalize(booth_number || '')}`;
-      if (existingKeys.has(dedupeKey) || seenInBatch.has(dedupeKey)) {
+      if (existingKeys.has(dedupeKey)) {
         skipped++;
-        continue;
+        addRejected(rowNumber, 'Já cadastrado no evento', row);
+        return;
+      }
+      if (seenInBatch.has(dedupeKey)) {
+        skipped++;
+        addRejected(rowNumber, 'Duplicado dentro da mesma planilha', row);
+        return;
       }
       seenInBatch.add(dedupeKey);
 
@@ -127,7 +148,7 @@ export async function POST(
         sector,
         status: 'PENDENTE',
       });
-    }
+    });
 
     if (toInsert.length > 0) {
       // Insere em batches de 100
@@ -137,6 +158,7 @@ export async function POST(
         const { error } = await admin.from('event_booths').insert(chunk);
         if (error) {
           errors += chunk.length;
+          addRejected(0, `Erro do banco: ${error.message.slice(0, 100)}`, {});
         } else {
           created += chunk.length;
         }
@@ -148,6 +170,8 @@ export async function POST(
       skipped,
       errors,
       total_rows: rows.length,
+      rejected_sample: rejectedSample,
+      rejected_total: errors + skipped,
     });
   } catch (error: any) {
     console.error('[booths/import] error:', error);
