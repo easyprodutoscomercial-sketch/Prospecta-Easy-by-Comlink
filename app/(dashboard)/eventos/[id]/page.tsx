@@ -709,11 +709,11 @@ function DashboardTab({ eventId, event }: { eventId: string; event: FairEvent })
         <StatCard label="Progresso" value={`${stats.progress_pct}%`} color="cyan" />
       </div>
 
-      {/* Secondary KPIs */}
+      {/* Secondary KPIs — os 3 de leads sao clicaveis, abrem /contacts filtrado pelo evento */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Visitas Stand" value={stats.total_visits} color="purple" />
-        <StatCard label="Leads Avulsos" value={stats.total_walk_ins || 0} color="cyan" />
-        <StatCard label="Total de Leads" value={stats.total_leads_event || stats.total_visits} color="emerald" />
+        <StatCard label="Visitas Stand" value={stats.total_visits} color="purple" href={`/contacts?event_id=${eventId}`} />
+        <StatCard label="Leads Avulsos" value={stats.total_walk_ins || 0} color="cyan" href={`/contacts?event_id=${eventId}`} />
+        <StatCard label="Total de Leads" value={stats.total_leads_event || stats.total_visits} color="emerald" href={`/contacts?event_id=${eventId}`} />
         <StatCard label="Media/Dia" value={stats.avg_visits_per_day} color="cyan" />
       </div>
 
@@ -993,7 +993,7 @@ function DashboardTab({ eventId, event }: { eventId: string; event: FairEvent })
   );
 }
 
-function StatCard({ label, value, color = 'purple' }: { label: string; value: string | number; color?: string }) {
+function StatCard({ label, value, color = 'purple', href }: { label: string; value: string | number; color?: string; href?: string }) {
   const colorMap: Record<string, string> = {
     emerald: 'text-emerald-400',
     amber: 'text-amber-400',
@@ -1001,10 +1001,28 @@ function StatCard({ label, value, color = 'purple' }: { label: string; value: st
     purple: 'text-purple-300',
   };
 
-  return (
-    <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
+  const inner = (
+    <>
       <p className="text-purple-300/50 text-xs mb-1">{label}</p>
       <p className={`text-2xl font-bold ${colorMap[color] || colorMap.purple}`}>{value}</p>
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 block hover:border-emerald-500/60 hover:bg-[#241142] transition-colors cursor-pointer"
+        title="Ver lista de leads"
+      >
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
+      {inner}
     </div>
   );
 }
