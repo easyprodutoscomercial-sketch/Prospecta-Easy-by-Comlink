@@ -2449,28 +2449,48 @@ function CheckInForm({
         }
       }
 
-      const formData = new FormData();
-      formData.append('booth_id', booth.id);
-      formData.append('contact_name', form.contact_name);
-      formData.append('contact_role', form.contact_role);
-      formData.append('prospect_type', form.prospect_type);
-      formData.append('notes', finalNotes);
-      if (scannedExtras?.phone) formData.append('contact_phone', scannedExtras.phone);
-      if (scannedExtras?.email) formData.append('contact_email', scannedExtras.email);
-      if (facadeFile) formData.append('photo_facade', facadeFile);
-      if (contactFile) formData.append('photo_contact', contactFile);
+      // Monta campos de texto
+      const fields: Record<string, string> = {
+        booth_id: booth.id,
+        contact_name: form.contact_name,
+        contact_role: form.contact_role,
+        prospect_type: form.prospect_type,
+        notes: finalNotes,
+      };
+      if (scannedExtras?.phone) fields.contact_phone = scannedExtras.phone;
+      if (scannedExtras?.email) fields.contact_email = scannedExtras.email;
 
-      const res = await fetch(`/api/events/${eventId}/check-in`, {
+      // Converte fotos para base64 (sobrevive no IndexedDB se offline)
+      const files: Array<{ field: string; name: string; type: string; base64: string }> = [];
+      if (facadeFile) {
+        const b64 = await fileToBase64(facadeFile);
+        files.push({ field: 'photo_facade', ...b64 });
+      }
+      if (contactFile) {
+        const b64 = await fileToBase64(contactFile);
+        files.push({ field: 'photo_contact', ...b64 });
+      }
+
+      const result = await enqueueOrSend({
+        type: 'booth-checkin',
+        endpoint: `/api/events/${eventId}/check-in`,
         method: 'POST',
-        body: formData,
+        body: { __form: true, fields, files },
+        meta: { booth_id: booth.id, booth_name: booth.company_name, event_id: eventId },
       });
 
-      if (res.ok) {
-        // Limpa rascunho — dados estão seguros no servidor
+      if (result.sent) {
+        // Enviado com sucesso — limpa rascunho
+        draftClear(draftKey).catch(() => {});
+        setSuccess(true);
+        setTimeout(onDone, 1500);
+      } else if (result.queued) {
+        // Offline — enfileirou. Payload (com fotos em base64) está seguro no IndexedDB.
         draftClear(draftKey).catch(() => {});
         setSuccess(true);
         setTimeout(onDone, 1500);
       }
+      // Se result.response existe (erro HTTP), mantém rascunho pro usuário tentar de novo.
     } catch {
       // silent — mantém rascunho pro usuário tentar de novo
     } finally {
