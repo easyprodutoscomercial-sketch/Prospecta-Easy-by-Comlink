@@ -49,16 +49,22 @@ export async function POST(
       return NextResponse.json({ error: 'Stand nao encontrado' }, { status: 404 });
     }
 
-    // Fetch existing active lead_capture_links for this user + pipeline
-    const { data: links, error: linksError } = await admin
+    // Fetch active lead_capture_links for this user + pipeline.
+    // Prioriza links ja amarrados a este evento (event_id bate). Se nao houver,
+    // cai nos links genericos (event_id null) do mesmo pipeline.
+    const { data: allLinks, error: linksError } = await admin
       .from('lead_capture_links')
-      .select('id, token, label, pipeline_id, whatsapp_vendedor')
+      .select('id, token, label, pipeline_id, whatsapp_vendedor, event_id')
       .eq('user_id', user.id)
       .eq('pipeline_id', event.pipeline_id)
       .eq('is_active', true)
       .order('created_at', { ascending: false });
 
     if (linksError) throw linksError;
+
+    const linksForThisEvent = (allLinks || []).filter((l: any) => l.event_id === eventId);
+    const genericLinks = (allLinks || []).filter((l: any) => l.event_id === null);
+    const links = linksForThisEvent.length > 0 ? linksForThisEvent : genericLinks;
 
     if (!links || links.length === 0) {
       return NextResponse.json({
@@ -69,10 +75,11 @@ export async function POST(
     const baseUrl = request.nextUrl.origin;
 
     // Return all links so user can pick, with first as default
-    const linksWithUrl = links.map((l) => ({
+    const linksWithUrl = links.map((l: any) => ({
       id: l.id,
       token: l.token,
       label: l.label,
+      event_scoped: l.event_id === eventId,
       url: `${baseUrl}/lead-capture/${l.token}?event=${eventId}&booth=${boothId}`,
     }));
 

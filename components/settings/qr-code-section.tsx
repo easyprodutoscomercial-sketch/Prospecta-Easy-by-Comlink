@@ -8,12 +8,21 @@ interface Pipeline {
   name: string;
 }
 
+interface EventOption {
+  id: string;
+  name: string;
+  status: string;
+  pipeline_id: string | null;
+}
+
 interface LeadCaptureLink {
   id: string;
   token: string;
   label: string | null;
   pipeline_id: string;
   pipeline_name: string;
+  event_id: string | null;
+  event_name: string | null;
   is_active: boolean;
   leads_count: number;
   created_at: string;
@@ -21,8 +30,10 @@ interface LeadCaptureLink {
 
 export default function QrCodeSection() {
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [events, setEvents] = useState<EventOption[]>([]);
   const [links, setLinks] = useState<LeadCaptureLink[]>([]);
   const [selectedPipeline, setSelectedPipeline] = useState('');
+  const [selectedEvent, setSelectedEvent] = useState('');
   const [label, setLabel] = useState('');
   const [whatsappVendedor, setWhatsappVendedor] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -58,9 +69,39 @@ export default function QrCodeSection() {
       } catch { /* silent */ }
     };
 
+    // Fetch eventos (pra dropdown de amarrar QR a evento especifico)
+    const fetchEvents = async () => {
+      try {
+        const res = await fetch('/api/events');
+        if (res.ok) {
+          const data = await res.json();
+          const raw = Array.isArray(data) ? data : (data.events || []);
+          // Mostra ATIVO e RASCUNHO (ENCERRADO nao faz sentido pra QR novo)
+          const usable = raw.filter((e: any) => e.status !== 'ENCERRADO');
+          setEvents(usable.map((e: any) => ({
+            id: e.id,
+            name: e.name,
+            status: e.status,
+            pipeline_id: e.pipeline_id || null,
+          })));
+        }
+      } catch { /* silent */ }
+    };
+
     fetchPipelines();
+    fetchEvents();
     fetchLinks();
   }, [fetchLinks]);
+
+  // Quando o usuario escolhe um evento, auto-preenche pipeline e label
+  const handleEventChange = (eventId: string) => {
+    setSelectedEvent(eventId);
+    if (!eventId) return;
+    const ev = events.find((e) => e.id === eventId);
+    if (!ev) return;
+    if (ev.pipeline_id) setSelectedPipeline(ev.pipeline_id);
+    if (!label.trim()) setLabel(ev.name);
+  };
 
   const getFullUrl = (token: string) => {
     if (typeof window !== 'undefined') {
@@ -93,6 +134,7 @@ export default function QrCodeSection() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           pipeline_id: selectedPipeline,
+          event_id: selectedEvent || undefined,
           label: label.trim() || undefined,
           whatsapp_vendedor: whatsappVendedor.trim() || undefined,
         }),
@@ -105,6 +147,7 @@ export default function QrCodeSection() {
         const dataUrl = await generateQrDataUrl(data.token);
         setQrDataUrl(dataUrl);
         setLabel('');
+        setSelectedEvent('');
         setWhatsappVendedor('');
         fetchLinks();
         setActionResult({ type: 'success', message: 'QR Code gerado com sucesso!' });
@@ -189,11 +232,35 @@ export default function QrCodeSection() {
       {/* Generator */}
       <div className="space-y-3 mb-5">
         <div>
+          <label className="block text-xs font-medium text-purple-300/80 mb-1">
+            Evento/Feira <span className="text-purple-300/40">(opcional — amarra o QR a uma feira especifica)</span>
+          </label>
+          <select
+            value={selectedEvent}
+            onChange={(e) => handleEventChange(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-[#2a1245] border border-purple-700/30 text-neutral-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+          >
+            <option value="">Generico (qualquer evento)</option>
+            {events.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name} {e.status === 'RASCUNHO' ? '(rascunho)' : ''}
+              </option>
+            ))}
+          </select>
+          {selectedEvent && (
+            <p className="text-[11px] text-emerald-400/70 mt-1">
+              Pipeline e nome foram preenchidos automaticamente a partir do evento.
+            </p>
+          )}
+        </div>
+
+        <div>
           <label className="block text-xs font-medium text-purple-300/80 mb-1">Pipeline de Destino</label>
           <select
             value={selectedPipeline}
             onChange={(e) => setSelectedPipeline(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-[#2a1245] border border-purple-700/30 text-neutral-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            disabled={!!selectedEvent && !!events.find((ev) => ev.id === selectedEvent)?.pipeline_id}
+            className="w-full px-3 py-2 text-sm bg-[#2a1245] border border-purple-700/30 text-neutral-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <option value="">Selecione um pipeline...</option>
             {pipelines.map((p) => (
@@ -306,7 +373,7 @@ export default function QrCodeSection() {
                 className="flex items-center justify-between p-3 bg-[#2a1245]/30 border border-purple-800/20 rounded-lg"
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm text-neutral-100 truncate">
                       {link.label || 'Sem nome'}
                     </p>
@@ -317,6 +384,14 @@ export default function QrCodeSection() {
                     }`}>
                       {link.is_active ? 'Ativo' : 'Inativo'}
                     </span>
+                    {link.event_name && (
+                      <span
+                        className="inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded bg-cyan-500/15 text-cyan-400"
+                        title="QR travado a este evento"
+                      >
+                        📍 {link.event_name}
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-purple-300/50 mt-0.5">
                     {link.pipeline_name} &middot; {link.leads_count} lead{link.leads_count !== 1 ? 's' : ''}

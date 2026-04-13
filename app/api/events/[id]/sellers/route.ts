@@ -37,16 +37,33 @@ export async function GET(
       return NextResponse.json({ error: 'Evento nao encontrado' }, { status: 404 });
     }
 
-    // 2. Vendedores com QR ativo nesse pipeline (quem "pode atuar")
+    // 2. Vendedores com QR ativo pra este evento ou pipeline.
+    // Prioriza links ja amarrados a este event_id; se houver qualquer link
+    // travado no evento, filtra SO esses usuarios. Senao, usa links genericos
+    // (event_id null) do mesmo pipeline — modo retrocompativel.
     const eligibleUserIds = new Set<string>();
+    const eventScopedUserIds = new Set<string>();
     if (event.pipeline_id) {
       const { data: links } = await admin
         .from('lead_capture_links')
-        .select('user_id')
+        .select('user_id, event_id')
         .eq('organization_id', profile.organization_id)
         .eq('pipeline_id', event.pipeline_id)
         .eq('is_active', true);
-      (links || []).forEach((l: any) => l.user_id && eligibleUserIds.add(l.user_id));
+      (links || []).forEach((l: any) => {
+        if (!l.user_id) return;
+        if (l.event_id === eventId) eventScopedUserIds.add(l.user_id);
+      });
+      // Se ha pelo menos 1 link travado no evento, a lista "elegivel" vira
+      // apenas esses. Quem so tem link generico e ignorado — e um passo
+      // forte, mas e o ponto do vinculo forte.
+      if (eventScopedUserIds.size > 0) {
+        eventScopedUserIds.forEach((uid) => eligibleUserIds.add(uid));
+      } else {
+        (links || []).forEach((l: any) => {
+          if (l.user_id && l.event_id === null) eligibleUserIds.add(l.user_id);
+        });
+      }
     }
 
     // 3. Vendedores que já produziram leads deste evento (união com os elegíveis)
