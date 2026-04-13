@@ -30,7 +30,7 @@ function formatEventDate(raw: string | null | undefined): string {
   return d.toLocaleDateString('pt-BR');
 }
 
-type Tab = 'dashboard' | 'stands' | 'map' | 'checkin' | 'timeline' | 'followup';
+type Tab = 'dashboard' | 'stands' | 'map' | 'checkin' | 'timeline' | 'followup' | 'contatos';
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -89,6 +89,7 @@ export default function EventDetailPage() {
 
   const tabs: { key: Tab; label: string }[] = [
     { key: 'dashboard', label: 'Dashboard' },
+    { key: 'contatos', label: 'Contatos' },
     { key: 'stands', label: 'Stands' },
     { key: 'map', label: 'Mapa' },
     { key: 'timeline', label: 'Timeline' },
@@ -269,6 +270,7 @@ export default function EventDetailPage() {
       {tab === 'checkin' && <CheckInTab eventId={id} onDone={fetchEvent} />}
       {tab === 'timeline' && <TimelineTab eventId={id} />}
       {tab === 'followup' && <FollowUpTab eventId={id} event={event} />}
+      {tab === 'contatos' && <ContatosTab eventId={id} />}
 
       {/* Edit Modal */}
       {showEdit && event && (
@@ -709,11 +711,11 @@ function DashboardTab({ eventId, event }: { eventId: string; event: FairEvent })
         <StatCard label="Progresso" value={`${stats.progress_pct}%`} color="cyan" />
       </div>
 
-      {/* Secondary KPIs — os 3 de leads sao clicaveis, abrem /contacts filtrado pelo evento */}
+      {/* Secondary KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Visitas Stand" value={stats.total_visits} color="purple" href={`/contacts?event_id=${eventId}`} />
-        <StatCard label="Leads Avulsos" value={stats.total_walk_ins || 0} color="cyan" href={`/contacts?event_id=${eventId}`} />
-        <StatCard label="Total de Leads" value={stats.total_leads_event || stats.total_visits} color="emerald" href={`/contacts?event_id=${eventId}`} />
+        <StatCard label="Visitas Stand" value={stats.total_visits} color="purple" />
+        <StatCard label="Leads Avulsos" value={stats.total_walk_ins || 0} color="cyan" />
+        <StatCard label="Total de Leads" value={stats.total_leads_event || stats.total_visits} color="emerald" />
         <StatCard label="Media/Dia" value={stats.avg_visits_per_day} color="cyan" />
       </div>
 
@@ -3685,6 +3687,125 @@ function WalkInForm({
           {loading ? 'Registrando...' : '✓ Registrar Contato Avulso'}
         </button>
       </form>
+    </div>
+  );
+}
+
+// --- Contatos Tab ---
+// Lista todos os contatos deste evento (stand + walk-in) inline.
+// Mostra nome, empresa, telefone/email, tipo (Stand/Avulso), vendedor, quando criado.
+// Clicar na linha abre o contato em nova aba.
+function ContatosTab({ eventId }: { eventId: string }) {
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/contacts?event_id=${eventId}&limit=500`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!abort) setContacts(data.contacts || data || []);
+        }
+      } catch { /* silent */ }
+      finally { if (!abort) setLoading(false); }
+    })();
+    return () => { abort = true; };
+  }, [eventId]);
+
+  const filtered = contacts.filter((c) => {
+    if (!search.trim()) return true;
+    const s = search.toLowerCase();
+    return (
+      (c.name || '').toLowerCase().includes(s) ||
+      (c.company || '').toLowerCase().includes(s) ||
+      (c.email || '').toLowerCase().includes(s) ||
+      (c.phone || '').toLowerCase().includes(s)
+    );
+  });
+
+  const formatDate = (iso: string) => {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
+  const isAvulso = (c: any) => (c.notes || '').trim().startsWith('[Avulso]');
+
+  if (loading) {
+    return (
+      <div className="space-y-3 animate-pulse">
+        {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-[#1e0f35] rounded-xl" />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-lg font-bold text-white">
+          Contatos da feira
+          <span className="ml-2 text-sm text-purple-300/60 font-normal">({filtered.length})</span>
+        </h3>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por nome, empresa, telefone..."
+          className="flex-1 max-w-sm px-3 py-2 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-12 text-center">
+          <p className="text-purple-300/60 text-sm">
+            {contacts.length === 0
+              ? 'Ainda nao ha contatos registrados nesta feira. Faca um check-in ou walk-in.'
+              : 'Nenhum contato encontrado pra essa busca.'}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden">
+          <div className="divide-y divide-purple-800/20">
+            {filtered.map((c) => (
+              <Link
+                key={c.id}
+                href={`/contacts/${c.id}`}
+                className="flex items-center gap-4 p-4 hover:bg-purple-800/20 transition-colors"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="text-white font-semibold truncate">{c.name}</p>
+                    {isAvulso(c) ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                        AVULSO
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                        STAND
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-purple-300/60">
+                    {c.company && <span>{c.company}</span>}
+                    {c.phone && <span>📞 {c.phone}</span>}
+                    {c.email && <span>✉️ {c.email}</span>}
+                  </div>
+                </div>
+                <div className="text-right text-[11px] text-purple-300/40 hidden sm:block">
+                  {formatDate(c.created_at)}
+                </div>
+                <svg className="w-4 h-4 text-purple-400/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
