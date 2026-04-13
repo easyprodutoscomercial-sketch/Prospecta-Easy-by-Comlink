@@ -34,15 +34,21 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let step = 'init';
   try {
+    step = 'params';
     const { id: eventId } = await params;
+    step = 'createClient';
     const supabase = await createClient();
+    step = 'getUser';
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 });
 
+    step = 'ensureProfile';
     const profile = await ensureProfile(supabase, user);
     if (!profile) return NextResponse.json({ error: 'Profile nao encontrado' }, { status: 404 });
 
+    step = 'adminClient';
     const admin = getAdminClient();
     const contentType = request.headers.get('content-type') || '';
 
@@ -57,6 +63,7 @@ export async function POST(
     let photoPersonUrl: string | null = null;
 
     if (contentType.includes('multipart/form-data')) {
+      step = 'parseFormData';
       const formData = await request.formData();
       contactName = (formData.get('contact_name') as string) || null;
       contactRole = (formData.get('contact_role') as string) || null;
@@ -67,15 +74,18 @@ export async function POST(
       notes = (formData.get('notes') as string) || null;
 
       // Foto do cartao (photo_contact) + foto da pessoa (photo_person)
+      step = 'uploadPhotoContact';
       const contactFile = formData.get('photo_contact') as File | null;
       if (contactFile && contactFile.size > 0) {
         photoContactUrl = await uploadFile(admin, contactFile, profile.organization_id, eventId, 'walkin-card');
       }
+      step = 'uploadPhotoPerson';
       const personFile = formData.get('photo_person') as File | null;
       if (personFile && personFile.size > 0) {
         photoPersonUrl = await uploadFile(admin, personFile, profile.organization_id, eventId, 'walkin-person');
       }
     } else {
+      step = 'parseJson';
       const body = await request.json();
       contactName = body.contact_name || null;
       contactRole = body.contact_role || null;
@@ -93,6 +103,7 @@ export async function POST(
     }
 
     // Verifica se o evento existe e pertence a org
+    step = 'fetchEvent';
     const { data: event } = await admin
       .from('events')
       .select('id, pipeline_id, stage_id')
@@ -111,6 +122,7 @@ export async function POST(
     }
 
     // Normaliza para dedup
+    step = 'normalize';
     const phoneNorm = normalizePhone(contactPhone);
     const emailNorm = normalizeEmail(contactEmail);
 
@@ -121,6 +133,7 @@ export async function POST(
     // com "mais de uma linha" em orgs com varios contatos.
     let createdContact: any = null;
     if (phoneNorm || emailNorm) {
+      step = 'dedupQuery';
       let q = admin
         .from('contacts')
         .select('id, phone, email, event_id, name')
@@ -172,6 +185,7 @@ export async function POST(
 
     // Se nao achou duplicata, cria contato novo.
     if (!createdContact) {
+      step = 'insertContact';
       const insertPayload: any = {
         organization_id: profile.organization_id,
         name: contactName.trim(),
@@ -235,7 +249,16 @@ export async function POST(
       walk_in: true,
     }, { status: 201 });
   } catch (error: any) {
-    console.error('Error in walk-in:', error);
-    return NextResponse.json({ error: error.message || 'Erro ao registrar contato avulso' }, { status: 500 });
+    console.error(`[walk-in] ERRO step=${step}:`, error);
+    const detail = {
+      error: error?.message || 'Erro ao registrar contato avulso',
+      step,
+      name: error?.name || null,
+      code: error?.code || null,
+      details: error?.details || null,
+      hint: error?.hint || null,
+      stack: error?.stack?.split('\n').slice(0, 8).join('\n') || null,
+    };
+    return NextResponse.json(detail, { status: 500 });
   }
 }
