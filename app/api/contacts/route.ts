@@ -63,6 +63,10 @@ function applyContactFilters(
   if (filters.stage_id) query = query.eq('stage_id', filters.stage_id);
   if (filters.assigned === 'me' && filters.userId) query = query.eq('assigned_to_user_id', filters.userId);
   else if (filters.assigned === 'unassigned') query = query.is('assigned_to_user_id', null);
+  else if (filters.assigned && filters.assigned !== 'all' && filters.assigned.length >= 32) {
+    // UUID direto (ex: vindo da lista de vendedores do evento)
+    query = query.eq('assigned_to_user_id', filters.assigned);
+  }
   if (filters.temperatura && filters.temperatura !== 'all') query = query.eq('temperatura', filters.temperatura);
   if (filters.origem && filters.origem !== 'all') query = query.eq('origem', filters.origem);
   if (filters.classe && filters.classe !== 'all') query = query.eq('classe', filters.classe);
