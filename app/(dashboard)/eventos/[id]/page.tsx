@@ -6,6 +6,16 @@ import Link from 'next/link';
 import type { FairEvent, EventBooth, BoothVisit } from '@/lib/types';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS, BOOTH_STATUS_COLORS, PROSPECT_TYPE_LABELS, PROSPECT_TYPE_COLORS } from '@/lib/utils/labels';
 import { enqueueOrSend, fileToBase64 } from '@/lib/offline/queue';
+import {
+  draftSave,
+  draftLoad,
+  draftClear,
+  draftPruneOld,
+  fileToDataUrl,
+  dataUrlToFile,
+  formatDraftAge,
+  DRAFT_MAX_AGE_MS,
+} from '@/lib/offline/drafts';
 import EditEventModal from '@/components/eventos/edit-event-modal';
 
 // Parser seguro de data ISO vinda do banco. Aceita tanto 'YYYY-MM-DD' quanto
@@ -898,10 +908,16 @@ function BoothDrawer({
   });
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newPreviews, setNewPreviews] = useState<string[]>([]);
+  // Base64 paralelo pra salvar em draft (sobrevive recarga de página)
+  const [newFilesB64, setNewFilesB64] = useState<Array<{ name: string; type: string; dataUrl: string }>>([]);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [submitting, setSubmitting] = useState<'save' | 'visit' | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // Draft state: chave única por evento+stand, toast de restauração, skip do save inicial
+  const draftKey = `checkin-drawer-${eventId}-${booth.id}`;
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+  const draftReadyRef = useRef(false);
 
   // QR Code state
   const [qrLoading, setQrLoading] = useState(false);
@@ -946,6 +962,68 @@ function BoothDrawer({
     return () => { document.body.style.overflow = ''; };
   }, []);
 
+  // === DRAFT: restaura rascunho salvo ao montar (se existir) ===
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      // Limpa rascunhos expirados em background (não bloqueia)
+      draftPruneOld(DRAFT_MAX_AGE_MS).catch(() => {});
+      try {
+        const saved = await draftLoad<{
+          contacts: { name: string; cargo: string }[];
+          prospectType: string;
+          notes: string;
+          photos: Array<{ name: string; type: string; dataUrl: string }>;
+        }>(draftKey);
+        if (cancelled || !saved || !saved.data) {
+          draftReadyRef.current = true;
+          return;
+        }
+        const d = saved.data;
+        if (Array.isArray(d.contacts) && d.contacts.length > 0) setContacts(d.contacts);
+        if (d.prospectType === 'COMPRADOR' || d.prospectType === 'FORNECEDOR' || d.prospectType === 'AMBOS') {
+          setProspectType(d.prospectType);
+        }
+        if (typeof d.notes === 'string') setNotes(d.notes);
+        if (Array.isArray(d.photos) && d.photos.length > 0) {
+          // Reconstrói File objects e previews a partir do base64
+          const files: File[] = [];
+          const previews: string[] = [];
+          for (const p of d.photos) {
+            try {
+              const f = await dataUrlToFile(p.dataUrl, p.name);
+              files.push(f);
+              previews.push(p.dataUrl);
+            } catch { /* ignora foto corrompida */ }
+          }
+          if (files.length > 0) {
+            setNewFiles(files);
+            setNewPreviews(previews);
+            setNewFilesB64(d.photos);
+          }
+        }
+        setDraftRestoredAt(saved.updatedAt);
+      } catch { /* silent */ } finally {
+        draftReadyRef.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [draftKey]);
+
+  // === DRAFT: auto-save debounced a cada mudança relevante ===
+  useEffect(() => {
+    if (!draftReadyRef.current) return; // não salva durante a restauração inicial
+    const t = setTimeout(() => {
+      draftSave(draftKey, {
+        contacts,
+        prospectType,
+        notes,
+        photos: newFilesB64,
+      }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(t);
+  }, [draftKey, contacts, prospectType, notes, newFilesB64]);
+
   // QR handlers
   const handleFetchQR = async () => {
     setQrLoading(true); setQrError(null);
@@ -969,17 +1047,38 @@ function BoothDrawer({
     setQrCopied(true); setTimeout(() => setQrCopied(false), 2000);
   };
 
-  // Photo handlers (#2)
-  const handleAddPhotos = (files: FileList | null) => {
+  // Photo handlers (#2) — atualiza também a versão base64 pra draft persistente
+  const handleAddPhotos = async (files: FileList | null) => {
     if (!files) return;
     const arr = Array.from(files);
     setNewFiles((prev) => [...prev, ...arr]);
     setNewPreviews((prev) => [...prev, ...arr.map((f) => URL.createObjectURL(f))]);
+    // Converte em base64 em paralelo pra draft (não bloqueia a UI)
+    try {
+      const converted = await Promise.all(
+        arr.map(async (f) => ({ name: f.name, type: f.type || 'application/octet-stream', dataUrl: await fileToDataUrl(f) })),
+      );
+      setNewFilesB64((prev) => [...prev, ...converted]);
+    } catch { /* silent — foto continua no state como File, só draft que não persiste essa */ }
   };
   const handleRemoveExisting = (idx: number) => setExistingPhotos((prev) => prev.filter((_, i) => i !== idx));
   const handleRemoveNew = (idx: number) => {
     setNewFiles((prev) => prev.filter((_, i) => i !== idx));
     setNewPreviews((prev) => prev.filter((_, i) => i !== idx));
+    setNewFilesB64((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const handleDismissDraft = async () => {
+    await draftClear(draftKey).catch(() => {});
+    setDraftRestoredAt(null);
+    // Reseta o form pro estado inicial (do visit existente, se houver)
+    const primary = { name: visit?.contact_name || '', cargo: visit?.contact_role || '' };
+    const extra = parsed.extraContacts.length > 0 ? parsed.extraContacts : [];
+    setContacts([primary, ...extra]);
+    setProspectType(visit?.prospect_type || 'COMPRADOR');
+    setNotes(parsed.userNotes);
+    setNewFiles([]);
+    setNewPreviews([]);
+    setNewFilesB64([]);
   };
 
   // Contact list handlers (#5)
@@ -1035,6 +1134,8 @@ function BoothDrawer({
       });
 
       if (result.sent) {
+        // Limpa o rascunho — dados estão seguros no servidor
+        draftClear(draftKey).catch(() => {});
         if (markVisited) {
           setSuccessMsg('Check-in realizado!');
           setTimeout(() => { onUpdate(); }, 1200);
@@ -1043,10 +1144,13 @@ function BoothDrawer({
           setTimeout(() => setSuccessMsg(null), 2000);
         }
       } else if (result.queued) {
+        // Enfileirou offline: o payload (incluindo fotos em base64) já está
+        // no IndexedDB da fila. Podemos limpar o rascunho com segurança.
+        draftClear(draftKey).catch(() => {});
         setSuccessMsg(markVisited ? 'Offline — check-in salvo na fila' : 'Offline — dados salvos na fila');
         setTimeout(() => { onUpdate(); }, 1500);
       } else if (result.response) {
-        // Erro HTTP de negócio — reporta
+        // Erro HTTP de negócio — reporta. MANTÉM o rascunho pro usuário tentar de novo.
         setSuccessMsg('Erro ao enviar. Tente novamente.');
         setTimeout(() => setSuccessMsg(null), 3000);
       }
@@ -1090,6 +1194,36 @@ function BoothDrawer({
           {successMsg && (
             <div className="p-3 rounded-lg bg-emerald-500/15 text-emerald-400 text-sm font-medium border border-emerald-500/20 text-center">
               {successMsg}
+            </div>
+          )}
+
+          {/* Draft restaurado — banner com opção de descartar */}
+          {draftRestoredAt && (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-3">
+              <svg className="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1 min-w-0 text-xs">
+                <div className="font-semibold text-amber-300">Rascunho restaurado</div>
+                <div className="text-amber-200/70">Salvo {formatDraftAge(draftRestoredAt)}. Continue de onde parou.</div>
+              </div>
+              <button
+                type="button"
+                onClick={handleDismissDraft}
+                className="shrink-0 px-2.5 py-1.5 text-[11px] font-semibold rounded-md bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors"
+              >
+                Descartar
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraftRestoredAt(null)}
+                className="shrink-0 p-1 text-amber-400/60 hover:text-amber-300"
+                aria-label="Fechar aviso"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           )}
 
@@ -2082,6 +2216,79 @@ function CheckInForm({
   const contactRef = useRef<HTMLInputElement>(null);
   const scanCardRef = useRef<HTMLInputElement>(null);
 
+  // === DRAFT: persiste form + fotos no IndexedDB pra sobreviver a recargas ===
+  const draftKey = `checkin-full-${eventId}-${booth.id}`;
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+  const draftReadyRef = useRef(false);
+  // Base64 paralelo das fotos pra draft
+  const [facadeB64, setFacadeB64] = useState<{ name: string; type: string; dataUrl: string } | null>(null);
+  const [contactB64, setContactB64] = useState<{ name: string; type: string; dataUrl: string } | null>(null);
+
+  // Restaura rascunho ao montar
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await draftLoad<{
+          form: typeof form;
+          facadePhoto: { name: string; type: string; dataUrl: string } | null;
+          contactPhoto: { name: string; type: string; dataUrl: string } | null;
+        }>(draftKey);
+        if (cancelled || !saved || !saved.data) {
+          draftReadyRef.current = true;
+          return;
+        }
+        const d = saved.data;
+        if (d.form) setForm(d.form);
+        if (d.facadePhoto) {
+          try {
+            const f = await dataUrlToFile(d.facadePhoto.dataUrl, d.facadePhoto.name);
+            setFacadeFile(f);
+            setFacadePreview(d.facadePhoto.dataUrl);
+            setFacadeB64(d.facadePhoto);
+          } catch { /* ignora */ }
+        }
+        if (d.contactPhoto) {
+          try {
+            const f = await dataUrlToFile(d.contactPhoto.dataUrl, d.contactPhoto.name);
+            setContactFile(f);
+            setContactPreview(d.contactPhoto.dataUrl);
+            setContactB64(d.contactPhoto);
+          } catch { /* ignora */ }
+        }
+        setDraftRestoredAt(saved.updatedAt);
+      } catch { /* silent */ } finally {
+        draftReadyRef.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [draftKey]);
+
+  // Auto-save debounced
+  useEffect(() => {
+    if (!draftReadyRef.current) return;
+    const t = setTimeout(() => {
+      draftSave(draftKey, {
+        form,
+        facadePhoto: facadeB64,
+        contactPhoto: contactB64,
+      }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(t);
+  }, [draftKey, form, facadeB64, contactB64]);
+
+  const handleDismissDraft = async () => {
+    await draftClear(draftKey).catch(() => {});
+    setDraftRestoredAt(null);
+    setForm({ contact_name: '', contact_role: '', prospect_type: 'COMPRADOR', notes: '' });
+    setFacadeFile(null);
+    setFacadePreview(null);
+    setFacadeB64(null);
+    setContactFile(null);
+    setContactPreview(null);
+    setContactB64(null);
+  };
+
   // Card scanner state
   const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -2164,7 +2371,7 @@ function CheckInForm({
     }
   };
 
-  const handleFile = (file: File | null, type: 'facade' | 'contact') => {
+  const handleFile = async (file: File | null, type: 'facade' | 'contact') => {
     if (!file) return;
     const url = URL.createObjectURL(file);
     if (type === 'facade') {
@@ -2174,6 +2381,13 @@ function CheckInForm({
       setContactFile(file);
       setContactPreview(url);
     }
+    // Converte pra base64 em paralelo pro draft persistente
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      const b64 = { name: file.name, type: file.type || 'application/octet-stream', dataUrl };
+      if (type === 'facade') setFacadeB64(b64);
+      else setContactB64(b64);
+    } catch { /* silent */ }
   };
 
   const handleScanCard = async (file: File | null) => {
@@ -2252,11 +2466,13 @@ function CheckInForm({
       });
 
       if (res.ok) {
+        // Limpa rascunho — dados estão seguros no servidor
+        draftClear(draftKey).catch(() => {});
         setSuccess(true);
         setTimeout(onDone, 1500);
       }
     } catch {
-      // silent
+      // silent — mantém rascunho pro usuário tentar de novo
     } finally {
       setLoading(false);
     }
@@ -2295,6 +2511,36 @@ function CheckInForm({
           </div>
         </div>
       </div>
+
+      {/* Draft restaurado — banner com opção de descartar */}
+      {draftRestoredAt && (
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-3">
+          <svg className="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1 min-w-0 text-xs">
+            <div className="font-semibold text-amber-300">Rascunho restaurado</div>
+            <div className="text-amber-200/70">Salvo {formatDraftAge(draftRestoredAt)}. Continue de onde parou.</div>
+          </div>
+          <button
+            type="button"
+            onClick={handleDismissDraft}
+            className="shrink-0 px-2.5 py-1.5 text-[11px] font-semibold rounded-md bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors"
+          >
+            Descartar
+          </button>
+          <button
+            type="button"
+            onClick={() => setDraftRestoredAt(null)}
+            className="shrink-0 p-1 text-amber-400/60 hover:text-amber-300"
+            aria-label="Fechar aviso"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* QR Code Section */}
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 space-y-3">

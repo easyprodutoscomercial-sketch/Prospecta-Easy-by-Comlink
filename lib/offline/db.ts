@@ -2,8 +2,9 @@
 // Sem dependências externas.
 
 const DB_NAME = 'controlei-offline';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_QUEUE = 'queue';
+const STORE_DRAFTS = 'drafts';
 
 export interface QueuedItem {
   id?: number;
@@ -17,6 +18,12 @@ export interface QueuedItem {
   meta?: Record<string, any>;
 }
 
+export interface DraftItem {
+  key: string;             // ex: 'checkin-{eventId}-{boothId}'
+  data: any;               // JSON-serializable (fotos em base64)
+  updatedAt: number;
+}
+
 function isBrowser() {
   return typeof window !== 'undefined' && typeof indexedDB !== 'undefined';
 }
@@ -25,12 +32,18 @@ function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     if (!isBrowser()) return reject(new Error('IndexedDB indisponível'));
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
+      const oldVersion = (ev as IDBVersionChangeEvent).oldVersion || 0;
       if (!db.objectStoreNames.contains(STORE_QUEUE)) {
         const store = db.createObjectStore(STORE_QUEUE, { keyPath: 'id', autoIncrement: true });
         store.createIndex('type', 'type', { unique: false });
         store.createIndex('createdAt', 'createdAt', { unique: false });
+      }
+      // Bump v1 -> v2: adiciona store de drafts
+      if (oldVersion < 2 && !db.objectStoreNames.contains(STORE_DRAFTS)) {
+        const draftStore = db.createObjectStore(STORE_DRAFTS, { keyPath: 'key' });
+        draftStore.createIndex('updatedAt', 'updatedAt', { unique: false });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -116,6 +129,72 @@ export async function queueClear(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       const req = store.clear();
       req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+// ===== DRAFTS (rascunhos de formulários, sobrevivem ao recarregar a página) =====
+
+export async function draftSave(key: string, data: any): Promise<void> {
+  if (!isBrowser()) return;
+  const item: DraftItem = { key, data, updatedAt: Date.now() };
+  return tx(STORE_DRAFTS, 'readwrite', (store) => {
+    return new Promise<void>((resolve, reject) => {
+      const req = store.put(item);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+export async function draftLoad<T = any>(key: string): Promise<{ data: T; updatedAt: number } | null> {
+  if (!isBrowser()) return null;
+  return tx(STORE_DRAFTS, 'readonly', (store) => {
+    return new Promise<{ data: T; updatedAt: number } | null>((resolve, reject) => {
+      const req = store.get(key);
+      req.onsuccess = () => {
+        const result = req.result as DraftItem | undefined;
+        if (!result) return resolve(null);
+        resolve({ data: result.data as T, updatedAt: result.updatedAt });
+      };
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+export async function draftClear(key: string): Promise<void> {
+  if (!isBrowser()) return;
+  return tx(STORE_DRAFTS, 'readwrite', (store) => {
+    return new Promise<void>((resolve, reject) => {
+      const req = store.delete(key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+// Remove drafts mais antigos que maxAgeMs (ex: 7 dias = 604800000 ms).
+// Útil pra não acumular rascunhos esquecidos indefinidamente.
+export async function draftPruneOld(maxAgeMs: number): Promise<number> {
+  if (!isBrowser()) return 0;
+  const cutoff = Date.now() - maxAgeMs;
+  return tx(STORE_DRAFTS, 'readwrite', (store) => {
+    return new Promise<number>((resolve, reject) => {
+      const idx = store.index('updatedAt');
+      const range = IDBKeyRange.upperBound(cutoff, true);
+      let removed = 0;
+      const req = idx.openCursor(range);
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          cursor.delete();
+          removed++;
+          cursor.continue();
+        } else {
+          resolve(removed);
+        }
+      };
       req.onerror = () => reject(req.error);
     });
   });
