@@ -126,14 +126,22 @@ export default function ContactForm({
   const [formData, setFormData] = useState<ContactFormData>(toFormData(initialData, defaultPipelineId));
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
-  const handleTipoChange = (value: string) => {
+  const handleTipoSelect = (value: string) => {
     setFormData((prev) => ({
       ...prev,
-      tipo: prev.tipo.includes(value)
-        ? prev.tipo.filter((t) => t !== value)
-        : [...prev.tipo, value],
+      tipo:
+        value === 'AMBOS'
+          ? ['FORNECEDOR', 'COMPRADOR']
+          : value
+            ? [value]
+            : [],
     }));
   };
+
+  const tipoSelectValue =
+    formData.tipo.includes('FORNECEDOR') && formData.tipo.includes('COMPRADOR')
+      ? 'AMBOS'
+      : formData.tipo[0] || '';
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -333,26 +341,16 @@ export default function ContactForm({
         <div className="space-y-4">
           <div>
             <label className={labelClass}>Tipo</label>
-            <div className="flex gap-4 mt-1">
-              <label className="flex items-center gap-2 text-sm text-purple-200/70 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.tipo.includes('FORNECEDOR')}
-                  onChange={() => handleTipoChange('FORNECEDOR')}
-                  className="rounded border-purple-700/30 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500"
-                />
-                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-100 text-purple-700">Fornecedor</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-purple-200/70 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.tipo.includes('COMPRADOR')}
-                  onChange={() => handleTipoChange('COMPRADOR')}
-                  className="rounded border-purple-700/30 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500"
-                />
-                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-cyan-100 text-cyan-700">Comprador</span>
-              </label>
-            </div>
+            <select
+              value={tipoSelectValue}
+              onChange={(e) => handleTipoSelect(e.target.value)}
+              className={inputClass()}
+            >
+              <option value="">Selecione...</option>
+              <option value="FORNECEDOR">Fornecedor</option>
+              <option value="COMPRADOR">Comprador</option>
+              <option value="AMBOS">Ambos (Fornecedor + Comprador)</option>
+            </select>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

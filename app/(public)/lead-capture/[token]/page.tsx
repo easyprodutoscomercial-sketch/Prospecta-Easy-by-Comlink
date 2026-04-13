@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 
 interface LinkInfo {
@@ -10,6 +10,7 @@ interface LinkInfo {
   user_avatar?: string | null;
   pipeline_name: string;
   whatsapp_vendedor?: string | null;
+  booth?: { company_name: string; booth_number: string | null } | null;
 }
 
 interface GoogleCredentialResponse {
@@ -37,11 +38,15 @@ function decodeJwtPayload(token: string): GoogleJwtPayload {
   return JSON.parse(jsonPayload);
 }
 
-export default function LeadCapturePage() {
+function LeadCapturePageInner() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const token = params.token as string;
+  const eventId = searchParams.get('event');
+  const boothId = searchParams.get('booth');
 
   const [linkInfo, setLinkInfo] = useState<LinkInfo | null>(null);
+  const [boothCompany, setBoothCompany] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [inactive, setInactive] = useState(false);
@@ -199,7 +204,11 @@ export default function LeadCapturePage() {
   useEffect(() => {
     const fetchInfo = async () => {
       try {
-        const res = await fetch(`/api/lead-capture?token=${token}`);
+        let url = `/api/lead-capture?token=${token}`;
+        if (eventId && boothId) {
+          url += `&event=${eventId}&booth=${boothId}`;
+        }
+        const res = await fetch(url);
         const data = await res.json();
 
         if (res.status === 410) {
@@ -213,6 +222,10 @@ export default function LeadCapturePage() {
         }
 
         setLinkInfo(data);
+        if (data.booth?.company_name) {
+          setBoothCompany(data.booth.company_name);
+          setCompany(data.booth.company_name);
+        }
       } catch {
         setError('Erro ao carregar formulario');
       } finally {
@@ -221,7 +234,7 @@ export default function LeadCapturePage() {
     };
 
     if (token) fetchInfo();
-  }, [token]);
+  }, [token, eventId, boothId]);
 
   const formatPhone = (value: string) => {
     const digits = value.replace(/\D/g, '').slice(0, 11);
@@ -263,6 +276,8 @@ export default function LeadCapturePage() {
           notes: notes.trim() || undefined,
           cidade: cidade.trim() || undefined,
           estado: estado.trim() || undefined,
+          event_id: eventId || undefined,
+          booth_id: boothId || undefined,
         }),
       });
 
@@ -532,7 +547,13 @@ export default function LeadCapturePage() {
           </div>
         )}
 
-        {!socialFilled && !prefilled && !(googleClientId || appleClientId) && (
+        {boothCompany && (
+          <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm border border-emerald-500/20 text-center">
+            Cadastro para: <strong>{boothCompany}</strong>
+          </div>
+        )}
+
+        {!socialFilled && !prefilled && !boothCompany && !(googleClientId || appleClientId) && (
           <p className="text-sm text-purple-300/60 mb-5 text-center">
             Preencha seus dados para que possamos entrar em contato.
           </p>
@@ -635,10 +656,11 @@ export default function LeadCapturePage() {
             <input
               type="text"
               value={company}
-              onChange={(e) => setCompany(e.target.value)}
+              onChange={(e) => !boothCompany && setCompany(e.target.value)}
+              readOnly={!!boothCompany}
               placeholder="Nome da empresa"
               autoComplete="organization"
-              className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className={`w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent ${boothCompany ? 'opacity-60 cursor-not-allowed' : ''}`}
             />
           </div>
 
@@ -713,5 +735,17 @@ export default function LeadCapturePage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function LeadCapturePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#120826] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-purple-800/30 border-t-emerald-500 rounded-full animate-spin" />
+      </div>
+    }>
+      <LeadCapturePageInner />
+    </Suspense>
   );
 }

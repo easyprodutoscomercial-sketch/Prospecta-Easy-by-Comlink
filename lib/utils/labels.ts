@@ -30,12 +30,21 @@ export const STATUS_CHART_COLORS: Record<string, string> = {
 export const CONTACT_TYPE_LABELS: Record<string, string> = {
   FORNECEDOR: 'Fornecedor',
   COMPRADOR: 'Comprador',
+  AMBOS: 'Ambos',
 };
 
 export const CONTACT_TYPE_COLORS: Record<string, string> = {
   FORNECEDOR: 'bg-purple-100 text-purple-700',
   COMPRADOR: 'bg-cyan-100 text-cyan-700',
+  AMBOS: 'bg-emerald-100 text-emerald-700',
 };
+
+/** Resolve tipo array to display keys: ['FORNECEDOR','COMPRADOR'] → ['AMBOS'] */
+export function resolveTipoDisplay(tipo?: string[]): string[] {
+  if (!tipo || tipo.length === 0) return [];
+  if (tipo.includes('FORNECEDOR') && tipo.includes('COMPRADOR')) return ['AMBOS'];
+  return tipo;
+}
 
 // Segmento de mercado — texto livre, cor gerada dinamicamente
 export const SEGMENTO_LABELS: Record<string, string> = {};
@@ -489,6 +498,44 @@ export const SUPPORT_KANBAN_COLUMNS = [
   { id: 'RESOLVIDO', label: 'Resolvido', color: '#10b981' },
   { id: 'FECHADO', label: 'Fechado', color: '#6b7280' },
 ];
+
+// ============================================
+// Events / Feiras Labels & Colors
+// ============================================
+
+export const EVENT_STATUS_LABELS: Record<string, string> = {
+  RASCUNHO: 'Rascunho',
+  ATIVO: 'Ativo',
+  ENCERRADO: 'Encerrado',
+};
+
+export const EVENT_STATUS_COLORS: Record<string, string> = {
+  RASCUNHO: 'bg-neutral-500/20 text-neutral-400',
+  ATIVO: 'bg-emerald-500/20 text-emerald-400',
+  ENCERRADO: 'bg-purple-500/20 text-purple-400',
+};
+
+export const BOOTH_STATUS_LABELS: Record<string, string> = {
+  PENDENTE: 'Pendente',
+  VISITADO: 'Visitado',
+};
+
+export const BOOTH_STATUS_COLORS: Record<string, string> = {
+  PENDENTE: 'bg-amber-500/20 text-amber-400',
+  VISITADO: 'bg-emerald-500/20 text-emerald-400',
+};
+
+export const PROSPECT_TYPE_LABELS: Record<string, string> = {
+  COMPRADOR: 'Comprador',
+  FORNECEDOR: 'Fornecedor',
+  AMBOS: 'Ambos',
+};
+
+export const PROSPECT_TYPE_COLORS: Record<string, string> = {
+  COMPRADOR: 'bg-cyan-500/20 text-cyan-400',
+  FORNECEDOR: 'bg-purple-500/20 text-purple-400',
+  AMBOS: 'bg-emerald-500/20 text-emerald-400',
+};
 
 // ============================================
 // Pedidos & Cotacoes Labels & Colors

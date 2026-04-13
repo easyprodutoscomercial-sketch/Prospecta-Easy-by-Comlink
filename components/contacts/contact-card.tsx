@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Contact, PipelineStage } from '@/lib/types';
-import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS, CLASSE_LABELS } from '@/lib/utils/labels';
+import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS, CLASSE_LABELS, resolveTipoDisplay } from '@/lib/utils/labels';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
 import ContactMiniPipeline from '@/components/contacts/contact-mini-pipeline';
 import type { DensityMode } from '@/lib/hooks/use-contact-preferences';
@@ -58,6 +58,15 @@ export default function ContactCard({
           </Link>
           {isInexistente && (
             <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400 whitespace-nowrap shrink-0">Inexistente</span>
+          )}
+
+          {contact.event && (
+            <span className="flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/20 whitespace-nowrap shrink-0 max-w-[120px]" title={`Feira: ${contact.event.name}`}>
+              {contact.event.cover_image_url && (
+                <img src={contact.event.cover_image_url} alt="" className="w-3 h-3 rounded object-cover" />
+              )}
+              <span className="truncate">{contact.event.name}</span>
+            </span>
           )}
 
           <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded-full whitespace-nowrap shrink-0 ${getStatusColor(contact.status)}`}>
@@ -133,7 +142,7 @@ export default function ContactCard({
                 {isInexistente && (
                   <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Inexistente</span>
                 )}
-                {contact.tipo?.map((t) => (
+                {resolveTipoDisplay(contact.tipo).map((t) => (
                   <span key={t} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
                     {CONTACT_TYPE_LABELS[t] || t}
                   </span>
@@ -142,6 +151,19 @@ export default function ContactCard({
                   <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}>
                     {TEMPERATURA_LABELS[contact.temperatura] || contact.temperatura}
                   </span>
+                )}
+                {contact.event && (
+                  <Link
+                    href={`/eventos/${contact.event.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/20 hover:bg-amber-500/25 max-w-[160px]"
+                    title={`Feira: ${contact.event.name}`}
+                  >
+                    {contact.event.cover_image_url && (
+                      <img src={contact.event.cover_image_url} alt="" className="w-3.5 h-3.5 rounded object-cover" />
+                    )}
+                    <span className="truncate">{contact.event.name}</span>
+                  </Link>
                 )}
               </div>
 
@@ -274,6 +296,19 @@ export default function ContactCard({
                 <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}>
                   {TEMPERATURA_LABELS[contact.temperatura] || contact.temperatura}
                 </span>
+              )}
+              {contact.event && (
+                <Link
+                  href={`/eventos/${contact.event.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/20 hover:bg-amber-500/25 max-w-[180px]"
+                  title={`Feira: ${contact.event.name}`}
+                >
+                  {contact.event.cover_image_url && (
+                    <img src={contact.event.cover_image_url} alt="" className="w-3.5 h-3.5 rounded object-cover" />
+                  )}
+                  <span className="truncate">{contact.event.name}</span>
+                </Link>
               )}
             </div>
 

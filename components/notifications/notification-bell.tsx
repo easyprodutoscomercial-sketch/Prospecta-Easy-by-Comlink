@@ -32,7 +32,16 @@ export default function NotificationBell() {
   const handleToggle = () => {
     if (!isOpen && buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 8, left: rect.left });
+      const isMobile = window.innerWidth < 640;
+      if (isMobile) {
+        // On mobile, center dropdown below button, clamped to viewport
+        setDropdownPos({ top: rect.bottom + 8, left: 0 });
+      } else {
+        // On desktop, align left edge with button, but clamp so it doesn't overflow
+        const dropdownWidth = 384; // sm:w-96
+        const maxLeft = window.innerWidth - dropdownWidth - 16;
+        setDropdownPos({ top: rect.bottom + 8, left: Math.min(rect.left, maxLeft) });
+      }
     }
     setIsOpen(!isOpen);
   };

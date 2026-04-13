@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Contact } from '@/lib/types';
 import {
   CONTACT_TYPE_LABELS,
@@ -9,6 +10,7 @@ import {
   TEMPERATURA_COLORS,
   ORIGEM_LABELS,
   PROXIMA_ACAO_LABELS,
+  resolveTipoDisplay,
 } from '@/lib/utils/labels';
 
 interface ContactDetailsProps {
@@ -36,6 +38,35 @@ function Section({ title, children, noBorder }: { title: string; children: React
 export default function ContactDetails({ contact }: ContactDetailsProps) {
   return (
     <div className="space-y-6">
+      {contact.event && (
+        <Link
+          href={`/eventos/${contact.event.id}`}
+          className="flex items-center gap-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/25 hover:bg-amber-500/15 transition-colors"
+          title={`Ver feira: ${contact.event.name}`}
+        >
+          {contact.event.cover_image_url ? (
+            <img
+              src={contact.event.cover_image_url}
+              alt={contact.event.name}
+              className="w-14 h-14 rounded-md object-cover shrink-0 border border-amber-500/30"
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-md bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+              <svg className="w-6 h-6 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-amber-400/80 uppercase tracking-widest mb-0.5">Origem: Feira</p>
+            <p className="text-sm font-bold text-amber-200 truncate">{contact.event.name}</p>
+          </div>
+          <svg className="w-5 h-5 text-amber-400/70 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </Link>
+      )}
+
       <Section title="Dados Basicos">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><Label>Nome</Label><FieldValue value={contact.name} /></div>
@@ -55,7 +86,7 @@ export default function ContactDetails({ contact }: ContactDetailsProps) {
             <Label>Tipo</Label>
             {contact.tipo && contact.tipo.length > 0 ? (
               <div className="flex gap-1 flex-wrap">
-                {contact.tipo.map((t) => (
+                {resolveTipoDisplay(contact.tipo).map((t) => (
                   <span key={t} className={`px-2 py-0.5 text-xs font-medium rounded-full ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
                     {CONTACT_TYPE_LABELS[t] || t}
                   </span>

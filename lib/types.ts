@@ -6,7 +6,7 @@ export type ContactStatus =
   | 'CONVERTIDO'
   | 'PERDIDO';
 
-export type ContactType = 'FORNECEDOR' | 'COMPRADOR';
+export type ContactType = 'FORNECEDOR' | 'COMPRADOR' | 'AMBOS';
 
 export type Temperatura = 'FRIO' | 'MORNO' | 'QUENTE';
 
@@ -97,6 +97,9 @@ export interface Contact {
   // Pipeline
   pipeline_id: string | null;
   stage_id: string | null;
+  // Evento / Feira de origem
+  event_id?: string | null;
+  event?: { id: string; name: string; cover_image_url: string | null } | null;
   // Telefones adicionais
   telefones_adicionais: TelefoneAdicional[];
   // Marcação
@@ -601,6 +604,68 @@ export interface PcStats {
   pedidos_ativos: number;
   taxa_resposta_pct: number;
   alerts: PcAlert[];
+}
+
+// ============================================
+// Events / Feiras
+// ============================================
+
+export type EventStatus = 'RASCUNHO' | 'ATIVO' | 'ENCERRADO';
+export type BoothStatus = 'PENDENTE' | 'VISITADO';
+export type ProspectType = 'COMPRADOR' | 'FORNECEDOR' | 'AMBOS';
+
+export interface FairEvent {
+  id: string;
+  organization_id: string;
+  name: string;
+  location: string | null;
+  start_date: string;
+  end_date: string;
+  map_url: string | null;
+  cover_image_url: string | null;
+  pipeline_id: string | null;
+  stage_id: string | null;
+  status: EventStatus;
+  created_by_user_id: string;
+  created_at: string;
+  updated_at: string;
+  // computed
+  booth_count?: number;
+  visited_count?: number;
+}
+
+export interface EventBooth {
+  id: string;
+  event_id: string;
+  organization_id: string;
+  company_name: string;
+  booth_number: string | null;
+  sector: string | null;
+  status: BoothStatus;
+  position_x: number | null;
+  position_y: number | null;
+  created_at: string;
+  updated_at: string;
+  // joined
+  visit?: BoothVisit | null;
+}
+
+export interface BoothVisit {
+  id: string;
+  booth_id: string;
+  event_id: string;
+  organization_id: string;
+  user_id: string;
+  user_name: string;
+  visited_at: string;
+  photo_facade_url: string | null;
+  photo_contact_url: string | null;
+  contact_name: string | null;
+  contact_role: string | null;
+  prospect_type: ProspectType;
+  notes: string | null;
+  contact_id: string | null;
+  created_at: string;
 }
 
 // Re-export AI types for convenience

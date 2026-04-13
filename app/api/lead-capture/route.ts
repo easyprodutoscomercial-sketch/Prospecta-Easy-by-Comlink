@@ -40,12 +40,31 @@ export async function GET(request: NextRequest) {
       .eq('id', link.pipeline_id)
       .single();
 
+    // Se event/booth params presentes, buscar info do stand
+    const eventId = request.nextUrl.searchParams.get('event');
+    const boothId = request.nextUrl.searchParams.get('booth');
+    let booth: { company_name: string; booth_number: string | null } | null = null;
+
+    if (eventId && boothId) {
+      const { data: boothData } = await admin
+        .from('event_booths')
+        .select('company_name, booth_number')
+        .eq('id', boothId)
+        .eq('event_id', eventId)
+        .single();
+
+      if (boothData) {
+        booth = { company_name: boothData.company_name, booth_number: boothData.booth_number };
+      }
+    }
+
     return NextResponse.json({
       label: link.label,
       user_name: profile?.name || 'Vendedor',
       user_avatar: profile?.avatar_url || null,
       pipeline_name: pipeline?.name || 'Pipeline',
       whatsapp_vendedor: link.whatsapp_vendedor || null,
+      booth,
     });
   } catch (error: any) {
     console.error('Error fetching lead capture info:', error);
@@ -59,7 +78,7 @@ export async function POST(request: NextRequest) {
     const admin = getAdminClient();
     const body = await request.json();
 
-    const { token, name, phone, email, company, cargo, notes, cidade, estado } = body;
+    const { token, name, phone, email, company, cargo, notes, cidade, estado, event_id, booth_id } = body;
 
     // Validacoes basicas
     if (!token) {
@@ -87,6 +106,186 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Este link foi desativado' }, { status: 410 });
     }
 
+    // Normalizar para deduplicacao
+    const phoneNormalized = normalizePhone(phone);
+    const emailNormalized = normalizeEmail(email);
+
+    // --- Fluxo com contexto de evento/stand ---
+    if (event_id && booth_id) {
+      // Buscar contato existente vinculado a este booth
+      const { data: existingVisit } = await admin
+        .from('booth_visits')
+        .select('contact_id')
+        .eq('booth_id', booth_id)
+        .eq('event_id', event_id)
+        .not('contact_id', 'is', null)
+        .limit(1)
+        .maybeSingle();
+
+      // Buscar info do booth
+      const { data: booth } = await admin
+        .from('event_booths')
+        .select('company_name, booth_number, organization_id')
+        .eq('id', booth_id)
+        .eq('event_id', event_id)
+        .single();
+
+      if (existingVisit?.contact_id) {
+        // UPDATE contato existente (NAO sobrescreve name nem company)
+        const updates: Record<string, any> = {
+          contato_nome: name.trim(),
+          phone: phone.trim(),
+          phone_normalized: phoneNormalized,
+          whatsapp: phone.trim(),
+        };
+        if (email?.trim()) {
+          updates.email = email.trim();
+          updates.email_normalized = emailNormalized;
+        }
+        if (cargo?.trim()) updates.cargo = cargo.trim();
+        if (cidade?.trim()) updates.cidade = cidade.trim();
+        if (estado?.trim()) updates.estado = estado.trim();
+        if (notes?.trim()) updates.notes = notes.trim();
+
+        await admin
+          .from('contacts')
+          .update(updates)
+          .eq('id', existingVisit.contact_id);
+
+        // Criar booth_visit de registro
+        await admin
+          .from('booth_visits')
+          .insert({
+            booth_id,
+            event_id,
+            organization_id: link.organization_id,
+            user_id: link.user_id,
+            contact_id: existingVisit.contact_id,
+            contact_name: name.trim(),
+            notes: notes?.trim() || null,
+          });
+
+        // Marcar booth como VISITADO
+        await admin
+          .from('event_booths')
+          .update({ status: 'VISITADO' })
+          .eq('id', booth_id);
+
+        // Incrementar leads_count
+        await admin
+          .from('lead_capture_links')
+          .update({
+            leads_count: (link.leads_count || 0) + 1,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', link.id);
+
+        return NextResponse.json({
+          success: true,
+          updated: true,
+          message: 'Dados registrados com sucesso! Entraremos em contato em breve.',
+          whatsapp_vendedor: link.whatsapp_vendedor || null,
+        }, { status: 200 });
+      }
+
+      // NAO encontrou contato existente → criar novo com dados do booth
+      const { data: firstStage } = await admin
+        .from('pipeline_stages')
+        .select('id')
+        .eq('pipeline_id', link.pipeline_id)
+        .order('position', { ascending: true })
+        .limit(1)
+        .single();
+
+      if (!firstStage) {
+        return NextResponse.json({ error: 'Pipeline sem stages configurados' }, { status: 500 });
+      }
+
+      const boothCompany = booth?.company_name || company?.trim() || null;
+
+      const newContactData: Record<string, any> = {
+        organization_id: link.organization_id,
+        name: boothCompany || name.trim(),
+        contato_nome: name.trim(),
+        phone: phone.trim(),
+        phone_normalized: phoneNormalized,
+        email: email?.trim() || null,
+        email_normalized: emailNormalized,
+        name_normalized: (boothCompany || name.trim()).toLowerCase(),
+        company: boothCompany,
+        cargo: cargo?.trim() || null,
+        notes: notes?.trim() || null,
+        whatsapp: phone.trim(),
+        cidade: cidade?.trim() || null,
+        estado: estado?.trim() || null,
+        tipo: [],
+        pipeline_id: link.pipeline_id,
+        stage_id: firstStage.id,
+        assigned_to_user_id: link.user_id,
+        created_by_user_id: link.user_id,
+      };
+
+      const optFields: Record<string, any> = {
+        origem: 'FEIRA',
+        temperatura: 'QUENTE',
+        sem_documento: true,
+      };
+
+      let { data: newContact, error: insertErr } = await admin
+        .from('contacts')
+        .insert({ ...newContactData, ...optFields })
+        .select('id')
+        .single();
+
+      if (insertErr) {
+        const { data: retryContact, error: retryErr } = await admin
+          .from('contacts')
+          .insert(newContactData)
+          .select('id')
+          .single();
+        if (retryErr) throw retryErr;
+        newContact = retryContact;
+      }
+
+      if (newContact) {
+        // Criar booth_visit vinculando
+        await admin
+          .from('booth_visits')
+          .insert({
+            booth_id,
+            event_id,
+            organization_id: link.organization_id,
+            user_id: link.user_id,
+            contact_id: newContact.id,
+            contact_name: name.trim(),
+            notes: notes?.trim() || null,
+          });
+
+        // Marcar booth como VISITADO
+        await admin
+          .from('event_booths')
+          .update({ status: 'VISITADO' })
+          .eq('id', booth_id);
+      }
+
+      // Incrementar leads_count
+      await admin
+        .from('lead_capture_links')
+        .update({
+          leads_count: (link.leads_count || 0) + 1,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', link.id);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Dados registrados com sucesso! Entraremos em contato em breve.',
+        whatsapp_vendedor: link.whatsapp_vendedor || null,
+      }, { status: 201 });
+    }
+
+    // --- Fluxo original (sem contexto de evento) ---
+
     // Buscar primeiro stage do pipeline
     const { data: firstStage } = await admin
       .from('pipeline_stages')
@@ -99,10 +298,6 @@ export async function POST(request: NextRequest) {
     if (!firstStage) {
       return NextResponse.json({ error: 'Pipeline sem stages configurados' }, { status: 500 });
     }
-
-    // Normalizar para deduplicacao
-    const phoneNormalized = normalizePhone(phone);
-    const emailNormalized = normalizeEmail(email);
 
     // Verificar duplicado (mesmo phone ou email na mesma org)
     const dupChecks = [];

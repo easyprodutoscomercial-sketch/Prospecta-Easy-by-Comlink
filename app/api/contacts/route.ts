@@ -40,6 +40,7 @@ function applyContactFilters(
     instagram?: string | null;
     proxima_acao_tipo?: string | null;
     produtos_fornecidos?: string | null;
+    event_id?: string | null;
   }
 ) {
   // Filtrar por pipelines permitidas (non-admin)
@@ -51,7 +52,13 @@ function applyContactFilters(
     query = query.or(`name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,company.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
   }
   if (filters.status && filters.status !== 'all') query = query.eq('status', filters.status);
-  if (filters.tipo && filters.tipo !== 'all') query = query.contains('tipo', [filters.tipo]);
+  if (filters.tipo && filters.tipo !== 'all') {
+    if (filters.tipo === 'AMBOS') {
+      query = query.contains('tipo', ['FORNECEDOR', 'COMPRADOR']);
+    } else {
+      query = query.contains('tipo', [filters.tipo]);
+    }
+  }
   if (filters.pipeline_id) query = query.eq('pipeline_id', filters.pipeline_id);
   if (filters.stage_id) query = query.eq('stage_id', filters.stage_id);
   if (filters.assigned === 'me' && filters.userId) query = query.eq('assigned_to_user_id', filters.userId);
@@ -75,8 +82,34 @@ function applyContactFilters(
   if (filters.instagram) query = query.ilike('instagram', `%${filters.instagram}%`);
   if (filters.proxima_acao_tipo && filters.proxima_acao_tipo !== 'all') query = query.eq('proxima_acao_tipo', filters.proxima_acao_tipo);
   if (filters.produtos_fornecidos) query = query.ilike('produtos_fornecidos', `%${filters.produtos_fornecidos}%`);
+  if (filters.event_id && filters.event_id !== 'all') query = query.eq('event_id', filters.event_id);
 
   return query;
+}
+
+// Enrich a list of contacts with their linked event info (id, name, cover_image_url)
+async function attachEventsToContacts(admin: any, contacts: any[], organizationId: string) {
+  if (!contacts || contacts.length === 0) return contacts;
+  const eventIds = Array.from(
+    new Set(contacts.map((c: any) => c.event_id).filter(Boolean))
+  );
+  if (eventIds.length === 0) return contacts;
+
+  const { data: events } = await admin
+    .from('events')
+    .select('id, name, cover_image_url')
+    .eq('organization_id', organizationId)
+    .in('id', eventIds);
+
+  const eventMap: Record<string, any> = {};
+  for (const e of events || []) eventMap[e.id] = e;
+
+  for (const c of contacts) {
+    if (c.event_id && eventMap[c.event_id]) {
+      c.event = eventMap[c.event_id];
+    }
+  }
+  return contacts;
 }
 
 // GET /api/contacts - Listar contatos com filtros
@@ -150,6 +183,7 @@ export async function GET(request: NextRequest) {
       instagram: searchParams.get('instagram'),
       proxima_acao_tipo: searchParams.get('proxima_acao_tipo'),
       produtos_fornecidos: searchParams.get('produtos_fornecidos'),
+      event_id: searchParams.get('event_id'),
     };
 
     // Helper para criar query filtrada
@@ -168,6 +202,8 @@ export async function GET(request: NextRequest) {
         .range(offset, offset + limit - 1);
 
       if (error) throw error;
+
+      await attachEventsToContacts(admin, contacts || [], profile.organization_id);
 
       return NextResponse.json({
         contacts,
@@ -202,6 +238,8 @@ export async function GET(request: NextRequest) {
       if (!batch || batch.length < batchSize) break;
       currentOffset += batch.length;
     }
+
+    await attachEventsToContacts(admin, allContacts, profile.organization_id);
 
     return NextResponse.json({
       contacts: allContacts,

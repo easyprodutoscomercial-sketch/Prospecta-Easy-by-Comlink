@@ -76,8 +76,8 @@ export default function NotificationDropdown({ isOpen, onClose, position }: Noti
 
       {/* Dropdown — fixed position via portal */}
       <div
-        className="fixed w-80 sm:w-96 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-xl shadow-purple-900/30 z-[9999] overflow-hidden"
-        style={{ top: position.top, left: position.left, maxHeight: 'calc(100vh - 100px)' }}
+        className="fixed left-2 right-2 sm:left-auto sm:right-auto sm:w-96 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-xl shadow-purple-900/30 z-[9999] overflow-hidden"
+        style={{ top: position.top, ...(position.left > 0 ? { left: position.left } : {}), maxHeight: 'calc(100vh - 100px)' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-purple-800/20">

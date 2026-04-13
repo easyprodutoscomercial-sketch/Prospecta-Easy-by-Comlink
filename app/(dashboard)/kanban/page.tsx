@@ -114,6 +114,8 @@ export default function KanbanPage() {
   const [classeFilter, setClasseFilter] = useSessionState('kanban:classe', '');
   const [estadoFilter, setEstadoFilter] = useSessionState('kanban:estado', '');
   const [proximaAcaoFilter, setProximaAcaoFilter] = useSessionState('kanban:proximaAcao', '');
+  const [feiraFilter, setFeiraFilter] = useSessionState('kanban:feira', '');
+  const [eventOptions, setEventOptions] = useState<{ id: string; name: string; cover_image_url?: string | null }[]>([]);
   const [advSearch, setAdvSearch] = useSessionState('kanban:advSearch', { cpf: '', cnpj: '', whatsapp: '', empresa: '', cidade: '', telefone: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   const [userMap, setUserMap] = useState<Record<string, UserInfo>>({});
@@ -286,6 +288,15 @@ export default function KanbanPage() {
         }
       } catch { /* silent */ }
 
+      // Fetch events for feira filter dropdown (from facets — only events with contacts)
+      try {
+        const facetsRes = await fetch('/api/contacts/facets');
+        if (facetsRes.ok) {
+          const facetsData = await facetsRes.json();
+          setEventOptions(facetsData.events || []);
+        }
+      } catch { /* silent */ }
+
       // Fetch pending access requests (sent by current user)
       try {
         const arRes = await fetch('/api/access-requests?role=requester');
@@ -403,13 +414,20 @@ export default function KanbanPage() {
       );
     }
 
-    if (tipoFilter) result = result.filter((c) => c.tipo?.includes(tipoFilter));
+    if (tipoFilter) {
+      if (tipoFilter === 'AMBOS') {
+        result = result.filter((c) => c.tipo?.includes('FORNECEDOR') && c.tipo?.includes('COMPRADOR'));
+      } else {
+        result = result.filter((c) => c.tipo?.includes(tipoFilter));
+      }
+    }
     if (responsavelFilter) result = result.filter((c) => responsavelFilter === '_none' ? !c.assigned_to_user_id : c.assigned_to_user_id === responsavelFilter);
     if (temperaturaFilter) result = result.filter((c) => c.temperatura === temperaturaFilter);
     if (origemFilter) result = result.filter((c) => c.origem === origemFilter);
     if (classeFilter) result = result.filter((c) => c.classe === classeFilter);
     if (estadoFilter) result = result.filter((c) => c.estado === estadoFilter);
     if (proximaAcaoFilter) result = result.filter((c) => c.proxima_acao_tipo === proximaAcaoFilter);
+    if (feiraFilter) result = result.filter((c) => c.event_id === feiraFilter);
 
     const ilike = (val: string | null | undefined, q: string) => val ? normalizeSearch(val).includes(normalizeSearch(q)) : false;
     if (advSearch.cpf) result = result.filter((c) => ilike(c.cpf, advSearch.cpf));
@@ -424,7 +442,7 @@ export default function KanbanPage() {
     if (advSearch.produtos_fornecidos) result = result.filter((c) => ilike(c.produtos_fornecidos, advSearch.produtos_fornecidos));
 
     return result;
-  }, [contacts, search, tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
+  }, [contacts, search, tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, feiraFilter, advSearch]);
 
   // Apply chip filter IDs for views that don't support dimming (list view)
   const chipFiltered = useMemo(() => {
@@ -631,9 +649,10 @@ export default function KanbanPage() {
     if (classeFilter) count++;
     if (estadoFilter) count++;
     if (proximaAcaoFilter) count++;
+    if (feiraFilter) count++;
     Object.values(advSearch).forEach(v => { if (v) count++; });
     return count;
-  }, [search, tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
+  }, [search, tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, feiraFilter, advSearch]);
 
   function clearAllFilters() {
     setTipoFilter('');
@@ -643,6 +662,7 @@ export default function KanbanPage() {
     setClasseFilter('');
     setEstadoFilter('');
     setProximaAcaoFilter('');
+    setFeiraFilter('');
     setAdvSearch({ cpf: '', cnpj: '', whatsapp: '', empresa: '', cidade: '', telefone: '', referencia: '', contato_nome: '', cargo: '', produtos_fornecidos: '' });
     setSearch('');
     setFilterPopoverOpen(false);
@@ -658,6 +678,7 @@ export default function KanbanPage() {
       case 'classeFilter': setClasseFilter(value as string); break;
       case 'estadoFilter': setEstadoFilter(value as string); break;
       case 'proximaAcaoFilter': setProximaAcaoFilter(value as string); break;
+      case 'feiraFilter': setFeiraFilter(value as string); break;
       case 'advSearch': setAdvSearch(value as typeof advSearch); break;
     }
   }, []);
@@ -670,8 +691,9 @@ export default function KanbanPage() {
     classeFilter,
     estadoFilter,
     proximaAcaoFilter,
+    feiraFilter,
     advSearch,
-  }), [tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, advSearch]);
+  }), [tipoFilter, responsavelFilter, temperaturaFilter, origemFilter, classeFilter, estadoFilter, proximaAcaoFilter, feiraFilter, advSearch]);
 
   // Claim contact
   async function handleClaimContact(contactId: string) {
@@ -915,6 +937,7 @@ export default function KanbanPage() {
               onClearAll={clearAllFilters}
               activeFilterCount={activeFilterCount}
               userMap={userMap}
+              events={eventOptions}
               isOpen={filterPopoverOpen}
               onClose={() => setFilterPopoverOpen(false)}
             />
@@ -1024,7 +1047,7 @@ export default function KanbanPage() {
         {activeFilterCount > 0 && (
           <div className="mt-1.5 flex items-center gap-2 overflow-x-auto scrollbar-hide">
             <div className="shrink-0">
-              <FilterChips filters={filterState} onFilterChange={handleFilterChange} userMap={userMap} />
+              <FilterChips filters={filterState} onFilterChange={handleFilterChange} userMap={userMap} events={eventOptions} />
             </div>
             <button
               onClick={clearAllFilters}

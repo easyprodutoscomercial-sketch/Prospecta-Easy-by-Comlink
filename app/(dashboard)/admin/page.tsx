@@ -22,6 +22,7 @@ const MENU_OPTIONS = [
   { key: 'reports', label: 'Relatorios' },
   { key: 'requests', label: 'Solicitacoes' },
   { key: 'quiz-feira', label: 'Quiz Feira' },
+  { key: 'eventos', label: 'Feiras' },
   { key: 'settings', label: 'Configuracoes' },
 ] as const;
 

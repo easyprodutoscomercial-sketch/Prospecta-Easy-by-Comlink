@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Drawer slide-in animation */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
 /* Scrollbar hide utility for mobile horizontal scroll */
 .scrollbar-hide {
   -ms-overflow-style: none;

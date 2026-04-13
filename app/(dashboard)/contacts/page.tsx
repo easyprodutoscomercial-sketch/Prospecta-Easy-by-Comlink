@@ -54,6 +54,7 @@ const CONTACT_FILTER_DEFS = {
   instagram: { type: 'text' as const, default: '' },
   produtos_fornecidos: { type: 'text' as const, default: '' },
   proxima_acao_tipo: { type: 'select' as const, default: 'all' },
+  event_id: { type: 'select' as const, default: 'all' },
   page: { type: 'select' as const, default: '1' },
   sortBy: { type: 'select' as const, default: 'created_at' },
   sortDir: { type: 'select' as const, default: 'desc' },
@@ -96,12 +97,16 @@ function ContactsPageContent() {
     temperaturaCounts: Record<string, number>;
     origemCounts: Record<string, number>;
     classeCounts: Record<string, number>;
+    eventCounts: Record<string, number>;
+    events: { id: string; name: string; cover_image_url: string | null }[];
   }>({
     statusCounts: {},
     tipoCounts: {},
     temperaturaCounts: {},
     origemCounts: {},
     classeCounts: {},
+    eventCounts: {},
+    events: [],
   });
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -147,6 +152,8 @@ function ContactsPageContent() {
           temperaturaCounts: data.temperaturaCounts || {},
           origemCounts: data.origemCounts || {},
           classeCounts: data.classeCounts || {},
+          eventCounts: data.eventCounts || {},
+          events: data.events || [],
         });
       }
     } catch { /* silent */ }
@@ -187,6 +194,7 @@ function ContactsPageContent() {
     if (filters.instagram) params.set('instagram', filters.instagram);
     if (filters.proxima_acao_tipo !== 'all') params.set('proxima_acao_tipo', filters.proxima_acao_tipo);
     if (filters.produtos_fornecidos) params.set('produtos_fornecidos', filters.produtos_fornecidos);
+    if (filters.event_id !== 'all') params.set('event_id', filters.event_id);
     if (contactsPipelineFilter && contactsPipelineFilter !== 'all') params.set('pipeline_id', contactsPipelineFilter);
     return params;
   }, [filters, contactsPipelineFilter]);
@@ -359,6 +367,7 @@ function ContactsPageContent() {
     if (filters.instagram) count++;
     if (filters.produtos_fornecidos) count++;
     if (filters.proxima_acao_tipo !== 'all') count++;
+    if (filters.event_id !== 'all') count++;
     if (contactsPipelineFilter !== 'all') count++;
     return count;
   }, [filters, contactsPipelineFilter]);
@@ -451,6 +460,7 @@ function ContactsPageContent() {
             <option value="all">Tipo</option>
             <option value="FORNECEDOR">Fornecedor ({facetCounts.tipoCounts['FORNECEDOR'] || 0})</option>
             <option value="COMPRADOR">Comprador ({facetCounts.tipoCounts['COMPRADOR'] || 0})</option>
+            <option value="AMBOS">Ambos ({facetCounts.tipoCounts['AMBOS'] || 0})</option>
           </select>
           <select value={filters.assigned} onChange={(e) => setFilter('assigned', e.target.value)} className={selectCls}>
             <option value="all">Responsavel</option>
@@ -469,6 +479,14 @@ function ContactsPageContent() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+          {facetCounts.events.length > 0 && (
+            <select value={filters.event_id} onChange={(e) => setFilter('event_id', e.target.value)} className={selectCls}>
+              <option value="all">Feira / Evento</option>
+              {facetCounts.events.map((ev) => (
+                <option key={ev.id} value={ev.id}>{ev.name} ({facetCounts.eventCounts[ev.id] || 0})</option>
+              ))}
+            </select>
+          )}
           <select value={filters.origem} onChange={(e) => setFilter('origem', e.target.value)} className={selectCls}>
             <option value="all">Origem</option>
             {Object.entries(ORIGEM_LABELS).map(([key, label]) => (

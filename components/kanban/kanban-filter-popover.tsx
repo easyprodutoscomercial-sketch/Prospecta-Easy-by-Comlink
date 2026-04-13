@@ -14,6 +14,7 @@ interface FilterState {
   classeFilter: string;
   estadoFilter: string;
   proximaAcaoFilter: string;
+  feiraFilter: string;
   advSearch: {
     cpf: string;
     cnpj: string;
@@ -28,12 +29,19 @@ interface FilterState {
   };
 }
 
+export interface EventOption {
+  id: string;
+  name: string;
+  cover_image_url?: string | null;
+}
+
 interface KanbanFilterPopoverProps {
   filters: FilterState;
   onFilterChange: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
   onClearAll: () => void;
   activeFilterCount: number;
   userMap: Record<string, UserInfo>;
+  events?: EventOption[];
   isOpen: boolean;
   onClose: () => void;
 }
@@ -41,7 +49,7 @@ interface KanbanFilterPopoverProps {
 const selectClass = "text-xs bg-[#120826] border border-purple-700/30 rounded-lg px-2.5 py-2.5 text-neutral-200 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50 w-full appearance-none";
 const inputClass = "text-xs bg-[#120826] border border-purple-700/30 rounded-lg px-2.5 py-2.5 text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 w-full";
 
-export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activeFilterCount, userMap, isOpen, onClose }: KanbanFilterPopoverProps) {
+export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activeFilterCount, userMap, events, isOpen, onClose }: KanbanFilterPopoverProps) {
   const [tab, setTab] = useState<'quick' | 'advanced'>('quick');
   const panelRef = useRef<HTMLDivElement>(null);
   const [mounted, setMounted] = useState(false);
@@ -148,6 +156,7 @@ export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activ
                     <option value="">Todos</option>
                     <option value="FORNECEDOR">Fornecedor</option>
                     <option value="COMPRADOR">Comprador</option>
+                    <option value="AMBOS">Ambos</option>
                   </select>
                 </div>
                 <div>
@@ -202,6 +211,17 @@ export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activ
                     {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (<option key={key} value={key}>{label}</option>))}
                   </select>
                 </div>
+                {events && events.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-semibold text-purple-300/50 uppercase tracking-wider mb-1.5">Feira / Evento</label>
+                    <select value={filters.feiraFilter} onChange={(e) => onFilterChange('feiraFilter', e.target.value)} className={selectClass}>
+                      <option value="">Todas</option>
+                      {events.map((ev) => (
+                        <option key={ev.id} value={ev.id}>{ev.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -257,10 +277,10 @@ export function KanbanFilterPopover({ filters, onFilterChange, onClearAll, activ
 }
 
 /** Active filter chips that show inline in header */
-export function FilterChips({ filters, onFilterChange, userMap }: { filters: FilterState; onFilterChange: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void; userMap: Record<string, UserInfo> }) {
+export function FilterChips({ filters, onFilterChange, userMap, events }: { filters: FilterState; onFilterChange: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void; userMap: Record<string, UserInfo>; events?: EventOption[] }) {
   const chips: { label: string; onRemove: () => void }[] = [];
 
-  if (filters.tipoFilter) chips.push({ label: `Tipo: ${filters.tipoFilter === 'FORNECEDOR' ? 'Fornecedor' : 'Comprador'}`, onRemove: () => onFilterChange('tipoFilter', '' as '' | ContactType) });
+  if (filters.tipoFilter) chips.push({ label: `Tipo: ${filters.tipoFilter === 'FORNECEDOR' ? 'Fornecedor' : filters.tipoFilter === 'COMPRADOR' ? 'Comprador' : 'Ambos'}`, onRemove: () => onFilterChange('tipoFilter', '' as '' | ContactType) });
   if (filters.responsavelFilter) {
     const name = filters.responsavelFilter === '_none' ? 'Sem resp.' : (userMap[filters.responsavelFilter]?.name || 'Desconhecido');
     chips.push({ label: `Resp: ${name}`, onRemove: () => onFilterChange('responsavelFilter', '') });
@@ -270,6 +290,10 @@ export function FilterChips({ filters, onFilterChange, userMap }: { filters: Fil
   if (filters.classeFilter) chips.push({ label: `Classe: ${filters.classeFilter}`, onRemove: () => onFilterChange('classeFilter', '') });
   if (filters.estadoFilter) chips.push({ label: `Estado: ${filters.estadoFilter}`, onRemove: () => onFilterChange('estadoFilter', '') });
   if (filters.proximaAcaoFilter) chips.push({ label: `Acao: ${PROXIMA_ACAO_LABELS[filters.proximaAcaoFilter as keyof typeof PROXIMA_ACAO_LABELS] || filters.proximaAcaoFilter}`, onRemove: () => onFilterChange('proximaAcaoFilter', '') });
+  if (filters.feiraFilter) {
+    const ev = (events || []).find((e) => e.id === filters.feiraFilter);
+    chips.push({ label: `Feira: ${ev?.name || 'Desconhecida'}`, onRemove: () => onFilterChange('feiraFilter', '') });
+  }
 
   const advKeys = Object.entries(filters.advSearch).filter(([, v]) => v);
   for (const [key, value] of advKeys) {

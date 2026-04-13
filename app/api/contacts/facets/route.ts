@@ -38,6 +38,8 @@ export async function GET(request: NextRequest) {
           temperaturaCounts: {},
           origemCounts: {},
           classeCounts: {},
+          eventCounts: {},
+          events: [],
         });
       }
     }
@@ -45,7 +47,7 @@ export async function GET(request: NextRequest) {
     // Fetch only the fields we need for counting (lightweight query)
     let query = admin
       .from('contacts')
-      .select('status, tipo, temperatura, origem, classe')
+      .select('status, tipo, temperatura, origem, classe, event_id')
       .eq('organization_id', profile.organization_id);
 
     if (allowedPipelineIds !== null && allowedPipelineIds.length > 0) {
@@ -62,6 +64,7 @@ export async function GET(request: NextRequest) {
     const temperaturaCounts: Record<string, number> = {};
     const origemCounts: Record<string, number> = {};
     const classeCounts: Record<string, number> = {};
+    const eventCounts: Record<string, number> = {};
 
     for (const c of contacts || []) {
       // Status
@@ -71,8 +74,14 @@ export async function GET(request: NextRequest) {
 
       // Tipo is an array field
       if (c.tipo && Array.isArray(c.tipo)) {
-        for (const t of c.tipo) {
-          tipoCounts[t] = (tipoCounts[t] || 0) + 1;
+        const hasFornecedor = c.tipo.includes('FORNECEDOR');
+        const hasComprador = c.tipo.includes('COMPRADOR');
+        if (hasFornecedor && hasComprador) {
+          tipoCounts['AMBOS'] = (tipoCounts['AMBOS'] || 0) + 1;
+        } else {
+          for (const t of c.tipo) {
+            tipoCounts[t] = (tipoCounts[t] || 0) + 1;
+          }
         }
       }
 
@@ -90,6 +99,23 @@ export async function GET(request: NextRequest) {
       if (c.classe) {
         classeCounts[c.classe] = (classeCounts[c.classe] || 0) + 1;
       }
+
+      // Event (feira)
+      if (c.event_id) {
+        eventCounts[c.event_id] = (eventCounts[c.event_id] || 0) + 1;
+      }
+    }
+
+    // Fetch event details for the events present in the counts
+    const eventIds = Object.keys(eventCounts);
+    let events: { id: string; name: string; cover_image_url: string | null }[] = [];
+    if (eventIds.length > 0) {
+      const { data: eventRows } = await admin
+        .from('events')
+        .select('id, name, cover_image_url')
+        .eq('organization_id', profile.organization_id)
+        .in('id', eventIds);
+      events = eventRows || [];
     }
 
     return NextResponse.json({
@@ -98,6 +124,8 @@ export async function GET(request: NextRequest) {
       temperaturaCounts,
       origemCounts,
       classeCounts,
+      eventCounts,
+      events,
     });
 
   } catch (error: any) {

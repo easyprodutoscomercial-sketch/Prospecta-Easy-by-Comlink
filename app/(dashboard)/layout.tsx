@@ -6,6 +6,7 @@ import { Providers } from '@/components/providers';
 import DashboardBanner from '@/components/dashboard-banner';
 import CommandPalette from '@/components/command-palette';
 import { ProductTour } from '@/components/onboarding/product-tour';
+import OfflineIndicator from '@/components/offline/offline-indicator';
 
 export default async function DashboardLayout({
   children,
@@ -46,6 +47,7 @@ export default async function DashboardLayout({
         </div>
       </main>
       <CommandPalette />
+      <OfflineIndicator />
     </div>
   );
 }
