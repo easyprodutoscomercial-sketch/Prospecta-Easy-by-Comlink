@@ -179,16 +179,43 @@ export async function GET(
     const daysWithVisits = dailyDetails.filter((d) => d.visits > 0).length;
     const totalVisits = (visits || []).length;
 
+    // Leads avulsos = contatos com event_id deste evento MAS sem booth_visit.
+    // Fonte de verdade: contar contacts com event_id = X e excluir aqueles que
+    // ja aparecem em booth_visits.contact_id.
+    const visitContactIds = new Set<string>();
+    (visits || []).forEach((v: any) => {
+      if (v.contact_id) visitContactIds.add(v.contact_id);
+    });
+
+    const { data: eventContacts } = await admin
+      .from('contacts')
+      .select('id, created_by_user_id, created_at')
+      .eq('organization_id', profile.organization_id)
+      .eq('event_id', id);
+
+    const walkInContacts = (eventContacts || []).filter((c: any) => !visitContactIds.has(c.id));
+    const totalWalkIns = walkInContacts.length;
+
+    // Walk-ins por vendedor (pra futuro breakdown)
+    const walkInsByUser: Record<string, number> = {};
+    walkInContacts.forEach((c: any) => {
+      const uid = c.created_by_user_id || 'unknown';
+      walkInsByUser[uid] = (walkInsByUser[uid] || 0) + 1;
+    });
+
     return NextResponse.json({
       total_booths: totalBooths,
       visited_booths: visitedBooths,
       pending_booths: pendingBooths,
       progress_pct: totalBooths > 0 ? Math.round((visitedBooths / totalBooths) * 100) : 0,
       total_visits: totalVisits,
+      total_walk_ins: totalWalkIns,
+      total_leads_event: totalVisits + totalWalkIns,
       total_event_days: eventDays.length,
       days_with_visits: daysWithVisits,
       avg_visits_per_day: daysWithVisits > 0 ? Math.round(totalVisits / daysWithVisits) : 0,
       by_user: byUser,
+      walk_ins_by_user: walkInsByUser,
       by_day: dailyDetails,
       cumulative_by_day: cumulativeByDay,
       by_type: byType,

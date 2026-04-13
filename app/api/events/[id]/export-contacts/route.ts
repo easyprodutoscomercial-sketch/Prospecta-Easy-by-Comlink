@@ -84,7 +84,15 @@ export async function GET(
     const xlsRows = allContacts.map((c) => {
       const visit = visitByContactId.get(c.id);
       const booth = visit?.event_booths;
+      // Tipo de captura: Stand se tem booth_visit, Avulso se so tem event_id.
+      // Fallback por marker [Avulso] nas notes pra ser ainda mais robusto.
+      const captureType = visit
+        ? 'Stand'
+        : (c.notes || '').startsWith('[Avulso]')
+          ? 'Avulso'
+          : 'Evento';
       return {
+        'Tipo de Captura': captureType,
         'Nome': c.name || '',
         'Empresa': c.company || booth?.company_name || '',
         'Email': c.email || '',
