@@ -3735,6 +3735,27 @@ function ContatosTab({ eventId }: { eventId: string }) {
 
   const isAvulso = (c: any) => (c.notes || '').trim().startsWith('[Avulso]');
 
+  // Extrai URL de foto do campo notes. Walk-in grava como texto:
+  //   "Foto da pessoa: https://..."
+  //   "Foto do cartao: https://..."
+  // Prioriza foto da pessoa (mais identificavel). Cai pra foto do cartao
+  // se nao tiver pessoa.
+  const extractPhoto = (notes: string | null): string | null => {
+    if (!notes) return null;
+    const pessoa = notes.match(/Foto da pessoa:\s*(https?:\/\/\S+)/);
+    if (pessoa) return pessoa[1];
+    const cartao = notes.match(/Foto do cartao:\s*(https?:\/\/\S+)/);
+    if (cartao) return cartao[1];
+    return null;
+  };
+
+  const getInitials = (name: string): string => {
+    const parts = (name || '').trim().split(/\s+/);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+  };
+
   if (loading) {
     return (
       <div className="space-y-3 animate-pulse">
@@ -3770,12 +3791,25 @@ function ContatosTab({ eventId }: { eventId: string }) {
       ) : (
         <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden">
           <div className="divide-y divide-purple-800/20">
-            {filtered.map((c) => (
+            {filtered.map((c) => {
+              const photo = extractPhoto(c.notes);
+              return (
               <Link
                 key={c.id}
                 href={`/contacts/${c.id}`}
                 className="flex items-center gap-4 p-4 hover:bg-purple-800/20 transition-colors"
               >
+                {photo ? (
+                  <img
+                    src={photo}
+                    alt={c.name}
+                    className="w-12 h-12 rounded-full object-cover border border-purple-700/40 shrink-0"
+                  />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-purple-800 flex items-center justify-center text-white font-bold text-sm border border-purple-700/40 shrink-0">
+                    {getInitials(c.name)}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <p className="text-white font-semibold truncate">{c.name}</p>
@@ -3802,7 +3836,8 @@ function ContatosTab({ eventId }: { eventId: string }) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </Link>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
