@@ -262,13 +262,6 @@ export default function ContactCard({
             </div>
           </div>
         </div>
-
-        <div className="border-t border-purple-800/30 px-3 sm:px-4 py-2 flex justify-end">
-          <Link href={`/contacts/${contact.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-purple-300 transition-colors">
-            Ver detalhes
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          </Link>
-        </div>
       </div>
     );
   }
@@ -435,13 +428,6 @@ export default function ContactCard({
             )}
           </div>
         </div>
-      </div>
-
-      <div className="border-t border-purple-800/30 px-4 sm:px-5 py-2 flex justify-end">
-        <Link href={`/contacts/${contact.id}`} className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-purple-300 transition-colors">
-          Ver detalhes
-          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-        </Link>
       </div>
     </div>
   );

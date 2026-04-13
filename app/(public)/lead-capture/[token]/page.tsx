@@ -678,7 +678,7 @@ function LeadCapturePageInner() {
           </div>
 
           {/* Cidade + Estado - side by side */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-[1fr_80px] gap-2">
             <div>
               <label className="block text-xs font-medium text-purple-300/80 mb-1">Cidade</label>
               <input
@@ -686,17 +686,22 @@ function LeadCapturePageInner() {
                 value={cidade}
                 onChange={(e) => setCidade(e.target.value)}
                 placeholder="Sua cidade"
+                autoComplete="address-level2"
+                autoCapitalize="words"
                 className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-purple-300/80 mb-1">Estado</label>
+              <label className="block text-xs font-medium text-purple-300/80 mb-1">UF</label>
               <input
                 type="text"
                 value={estado}
-                onChange={(e) => setEstado(e.target.value)}
-                placeholder="UF"
-                className="w-full px-3.5 py-3 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                onChange={(e) => setEstado(e.target.value.toUpperCase().slice(0, 2))}
+                placeholder="SP"
+                maxLength={2}
+                autoComplete="address-level1"
+                autoCapitalize="characters"
+                className="w-full px-3.5 py-3 text-sm text-center bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder:text-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent uppercase tracking-wider"
               />
             </div>
           </div>

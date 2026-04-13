@@ -17,6 +17,7 @@ import { ScoreTrend } from '@/components/lead-score/score-trend';
 import { Skeleton, SkeletonText } from '@/components/ui/skeleton';
 import Breadcrumbs from '@/components/ui/breadcrumbs';
 import { useToast } from '@/lib/toast-context';
+import { formatStatus, getStatusColor } from '@/lib/utils/labels';
 
 interface CurrentUser { user_id: string; role: string; name: string; }
 
@@ -223,9 +224,24 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     } catch { setContact((p) => p ? { ...p, inexistente: !newValue } : p); toast.error('Erro ao atualizar contato'); }
   };
 
+  // Count preenchidos: campos "importantes" do contato que têm valor
+  const detalhesCount = (() => {
+    if (!contact) return 0;
+    const fields = [
+      contact.name, contact.company, contact.email, contact.phone, contact.whatsapp,
+      contact.cpf, contact.cnpj, contact.cidade, contact.estado, contact.endereco,
+      contact.cargo, contact.contato_nome, contact.temperatura, contact.classe,
+      contact.origem, contact.segmento, contact.produtos_fornecidos, contact.website,
+      contact.instagram, contact.notes,
+      (contact.tipo && contact.tipo.length > 0) ? 'tipo' : null,
+      (contact.valor_estimado != null && contact.valor_estimado > 0) ? 'valor' : null,
+    ];
+    return fields.filter((f) => f && String(f).trim() !== '').length;
+  })();
+
   const baseTabs = [
     { key: 'timeline', label: 'Timeline', count: interactions.length + meetings.length + attachments.length },
-    { key: 'detalhes', label: 'Detalhes' },
+    { key: 'detalhes', label: 'Detalhes', count: detalhesCount },
   ];
   const tabs = isAdmin
     ? [...baseTabs, { key: 'ai-copilot', label: 'AI Copilot' }]
@@ -259,6 +275,44 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     <div className="space-y-4">
       {/* Breadcrumbs */}
       <Breadcrumbs items={[{ label: 'Contatos', href: '/contacts' }, { label: contact.name }]} />
+
+      {/* Toolbar: nome + status + açoes rápidas (sempre visível no topo) */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <h1 className={`text-xl sm:text-2xl font-bold truncate ${contact.inexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
+            {contact.name}
+          </h1>
+          <span className={`shrink-0 px-2 py-0.5 text-[11px] font-medium rounded-full whitespace-nowrap ${getStatusColor(contact.status)}`}>
+            {formatStatus(contact.status)}
+          </span>
+        </div>
+        {canModify && (
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setIsEditing(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/15 hover:border-emerald-400 transition-colors min-h-[40px]"
+              aria-label="Editar contato"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <span className="hidden sm:inline">Editar</span>
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="inline-flex items-center justify-center p-2 text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg hover:bg-red-500/15 hover:border-red-400 transition-colors min-h-[40px] min-w-[40px]"
+                aria-label="Deletar contato"
+                title="Deletar contato"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* 2-column layout */}
       <div className="flex flex-col lg:flex-row gap-6">
