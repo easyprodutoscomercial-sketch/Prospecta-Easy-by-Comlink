@@ -42,3 +42,6 @@ public/swe-worker-*.js
 
 # Windows artifacts
 nul
+
+# Claude Code local settings (pode conter permissões com segredos)
+.claude/settings.local.json
