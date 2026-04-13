@@ -7,6 +7,17 @@ import type { FairEvent, EventBooth, BoothVisit } from '@/lib/types';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS, BOOTH_STATUS_COLORS, PROSPECT_TYPE_LABELS, PROSPECT_TYPE_COLORS } from '@/lib/utils/labels';
 import { enqueueOrSend, fileToBase64 } from '@/lib/offline/queue';
 
+// Parser seguro de data ISO vinda do banco. Aceita tanto 'YYYY-MM-DD' quanto
+// 'YYYY-MM-DDT...' (com tempo/zona), sempre fixando ao meio-dia local pra
+// evitar pulo de dia por timezone. Retorna '-' se inválido.
+function formatEventDate(raw: string | null | undefined): string {
+  if (!raw) return '-';
+  const datePart = raw.slice(0, 10);
+  const d = new Date(`${datePart}T12:00:00`);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('pt-BR');
+}
+
 type Tab = 'dashboard' | 'stands' | 'map' | 'checkin' | 'timeline' | 'followup';
 
 export default function EventDetailPage() {
@@ -20,6 +31,7 @@ export default function EventDetailPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [userRole, setUserRole] = useState<string>('user');
   const [preselectedBoothId, setPreselectedBoothId] = useState<string | null>(null);
+  const [globalSearch, setGlobalSearch] = useState('');
 
   useEffect(() => {
     fetch('/api/me').then((r) => r.json()).then((d) => setUserRole(d.role || 'user')).catch(() => {});
@@ -97,7 +109,7 @@ export default function EventDetailPage() {
           <div className="flex items-center gap-4 text-xs text-purple-300/50 ml-8">
             {event.location && <span>{event.location}</span>}
             <span>
-              {new Date(event.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} - {new Date(event.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+              {formatEventDate(event.start_date)} - {formatEventDate(event.end_date)}
             </span>
           </div>
         </div>
@@ -174,6 +186,38 @@ export default function EventDetailPage() {
         </div>
       </div>
 
+      {/* Busca global de stand — sempre visível no topo, vai pra aba Stands ao digitar */}
+      {tab !== 'checkin' && (
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={globalSearch}
+            onChange={(e) => {
+              const v = e.target.value;
+              setGlobalSearch(v);
+              if (v.trim() && tab !== 'stands') setTab('stands');
+            }}
+            placeholder="Buscar stand por empresa, número ou setor..."
+            className="w-full pl-10 pr-10 py-2.5 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-transparent"
+          />
+          {globalSearch && (
+            <button
+              onClick={() => setGlobalSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-400/50 hover:text-white transition-colors"
+              title="Limpar busca"
+              aria-label="Limpar busca"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Tabs */}
       {tab !== 'checkin' && (
         <div className="flex gap-1 bg-purple-900/20 rounded-lg p-1 overflow-x-auto">
@@ -213,6 +257,7 @@ export default function EventDetailPage() {
           eventId={id}
           preselectedBoothId={preselectedBoothId}
           onClearPreselect={() => setPreselectedBoothId(null)}
+          initialSearch={globalSearch}
         />
       )}
       {tab === 'map' && (
@@ -1193,23 +1238,25 @@ function BoothDrawer({
             <textarea placeholder="O que conversou, interesses, próximos passos..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
           </div>
 
-          {/* ===== Two Buttons (#4) ===== */}
-          <div className="flex gap-3 pb-2">
+          {/* ===== Two Buttons — mobile friendly (touch area ≥ 48px) ===== */}
+          <div className="flex gap-3 pb-2 pt-1 sticky bottom-0 bg-[#120826]/95 backdrop-blur-sm -mx-0 px-0 py-2">
             <button
               type="button"
               onClick={() => handleSubmit(false)}
               disabled={submitting !== null}
-              className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
+              className="flex-1 py-4 min-h-[56px] bg-purple-600 text-white rounded-xl font-bold text-base hover:bg-purple-700 active:bg-purple-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-purple-900/30"
+              title="Salva os dados sem marcar como visitado"
             >
-              {submitting === 'save' ? 'Salvando...' : 'Salvar'}
+              {submitting === 'save' ? 'Salvando...' : 'Só Salvar'}
             </button>
             <button
               type="button"
               onClick={() => handleSubmit(true)}
               disabled={submitting !== null}
-              className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+              className="flex-1 py-4 min-h-[56px] bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 active:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-emerald-900/30"
+              title="Salva os dados e marca o stand como visitado"
             >
-              {submitting === 'visit' ? 'Registrando...' : 'Registrar Visita'}
+              {submitting === 'visit' ? 'Registrando...' : '✓ Registrar Visita'}
             </button>
           </div>
         </div>
@@ -1223,14 +1270,21 @@ function StandsTab({
   eventId,
   preselectedBoothId,
   onClearPreselect,
+  initialSearch,
 }: {
   eventId: string;
   preselectedBoothId?: string | null;
   onClearPreselect?: () => void;
+  initialSearch?: string;
 }) {
   const [booths, setBooths] = useState<EventBooth[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch || '');
+
+  // Se o search global mudar (ex: user digitou no header), sincronizar aqui
+  useEffect(() => {
+    if (initialSearch !== undefined) setSearch(initialSearch);
+  }, [initialSearch]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAdd, setShowAdd] = useState(false);
   const [newBooth, setNewBooth] = useState({ company_name: '', booth_number: '', sector: '' });
@@ -1767,6 +1821,7 @@ function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }
   const [loading, setLoading] = useState(true);
   const [selectedBooth, setSelectedBooth] = useState<EventBooth | null>(null);
   const [showNewBooth, setShowNewBooth] = useState(false);
+  const [confirmRevisit, setConfirmRevisit] = useState<EventBooth | null>(null);
 
   const fetchBooths = useCallback(async () => {
     try {
@@ -1786,6 +1841,15 @@ function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }
   }, [eventId, search]);
 
   useEffect(() => { fetchBooths(); }, [fetchBooths]);
+
+  // Ao clicar num stand, se já foi visitado, pede confirmação antes de abrir o form.
+  const handleSelectBooth = (booth: EventBooth) => {
+    if (booth.status === 'VISITADO') {
+      setConfirmRevisit(booth);
+    } else {
+      setSelectedBooth(booth);
+    }
+  };
 
   if (selectedBooth) {
     return (
@@ -1834,7 +1898,7 @@ function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }
             {booths.map((booth) => (
               <button
                 key={booth.id}
-                onClick={() => setSelectedBooth(booth)}
+                onClick={() => handleSelectBooth(booth)}
                 className={`w-full text-left bg-[#1e0f35] rounded-xl border p-4 hover:border-emerald-500/40 transition-colors ${
                   booth.status === 'VISITADO' ? 'border-emerald-500/20 opacity-60' : 'border-purple-800/30'
                 }`}
@@ -1884,6 +1948,55 @@ function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }
             />
           )}
         </>
+      )}
+
+      {/* Modal: confirmar revisita a stand já visitado */}
+      {confirmRevisit && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => setConfirmRevisit(null)}
+        >
+          <div
+            className="bg-[#1e0f35] border border-amber-500/40 rounded-2xl max-w-md w-full p-6 shadow-2xl shadow-amber-900/30"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="shrink-0 w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-white mb-1">Stand já visitado</h3>
+                <p className="text-sm text-purple-200/70">
+                  <span className="font-semibold text-amber-300">{confirmRevisit.company_name}</span>
+                  {confirmRevisit.booth_number && <span className="text-purple-300/60"> (Stand {confirmRevisit.booth_number})</span>}
+                  {' '}já foi marcado como visitado neste evento.
+                </p>
+                <p className="text-xs text-purple-300/50 mt-2 leading-relaxed">
+                  Se continuar, um novo check-in será registrado por cima. Tem certeza que quer revisitar?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmRevisit(null)}
+                className="flex-1 py-3 min-h-[48px] bg-purple-800/40 text-purple-200 rounded-lg font-semibold text-sm hover:bg-purple-800/60 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedBooth(confirmRevisit);
+                  setConfirmRevisit(null);
+                }}
+                className="flex-1 py-3 min-h-[48px] bg-amber-500 text-white rounded-lg font-bold text-sm hover:bg-amber-600 transition-colors"
+              >
+                Sim, revisitar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -2485,13 +2598,13 @@ function CheckInForm({
           </div>
         </div>
 
-        {/* Submit */}
+        {/* Submit — mobile friendly (touch area ≥ 56px) */}
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3 bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+          className="w-full py-4 min-h-[56px] bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 active:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-emerald-900/30"
         >
-          {loading ? 'Registrando...' : 'Registrar Visita'}
+          {loading ? 'Registrando...' : '✓ Registrar Visita'}
         </button>
       </form>
     </div>

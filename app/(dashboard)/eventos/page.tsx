@@ -6,6 +6,17 @@ import { useRouter } from 'next/navigation';
 import type { FairEvent } from '@/lib/types';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS } from '@/lib/utils/labels';
 
+// Parser seguro de data ISO vinda do banco. Aceita tanto 'YYYY-MM-DD' quanto
+// 'YYYY-MM-DDT...' (com tempo/zona), sempre fixando ao meio-dia local pra
+// evitar pulo de dia por timezone. Retorna '-' se inválido.
+function formatEventDate(raw: string | null | undefined): string {
+  if (!raw) return '-';
+  const datePart = raw.slice(0, 10);
+  const d = new Date(`${datePart}T12:00:00`);
+  if (isNaN(d.getTime())) return '-';
+  return d.toLocaleDateString('pt-BR');
+}
+
 export default function EventosPage() {
   const router = useRouter();
   const [events, setEvents] = useState<FairEvent[]>([]);
@@ -206,7 +217,7 @@ export default function EventosPage() {
                 )}
 
                 <p className="text-purple-300/50 text-xs mb-4">
-                  {new Date(event.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} - {new Date(event.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                  {formatEventDate(event.start_date)} - {formatEventDate(event.end_date)}
                 </p>
 
                 {/* Progress */}

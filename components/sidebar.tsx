@@ -7,6 +7,7 @@ import { useState, useEffect } from 'react';
 import NotificationBell from '@/components/notifications/notification-bell';
 import PipelineSelectorGlobal from '@/components/pipeline-selector-global';
 import WorkFrontSelector from '@/components/work-fronts/work-front-selector';
+import { useQueueCount, useOnlineStatus, useInstallQueueAutoFlush, processQueue } from '@/lib/offline/hooks';
 
 interface SidebarProps {
   profileName: string | null;
@@ -177,6 +178,11 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [quizDia, setQuizDia] = useState<{ dia: number; total: number } | null>(null);
 
+  // Fila offline: instala auto-flush e assina o contador pra badge visível.
+  useInstallQueueAutoFlush();
+  const offlineQueueCount = useQueueCount();
+  const online = useOnlineStatus();
+
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard';
     return pathname.startsWith(href);
@@ -268,6 +274,40 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
         </button>
       </div>
 
+      {/* Offline status banner — aparece quando está offline OU quando há itens na fila */}
+      {(!online || offlineQueueCount > 0) && (
+        <div className="px-4 pb-2">
+          <button
+            onClick={() => { if (online) processQueue().catch(() => {}); }}
+            disabled={!online && offlineQueueCount === 0}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg border transition-colors ${
+              !online
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-300 hover:bg-amber-500/15'
+                : 'bg-red-500/10 border-red-500/30 text-red-300 hover:bg-red-500/15 animate-pulse'
+            }`}
+            title={!online ? 'Sem conexão — dados ficam na fila local' : 'Clique para forçar sincronização'}
+          >
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {!online ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m-3.536-3.536a3 3 0 010-4.243M12 12h.01M5.636 18.364a9 9 0 010-12.728m3.536 3.536a3 3 0 000 4.243M3 3l18 18" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              )}
+            </svg>
+            <span className="flex-1 text-left font-semibold">
+              {!online ? 'Offline' : `${offlineQueueCount} pendente${offlineQueueCount > 1 ? 's' : ''}`}
+            </span>
+            {offlineQueueCount > 0 && (
+              <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full min-w-[18px] text-center ${
+                !online ? 'bg-amber-500/30 text-amber-200' : 'bg-red-500/30 text-red-200'
+              }`}>
+                {offlineQueueCount}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav className="flex-1 px-3 py-2 space-y-1" aria-label="Menu principal">
         {filteredNavItems.map((item) => (
@@ -299,6 +339,17 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
                 {tasksCount}
+              </span>
+            )}
+            {item.href === '/eventos' && offlineQueueCount > 0 && (
+              <span
+                className="ml-auto flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full min-w-[18px] text-center animate-pulse"
+                title={`${offlineQueueCount} check-in(s) pendente(s) de sincronização`}
+              >
+                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                {offlineQueueCount}
               </span>
             )}
           </Link>
