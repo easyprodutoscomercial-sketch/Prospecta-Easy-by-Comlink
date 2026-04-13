@@ -192,6 +192,11 @@ export async function POST(
       packedNotes += `\n\nFoto do cartao: ${photoContactUrl}`;
     }
 
+    // Avatar do contato: prioriza foto da pessoa, fallback pra foto do cartao.
+    // Gravado na coluna dedicada avatar_url (notes continua tendo as URLs
+    // como texto pra retrocompatibilidade com code paths antigos).
+    const avatarUrl = photoPersonUrl || photoContactUrl || null;
+
     // Se nao achou duplicata, cria contato novo.
     if (!createdContact) {
       step = 'insertContact';
@@ -211,6 +216,7 @@ export async function POST(
         assigned_to_user_id: user.id,
         name_normalized: contactName.trim().toLowerCase(),
         temperatura: 'QUENTE',
+        avatar_url: avatarUrl,
       };
       if (contactPhone) {
         insertPayload.phone = contactPhone;
@@ -231,10 +237,11 @@ export async function POST(
       if (insertErr) throw insertErr;
       createdContact = newContact;
     } else if (photoContactUrl || photoPersonUrl) {
-      // Duplicata: append fotos novas nas notes existentes se ainda nao tem
+      // Duplicata: append fotos novas nas notes existentes se ainda nao tem.
+      // E, se o contato nao tinha avatar_url, grava agora.
       const { data: existing } = await admin
         .from('contacts')
-        .select('notes')
+        .select('notes, avatar_url')
         .eq('id', createdContact.id)
         .single();
       const currentNotes = existing?.notes || '';
@@ -244,6 +251,12 @@ export async function POST(
       }
       if (photoContactUrl && !currentNotes.includes(photoContactUrl)) {
         updated += `\n\nFoto do cartao (revisita): ${photoContactUrl}`;
+      }
+      if (!existing?.avatar_url && avatarUrl) {
+        await admin
+          .from('contacts')
+          .update({ avatar_url: avatarUrl })
+          .eq('id', createdContact.id);
       }
       if (updated !== currentNotes) {
         await admin

@@ -7,6 +7,7 @@ import {
   INTERACTION_TYPE_LABELS,
   INTERACTION_OUTCOME_LABELS,
 } from '@/lib/utils/labels';
+import ContactAvatar from '@/components/contacts/contact-avatar';
 
 interface FocusContactCardProps {
   contact: any;
@@ -27,6 +28,7 @@ export default function FocusContactCard({
     <div className="bg-[#1e0f35] rounded-2xl border border-purple-800/30 p-5 sm:p-6 space-y-5">
       {/* Header: Name + Company */}
       <div className="flex items-start justify-between gap-4">
+        <ContactAvatar name={contact.name} avatarUrl={contact.avatar_url} size="lg" />
         <div className="min-w-0 flex-1">
           <h2 className="text-xl font-bold text-neutral-100 truncate">
             {contact.name}

@@ -5,6 +5,7 @@ import { Contact, PipelineStage } from '@/lib/types';
 import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS, CLASSE_LABELS, resolveTipoDisplay } from '@/lib/utils/labels';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
 import ContactMiniPipeline from '@/components/contacts/contact-mini-pipeline';
+import ContactAvatar from '@/components/contacts/contact-avatar';
 import type { DensityMode } from '@/lib/hooks/use-contact-preferences';
 
 interface UserInfo {
@@ -52,6 +53,8 @@ export default function ContactCard({
       <div className={`group bg-[#1e0f35] rounded-lg border transition-all ${isInexistente ? 'opacity-60' : ''} ${isSelected ? 'border-emerald-500 ring-1 ring-emerald-500/20' : 'border-purple-800/30 hover:border-purple-600/40'}`}>
         <div className="p-2 flex items-center gap-2">
           <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(contact.id)} className="rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500 shrink-0" />
+
+          <ContactAvatar name={contact.name} avatarUrl={contact.avatar_url} size="sm" />
 
           <Link href={`/contacts/${contact.id}`} className={`text-xs font-semibold hover:text-emerald-400 transition-colors truncate flex-1 min-w-0 ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
             {contact.name}
@@ -134,6 +137,7 @@ export default function ContactCard({
         <div className="p-3 sm:p-4">
           <div className="flex items-start gap-3">
             <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(contact.id)} className="mt-1 rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500 shrink-0" />
+            <ContactAvatar name={contact.name} avatarUrl={contact.avatar_url} size="md" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <Link href={`/contacts/${contact.id}`} className={`text-sm font-semibold hover:text-emerald-400 transition-colors truncate ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
@@ -272,6 +276,7 @@ export default function ContactCard({
       <div className="p-4 sm:p-5">
         <div className="flex items-start gap-3">
           <input type="checkbox" checked={isSelected} onChange={() => onToggleSelect(contact.id)} className="mt-1 rounded border-neutral-600 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500 shrink-0" />
+          <ContactAvatar name={contact.name} avatarUrl={contact.avatar_url} size="lg" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <Link href={`/contacts/${contact.id}`} className={`text-base font-semibold hover:text-emerald-400 transition-colors truncate ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>

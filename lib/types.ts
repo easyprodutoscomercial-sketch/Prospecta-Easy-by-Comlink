@@ -100,6 +100,8 @@ export interface Contact {
   // Evento / Feira de origem
   event_id?: string | null;
   event?: { id: string; name: string; cover_image_url: string | null } | null;
+  // Foto do contato (pessoa ou cartao). Walk-in/check-in gravam direto.
+  avatar_url?: string | null;
   // Telefones adicionais
   telefones_adicionais: TelefoneAdicional[];
   // Marcação

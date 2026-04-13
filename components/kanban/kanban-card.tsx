@@ -8,6 +8,7 @@ import type { Contact, PipelineType } from '@/lib/types';
 import { CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, PROXIMA_ACAO_LABELS, SEGMENTO_COLORS, resolveTipoDisplay } from '@/lib/utils/labels';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
 import { computeLeadScore, getScoreColor } from '@/lib/utils/lead-score';
+import ContactAvatar from '@/components/contacts/contact-avatar';
 
 export interface UserInfo {
   name: string;
@@ -192,7 +193,7 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
           </div>
         )}
 
-        {/* Avatar (compact: 24px) */}
+        {/* Owner avatar (vendedor responsavel — discreto) */}
         <div className="shrink-0">
           {isUnassigned ? (
             <div className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold border border-dashed border-purple-500/25 text-purple-300/30">?</div>
@@ -209,6 +210,9 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
             </div>
           )}
         </div>
+
+        {/* Contact avatar (foto da pessoa/cartao) */}
+        <ContactAvatar name={contact.name} avatarUrl={contact.avatar_url} size="sm" />
 
         {/* Name + company */}
         <div className="flex-1 min-w-0">

@@ -256,6 +256,9 @@ export async function POST(
           }
         }
       } else if (contactName) {
+        // Avatar: photo_contact_url (foto do cartao) e o melhor que temos aqui
+        // porque check-in de stand nao tira foto da pessoa, so do cartao.
+        const avatarUrl = photoContactUrl || null;
         const insertPayload: any = {
           organization_id: profile.organization_id,
           name: contactName,
@@ -270,6 +273,7 @@ export async function POST(
           status: 'NOVO',
           created_by_user_id: user.id,
           name_normalized: contactName.toLowerCase().trim(),
+          avatar_url: avatarUrl,
         };
         if (contactPhone) {
           insertPayload.phone = contactPhone;

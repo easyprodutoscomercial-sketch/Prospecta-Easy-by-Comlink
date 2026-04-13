@@ -7,6 +7,7 @@ import type { Contact } from '@/lib/types';
 import type { UserInfo } from './kanban-card';
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
 import { SEGMENTO_COLORS } from '@/lib/utils/labels';
+import ContactAvatar from '@/components/contacts/contact-avatar';
 
 interface KanbanCardCompactProps {
   contact: Contact;
@@ -92,7 +93,7 @@ export const KanbanCardCompact = memo(function KanbanCardCompact({ contact, over
           </div>
         )}
 
-        {/* Mini avatar */}
+        {/* Mini owner avatar (vendedor) */}
         <div className="shrink-0">
           {owner?.avatar_url ? (
             <img src={owner.avatar_url} alt="" className="w-4 h-4 object-cover rounded-full" />
@@ -103,6 +104,9 @@ export const KanbanCardCompact = memo(function KanbanCardCompact({ contact, over
             >{ownerInitials}</div>
           )}
         </div>
+
+        {/* Contact avatar (foto da pessoa/cartao) */}
+        <ContactAvatar name={contact.name} avatarUrl={contact.avatar_url} size="xs" />
 
         {/* Name */}
         <span className="text-[11px] font-bold text-white truncate flex-1">{contact.name}</span>

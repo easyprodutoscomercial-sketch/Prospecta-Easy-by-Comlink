@@ -10,6 +10,7 @@ import MotivoModal from '@/components/ui/motivo-modal';
 import Tabs from '@/components/ui/tabs';
 import ContactSidebar from '@/components/contacts/contact-sidebar';
 import ContactDetails from '@/components/contacts/contact-details';
+import ContactAvatar from '@/components/contacts/contact-avatar';
 import ContactTimeline from '@/components/contacts/contact-timeline';
 import AICopilotPanel from '@/components/ai/ai-copilot-panel';
 import { ScoreBadge } from '@/components/lead-score/score-badge';
@@ -296,12 +297,15 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       {/* Toolbar: nome + status + açoes rápidas (sempre visível no topo) */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <h1 className={`text-xl sm:text-2xl font-bold truncate ${contact.inexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
-            {contact.name}
-          </h1>
-          <span className={`shrink-0 px-2 py-0.5 text-[11px] font-medium rounded-full whitespace-nowrap ${getStatusColor(contact.status)}`}>
-            {formatStatus(contact.status)}
-          </span>
+          <ContactAvatar name={contact.name} avatarUrl={contact.avatar_url} size="xl" />
+          <div className="flex items-center gap-3 min-w-0 flex-1 flex-wrap">
+            <h1 className={`text-xl sm:text-2xl font-bold truncate ${contact.inexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
+              {contact.name}
+            </h1>
+            <span className={`shrink-0 px-2 py-0.5 text-[11px] font-medium rounded-full whitespace-nowrap ${getStatusColor(contact.status)}`}>
+              {formatStatus(contact.status)}
+            </span>
+          </div>
         </div>
         {canModify && (
           <div className="flex items-center gap-2 shrink-0">
