@@ -1,0 +1,4375 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
+import type { FairEvent, EventBooth, BoothVisit } from '@/lib/types';
+import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS, BOOTH_STATUS_COLORS, PROSPECT_TYPE_LABELS, PROSPECT_TYPE_COLORS } from '@/lib/utils/labels';
+import { enqueueOrSend, fileToBase64 } from '@/lib/offline/queue';
+
+type Tab = 'dashboard' | 'stands' | 'map' | 'checkin' | 'timeline' | 'followup';
+
+export default function EventDetailPage() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [event, setEvent] = useState<FairEvent | null>(null);
+  const [tab, setTab] = useState<Tab>('dashboard');
+  const [loading, setLoading] = useState(true);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deletingEvent, setDeletingEvent] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [userRole, setUserRole] = useState<string>('user');
+  const [preselectedBoothId, setPreselectedBoothId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/me').then((r) => r.json()).then((d) => setUserRole(d.role || 'user')).catch(() => {});
+  }, []);
+
+  const isAdmin = userRole === 'admin';
+
+  const fetchEvent = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/events/${id}`);
+      if (res.ok) {
+        setEvent(await res.json());
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  useEffect(() => { fetchEvent(); }, [fetchEvent]);
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 bg-purple-700/30 rounded w-1/3" />
+        <div className="h-4 bg-purple-700/20 rounded w-1/4" />
+        <div className="grid grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 bg-[#1e0f35] rounded-xl" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (!event) {
+    return (
+      <div className="text-center py-16">
+        <p className="text-purple-300/50">Evento não encontrado</p>
+        <Link href="/eventos" className="text-emerald-400 text-sm mt-2 inline-block hover:underline">Voltar</Link>
+      </div>
+    );
+  }
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'dashboard', label: 'Dashboard' },
+    { key: 'stands', label: 'Stands' },
+    { key: 'map', label: 'Mapa' },
+    { key: 'timeline', label: 'Timeline' },
+    { key: 'followup', label: 'Follow-up' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Cover image */}
+      {event.cover_image_url && (
+        <div className="w-full h-40 sm:h-56 rounded-xl overflow-hidden -mb-2">
+          <img src={event.cover_image_url} alt={event.name} className="w-full h-full object-cover" />
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <Link href="/eventos" className="text-purple-300/50 hover:text-emerald-400 transition-colors">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white">{event.name}</h1>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${EVENT_STATUS_COLORS[event.status]}`}>
+              {EVENT_STATUS_LABELS[event.status]}
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-purple-300/50 ml-8">
+            {event.location && <span>{event.location}</span>}
+            <span>
+              {new Date(event.start_date + 'T12:00:00').toLocaleDateString('pt-BR')} - {new Date(event.end_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 ml-8 sm:ml-0">
+          <button
+            onClick={() => setTab('checkin')}
+            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+            Fazer Check-in
+          </button>
+          <StatusToggle event={event} onUpdate={fetchEvent} />
+          <button
+            onClick={() => setShowEdit(true)}
+            className="px-3 py-1.5 bg-purple-800/30 text-purple-200/70 border border-purple-700/30 rounded-lg text-xs font-medium hover:bg-purple-800/50 hover:text-white transition-colors flex items-center gap-1.5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Editar
+          </button>
+          {isAdmin && (
+            <>
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  Excluir
+                </button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-red-400">Excluir este evento?</span>
+                  <button
+                    onClick={async () => {
+                      setDeletingEvent(true);
+                      try {
+                        const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
+                        if (res.ok) {
+                          router.push('/eventos');
+                        } else {
+                          const data = await res.json();
+                          alert(data.error || 'Erro ao excluir');
+                          setDeletingEvent(false);
+                          setShowDeleteConfirm(false);
+                        }
+                      } catch {
+                        alert('Erro ao excluir evento');
+                        setDeletingEvent(false);
+                        setShowDeleteConfirm(false);
+                      }
+                    }}
+                    disabled={deletingEvent}
+                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deletingEvent ? 'Excluindo...' : 'Confirmar'}
+                  </button>
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    disabled={deletingEvent}
+                    className="px-3 py-1.5 bg-purple-800/30 text-purple-300/60 rounded-lg text-xs font-medium hover:bg-purple-800/50 disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs */}
+      {tab !== 'checkin' && (
+        <div className="flex gap-1 bg-purple-900/20 rounded-lg p-1 overflow-x-auto">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
+                tab === t.key
+                  ? 'bg-emerald-500/20 text-emerald-400'
+                  : 'text-purple-300/50 hover:text-white hover:bg-purple-800/30'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Back button for check-in mode */}
+      {tab === 'checkin' && (
+        <button
+          onClick={() => setTab('dashboard')}
+          className="inline-flex items-center gap-2 text-purple-300/70 hover:text-white text-sm transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Voltar ao Dashboard
+        </button>
+      )}
+
+      {/* Tab content */}
+      {tab === 'dashboard' && <DashboardTab eventId={id} />}
+      {tab === 'stands' && (
+        <StandsTab
+          eventId={id}
+          preselectedBoothId={preselectedBoothId}
+          onClearPreselect={() => setPreselectedBoothId(null)}
+        />
+      )}
+      {tab === 'map' && (
+        <MapTab
+          eventId={id}
+          event={event}
+          isAdmin={isAdmin}
+          onEventUpdated={fetchEvent}
+          onOpenStand={(boothId) => {
+            setPreselectedBoothId(boothId);
+            setTab('stands');
+          }}
+        />
+      )}
+      {tab === 'checkin' && <CheckInTab eventId={id} onDone={fetchEvent} />}
+      {tab === 'timeline' && <TimelineTab eventId={id} />}
+      {tab === 'followup' && <FollowUpTab eventId={id} event={event} />}
+
+      {/* Edit Modal */}
+      {showEdit && event && (
+        <EditEventModal
+          event={event}
+          onClose={() => setShowEdit(false)}
+          onSaved={() => { setShowEdit(false); fetchEvent(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Edit Event Modal ---
+function EditEventModal({ event, onClose, onSaved }: { event: FairEvent; onClose: () => void; onSaved: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    name: event.name,
+    location: event.location || '',
+    start_date: event.start_date,
+    end_date: event.end_date,
+    pipeline_id: event.pipeline_id || '',
+    stage_id: event.stage_id || '',
+  });
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(event.cover_image_url || null);
+  const [pipelines, setPipelines] = useState<any[]>([]);
+  const [stages, setStages] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetch('/api/pipelines').then((r) => r.json()).then((d) => setPipelines(d.pipelines || d || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (form.pipeline_id) {
+      const p = pipelines.find((p: any) => p.id === form.pipeline_id);
+      setStages(p?.stages || []);
+    } else {
+      setStages([]);
+    }
+  }, [form.pipeline_id, pipelines]);
+
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCoverFile(file);
+      setCoverPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name || !form.start_date || !form.end_date) {
+      setError('Preencha nome e datas');
+      return;
+    }
+    if (!form.pipeline_id) {
+      setError('Selecione uma pipeline');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      if (coverFile) {
+        const formData = new FormData();
+        formData.append('name', form.name);
+        formData.append('location', form.location);
+        formData.append('start_date', form.start_date);
+        formData.append('end_date', form.end_date);
+        formData.append('pipeline_id', form.pipeline_id);
+        formData.append('stage_id', form.stage_id);
+        formData.append('cover_image', coverFile);
+        const res = await fetch(`/api/events/${event.id}`, { method: 'PUT', body: formData });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Erro'); }
+      } else {
+        const res = await fetch(`/api/events/${event.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(form),
+        });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || 'Erro'); }
+      }
+      onSaved();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={onClose}>
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <h2 className="text-lg font-bold text-white mb-4">Editar Evento</h2>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-2 rounded-lg text-sm mb-4">{error}</div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Cover image */}
+          <div>
+            <label className="block text-sm font-medium text-purple-200/80 mb-1">Capa do Evento</label>
+            <div className="relative">
+              {coverPreview ? (
+                <div className="relative h-36 rounded-lg overflow-hidden border border-purple-700/30">
+                  <img src={coverPreview} alt="Capa" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => { setCoverFile(null); setCoverPreview(null); }}
+                    className="absolute top-2 right-2 p-1 bg-black/50 rounded-full text-white hover:bg-black/70"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center h-36 border-2 border-dashed border-purple-700/30 rounded-lg cursor-pointer hover:border-emerald-500/30 transition-colors">
+                  <svg className="w-8 h-8 text-purple-500/30 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <span className="text-xs text-purple-300/40">Clique para adicionar capa</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={handleCoverChange} />
+                </label>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-purple-200/80 mb-1">Nome *</label>
+            <input type="text" required value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} className={inputClass} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-purple-200/80 mb-1">Local</label>
+            <input type="text" value={form.location} onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))} className={inputClass} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-purple-200/80 mb-1">Data Inicio *</label>
+              <input type="date" required value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-200/80 mb-1">Data Fim *</label>
+              <input type="date" required value={form.end_date} onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} className={inputClass} />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-purple-200/80 mb-1">Pipeline <span className="text-red-400">*</span></label>
+            <select value={form.pipeline_id} onChange={(e) => setForm((f) => ({ ...f, pipeline_id: e.target.value, stage_id: '' }))} className={inputClass} required>
+              <option value="">Selecione uma pipeline</option>
+              {pipelines.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+
+          {stages.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-purple-200/80 mb-1">Estagio Inicial</label>
+              <select value={form.stage_id} onChange={(e) => setForm((f) => ({ ...f, stage_id: e.target.value }))} className={inputClass}>
+                {stages.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button type="submit" disabled={loading} className="flex-1 px-4 py-2.5 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 disabled:opacity-50 text-sm">
+              {loading ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-purple-800/30 text-purple-200 rounded-lg font-medium hover:bg-purple-800/50 text-sm">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// --- Status Toggle ---
+function StatusToggle({ event, onUpdate }: { event: FairEvent; onUpdate: () => void }) {
+  const [loading, setLoading] = useState(false);
+
+  const toggle = async (status: string) => {
+    setLoading(true);
+    try {
+      await fetch(`/api/events/${event.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      onUpdate();
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (event.status === 'RASCUNHO') {
+    return (
+      <button onClick={() => toggle('ATIVO')} disabled={loading} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-medium hover:bg-emerald-600 disabled:opacity-50">
+        Ativar Evento
+      </button>
+    );
+  }
+  if (event.status === 'ATIVO') {
+    return (
+      <button onClick={() => toggle('ENCERRADO')} disabled={loading} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 disabled:opacity-50">
+        Encerrar Evento
+      </button>
+    );
+  }
+  return (
+    <button onClick={() => toggle('ATIVO')} disabled={loading} className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-500/30 disabled:opacity-50">
+      Reabrir
+    </button>
+  );
+}
+
+// --- Dashboard Tab ---
+function DashboardTab({ eventId }: { eventId: string }) {
+  const [stats, setStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    fetch(`/api/events/${eventId}/stats`)
+      .then((r) => r.json())
+      .then(setStats)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [eventId]);
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
+        {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 bg-[#1e0f35] rounded-xl" />)}
+      </div>
+    );
+  }
+
+  if (!stats) return null;
+
+  const maxDayVisits = Math.max(...(stats.by_day || []).map((d: any) => d.visits), 1);
+
+  return (
+    <div className="space-y-6">
+      {/* Botão relatório executivo */}
+      <div className="flex justify-end">
+        <button
+          onClick={() => router.push(`/eventos/${eventId}/relatorio`)}
+          className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold px-4 py-2.5 rounded-lg shadow-lg shadow-emerald-500/20 transition-all text-sm"
+          title="Gerar relatório executivo em PDF"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          Relatório Executivo
+        </button>
+      </div>
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Stands" value={stats.total_booths} />
+        <StatCard label="Visitados" value={stats.visited_booths} color="emerald" />
+        <StatCard label="Pendentes" value={stats.pending_booths} color="amber" />
+        <StatCard label="Progresso" value={`${stats.progress_pct}%`} color="cyan" />
+      </div>
+
+      {/* Secondary KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="Total Visitas" value={stats.total_visits} color="purple" />
+        <StatCard label="Dias do Evento" value={stats.total_event_days} color="purple" />
+        <StatCard label="Dias com Visitas" value={stats.days_with_visits} color="emerald" />
+        <StatCard label="Media/Dia" value={stats.avg_visits_per_day} color="cyan" />
+      </div>
+
+      {/* Progress bar */}
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-purple-200/70 font-medium">Cobertura do Evento</span>
+          <span className="text-emerald-400 font-bold text-sm">{stats.visited_booths}/{stats.total_booths}</span>
+        </div>
+        <div className="w-full bg-purple-900/40 rounded-full h-3">
+          <div
+            className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-3 rounded-full transition-all"
+            style={{ width: `${stats.progress_pct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* ===== DAILY BREAKDOWN ===== */}
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+        <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Registro Diario</h3>
+
+        {(stats.by_day || []).length === 0 ? (
+          <p className="text-purple-300/40 text-sm">Nenhuma visita registrada ainda</p>
+        ) : (
+          <div className="space-y-3">
+            {stats.by_day.map((day: any) => {
+              const isExpanded = expandedDay === day.date;
+              const isToday = day.date === new Date().toISOString().split('T')[0];
+              const cumDay = (stats.cumulative_by_day || []).find((c: any) => c.date === day.date);
+
+              return (
+                <div key={day.date} className={`rounded-xl border transition-colors ${isToday ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-purple-800/20 bg-purple-900/10'}`}>
+                  {/* Day header — clickable */}
+                  <button
+                    onClick={() => setExpandedDay(isExpanded ? null : day.date)}
+                    className="w-full text-left p-4 flex items-center gap-4"
+                  >
+                    {/* Day number badge */}
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 font-bold text-sm ${
+                      day.visits > 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-purple-800/30 text-purple-400/40'
+                    }`}>
+                      D{day.day_number}
+                    </div>
+
+                    {/* Date + summary */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-white font-medium">
+                          {new Date(day.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}
+                        </span>
+                        {isToday && <span className="px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 text-[9px] font-bold rounded uppercase">Hoje</span>}
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-purple-300/40 mt-0.5">
+                        <span>{day.visits} visita{day.visits !== 1 ? 's' : ''}</span>
+                        <span>{day.unique_booths} stand{day.unique_booths !== 1 ? 's' : ''}</span>
+                        {day.active_hours > 0 && <span>{day.active_hours}h ativas</span>}
+                        {day.avg_per_hour > 0 && <span>{day.avg_per_hour}/hora</span>}
+                      </div>
+                    </div>
+
+                    {/* Mini bar */}
+                    <div className="w-20 shrink-0 hidden sm:block">
+                      <div className="w-full bg-purple-900/40 rounded-full h-2">
+                        <div
+                          className="bg-emerald-500 h-2 rounded-full transition-all"
+                          style={{ width: `${Math.round((day.visits / maxDayVisits) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Visit count */}
+                    <span className="text-emerald-400 font-bold text-lg shrink-0 w-10 text-right">{day.visits}</span>
+
+                    {/* Cumulative % */}
+                    {cumDay && (
+                      <span className="text-cyan-400/70 text-xs font-medium shrink-0 w-12 text-right">{cumDay.cumulative_pct}%</span>
+                    )}
+
+                    {/* Chevron */}
+                    <svg className={`w-4 h-4 text-purple-400/30 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* Expanded detail */}
+                  {isExpanded && (
+                    <div className="px-4 pb-4 border-t border-purple-800/15 pt-3 space-y-4">
+                      {/* Horario */}
+                      {day.first_visit && (
+                        <div className="flex items-center gap-6 text-xs">
+                          <div>
+                            <span className="text-purple-300/40">Primeira visita: </span>
+                            <span className="text-white font-medium">
+                              {new Date(day.first_visit).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-purple-300/40">Ultima visita: </span>
+                            <span className="text-white font-medium">
+                              {new Date(day.last_visit).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-purple-300/40">Tempo ativo: </span>
+                            <span className="text-white font-medium">{day.active_hours}h</span>
+                          </div>
+                          <div>
+                            <span className="text-purple-300/40">Ritmo: </span>
+                            <span className="text-emerald-400 font-medium">{day.avg_per_hour} visitas/hora</span>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Per-user this day */}
+                        <div>
+                          <p className="text-[10px] text-purple-300/40 uppercase font-bold tracking-wider mb-2">Por Vendedor</p>
+                          {day.by_user.length === 0 ? (
+                            <p className="text-purple-300/30 text-xs">--</p>
+                          ) : (
+                            <div className="space-y-1.5">
+                              {day.by_user.map((u: any) => (
+                                <div key={u.user_id} className="flex items-center justify-between">
+                                  <span className="text-xs text-purple-200/70">{u.user_name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-16 bg-purple-900/40 rounded-full h-1.5">
+                                      <div
+                                        className="bg-emerald-500 h-1.5 rounded-full"
+                                        style={{ width: `${Math.round((u.count / day.visits) * 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="text-emerald-400 font-bold text-xs w-6 text-right">{u.count}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Per-type this day */}
+                        <div>
+                          <p className="text-[10px] text-purple-300/40 uppercase font-bold tracking-wider mb-2">Por Tipo</p>
+                          {Object.keys(day.by_type).length === 0 ? (
+                            <p className="text-purple-300/30 text-xs">--</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(day.by_type).map(([type, count]) => (
+                                <div key={type} className="flex items-center gap-1.5">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${PROSPECT_TYPE_COLORS[type] || 'bg-neutral-500/20 text-neutral-400'}`}>
+                                    {PROSPECT_TYPE_LABELS[type] || type}
+                                  </span>
+                                  <span className="text-white font-bold text-xs">{count as number}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Cumulative progress this day */}
+                      {cumDay && (
+                        <div>
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="text-purple-300/40">Progresso acumulado ate este dia</span>
+                            <span className="text-cyan-400 font-bold">{cumDay.cumulative_booths}/{stats.total_booths} ({cumDay.cumulative_pct}%)</span>
+                          </div>
+                          <div className="w-full bg-purple-900/40 rounded-full h-1.5">
+                            <div
+                              className="bg-cyan-500 h-1.5 rounded-full transition-all"
+                              style={{ width: `${cumDay.cumulative_pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Cumulative chart - visual bar chart */}
+      {(stats.cumulative_by_day || []).length > 1 && (
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+          <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Evolucao Acumulada</h3>
+          <div className="flex items-end gap-1 h-32">
+            {stats.cumulative_by_day.map((day: any, idx: number) => (
+              <div key={day.date} className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-[9px] text-cyan-400 font-bold">{day.cumulative_pct}%</span>
+                <div className="w-full bg-purple-900/40 rounded-t-sm relative" style={{ height: '100px' }}>
+                  <div
+                    className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-cyan-600 to-cyan-400 rounded-t-sm transition-all"
+                    style={{ height: `${day.cumulative_pct}%` }}
+                  />
+                </div>
+                <span className="text-[9px] text-purple-300/40">D{idx + 1}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* By user (global) */}
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+          <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Ranking Vendedores (Total)</h3>
+          {stats.by_user.length === 0 ? (
+            <p className="text-purple-300/40 text-sm">Nenhuma visita ainda</p>
+          ) : (
+            <div className="space-y-3">
+              {stats.by_user.map((u: any, idx: number) => (
+                <div key={u.user_id} className="flex items-center gap-3">
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                    idx === 0 ? 'bg-amber-500/20 text-amber-400' :
+                    idx === 1 ? 'bg-neutral-400/20 text-neutral-300' :
+                    idx === 2 ? 'bg-orange-700/20 text-orange-400' :
+                    'bg-purple-800/20 text-purple-300/50'
+                  }`}>
+                    {idx + 1}
+                  </span>
+                  <span className="text-sm text-purple-200/70 flex-1">{u.user_name}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 bg-purple-900/40 rounded-full h-1.5">
+                      <div
+                        className="bg-emerald-500 h-1.5 rounded-full"
+                        style={{ width: `${stats.total_visits ? Math.round((u.count / stats.total_visits) * 100) : 0}%` }}
+                      />
+                    </div>
+                    <span className="text-emerald-400 font-bold text-sm w-8 text-right">{u.count}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* By prospect type (global) */}
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
+          <h3 className="text-xs font-bold text-emerald-400 mb-4 uppercase tracking-widest">Por Tipo de Prospeccao (Total)</h3>
+          {Object.keys(stats.by_type).length === 0 ? (
+            <p className="text-purple-300/40 text-sm">Nenhuma visita ainda</p>
+          ) : (
+            <div className="space-y-3">
+              {Object.entries(stats.by_type).map(([type, count]) => {
+                const pct = stats.total_visits > 0 ? Math.round(((count as number) / stats.total_visits) * 100) : 0;
+                return (
+                  <div key={type} className="flex items-center gap-3">
+                    <span className={`px-2.5 py-1 rounded-lg text-xs font-bold ${PROSPECT_TYPE_COLORS[type] || 'bg-neutral-500/20 text-neutral-400'}`}>
+                      {PROSPECT_TYPE_LABELS[type] || type}
+                    </span>
+                    <div className="flex-1">
+                      <div className="w-full bg-purple-900/40 rounded-full h-2">
+                        <div
+                          className="bg-emerald-500 h-2 rounded-full transition-all"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-white font-bold text-sm w-12 text-right">{count as number}</span>
+                    <span className="text-purple-300/40 text-xs w-10 text-right">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, color = 'purple' }: { label: string; value: string | number; color?: string }) {
+  const colorMap: Record<string, string> = {
+    emerald: 'text-emerald-400',
+    amber: 'text-amber-400',
+    cyan: 'text-cyan-400',
+    purple: 'text-purple-300',
+  };
+
+  return (
+    <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
+      <p className="text-purple-300/50 text-xs mb-1">{label}</p>
+      <p className={`text-2xl font-bold ${colorMap[color] || colorMap.purple}`}>{value}</p>
+    </div>
+  );
+}
+
+// --- Booth Drawer ---
+// Helper to parse extra metadata from notes
+function parseNotesMeta(notes: string | null): { userNotes: string; extraPhotos: string[]; extraContacts: { name: string; cargo: string }[] } {
+  if (!notes) return { userNotes: '', extraPhotos: [], extraContacts: [] };
+  const match = notes.match(/<!--EXTRA:([\s\S]*?)-->/);
+  const userNotes = notes.replace(/\n?<!--EXTRA:[\s\S]*?-->/, '').trim();
+  if (!match) return { userNotes, extraPhotos: [], extraContacts: [] };
+  try {
+    const meta = JSON.parse(match[1]);
+    return { userNotes, extraPhotos: meta.photos || [], extraContacts: meta.contacts || [] };
+  } catch {
+    return { userNotes, extraPhotos: [], extraContacts: [] };
+  }
+}
+
+// --- Booth Drawer ---
+function BoothDrawer({
+  booth,
+  eventId,
+  onClose,
+  onUpdate,
+}: {
+  booth: EventBooth;
+  eventId: string;
+  onClose: () => void;
+  onUpdate: () => void;
+}) {
+  const visit = booth.visit;
+  const parsed = parseNotesMeta(visit?.notes || null);
+
+  const [contact, setContact] = useState<any>(null);
+  const [loadingContact, setLoadingContact] = useState(true);
+
+  // Pre-fill form from existing visit (#1)
+  const [contacts, setContacts] = useState<{ name: string; cargo: string }[]>(() => {
+    const primary = { name: visit?.contact_name || '', cargo: visit?.contact_role || '' };
+    const extra = parsed.extraContacts.length > 0 ? parsed.extraContacts : [];
+    return [primary, ...extra];
+  });
+  const [prospectType, setProspectType] = useState(visit?.prospect_type || 'COMPRADOR');
+  const [notes, setNotes] = useState(parsed.userNotes);
+
+  // Photos: existing URLs + new files (#2)
+  const [existingPhotos, setExistingPhotos] = useState<string[]>(() => {
+    const urls: string[] = [];
+    if (visit?.photo_facade_url) urls.push(visit.photo_facade_url);
+    if (visit?.photo_contact_url) urls.push(visit.photo_contact_url);
+    urls.push(...parsed.extraPhotos);
+    return urls;
+  });
+  const [newFiles, setNewFiles] = useState<File[]>([]);
+  const [newPreviews, setNewPreviews] = useState<string[]>([]);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const [submitting, setSubmitting] = useState<'save' | 'visit' | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // QR Code state
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrLinks, setQrLinks] = useState<{ id: string; token: string; label: string; url: string }[]>([]);
+  const [selectedQrIdx, setSelectedQrIdx] = useState(0);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [qrCopied, setQrCopied] = useState(false);
+
+  // Fetch or auto-create contact on mount
+  useEffect(() => {
+    const loadContact = async () => {
+      setLoadingContact(true);
+      try {
+        if (visit?.contact_id) {
+          const res = await fetch(`/api/contacts/${visit.contact_id}`);
+          if (res.ok) setContact(await res.json());
+        } else {
+          const res = await fetch(`/api/events/${eventId}/check-in`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ booth_id: booth.id, auto_create: true }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.contact) setContact(data.contact);
+          }
+        }
+      } catch { /* silent */ } finally { setLoadingContact(false); }
+    };
+    loadContact();
+  }, [booth.id, visit?.contact_id, eventId]);
+
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  // QR handlers
+  const handleFetchQR = async () => {
+    setQrLoading(true); setQrError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/booths/${booth.id}/qr-link`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { setQrError(data.error || 'Erro'); return; }
+      setQrLinks(data.links); setSelectedQrIdx(0);
+      const QRCode = (await import('qrcode')).default;
+      setQrDataUrl(await QRCode.toDataURL(data.links[0].url, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }));
+    } catch { setQrError('Erro de conexao'); } finally { setQrLoading(false); }
+  };
+  const handleSelectQrLink = async (idx: number) => {
+    setSelectedQrIdx(idx);
+    try { const QRCode = (await import('qrcode')).default; setQrDataUrl(await QRCode.toDataURL(qrLinks[idx].url, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } })); } catch {}
+  };
+  const handleDownloadQR = () => { if (!qrDataUrl) return; const a = document.createElement('a'); a.download = `qr-${booth.company_name.replace(/\s+/g, '-').toLowerCase()}.png`; a.href = qrDataUrl; a.click(); };
+  const handleCopyLink = async () => {
+    const url = qrLinks[selectedQrIdx]?.url; if (!url) return;
+    try { await navigator.clipboard.writeText(url); } catch { const i = document.createElement('input'); i.value = url; document.body.appendChild(i); i.select(); document.execCommand('copy'); document.body.removeChild(i); }
+    setQrCopied(true); setTimeout(() => setQrCopied(false), 2000);
+  };
+
+  // Photo handlers (#2)
+  const handleAddPhotos = (files: FileList | null) => {
+    if (!files) return;
+    const arr = Array.from(files);
+    setNewFiles((prev) => [...prev, ...arr]);
+    setNewPreviews((prev) => [...prev, ...arr.map((f) => URL.createObjectURL(f))]);
+  };
+  const handleRemoveExisting = (idx: number) => setExistingPhotos((prev) => prev.filter((_, i) => i !== idx));
+  const handleRemoveNew = (idx: number) => {
+    setNewFiles((prev) => prev.filter((_, i) => i !== idx));
+    setNewPreviews((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // Contact list handlers (#5)
+  const updateContact = (idx: number, field: 'name' | 'cargo', value: string) => {
+    setContacts((prev) => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
+  };
+  const addContact = () => setContacts((prev) => [...prev, { name: '', cargo: '' }]);
+  const removeContact = (idx: number) => {
+    if (contacts.length <= 1) return;
+    setContacts((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // Submit handler (#4 - Save vs Register Visit)
+  // Suporta modo offline: se não houver conexão ou o fetch falhar,
+  // enfileira no IndexedDB e sincroniza automaticamente quando voltar online.
+  const handleSubmit = async (markVisited: boolean) => {
+    const mode = markVisited ? 'visit' : 'save';
+    setSubmitting(mode);
+    setSuccessMsg(null);
+    try {
+      // Monta os campos de texto
+      const fields: Record<string, string> = {
+        booth_id: booth.id,
+        contact_name: contacts[0]?.name || '',
+        contact_role: contacts[0]?.cargo || '',
+        prospect_type: prospectType,
+        notes: notes,
+        mark_visited: markVisited ? 'true' : 'false',
+      };
+      const extras = contacts.slice(1).filter((c) => c.name.trim());
+      if (extras.length > 0) {
+        fields.extra_contacts = JSON.stringify(extras);
+      }
+
+      // Converte fotos para base64 (para sobreviver num IndexedDB caso offline)
+      const files: Array<{ field: string; name: string; type: string; base64: string }> = [];
+      for (let i = 0; i < newFiles.length; i++) {
+        const f = newFiles[i];
+        let field: string;
+        if (i === 0 && !existingPhotos.some((u) => u.includes('facade'))) field = 'photo_facade';
+        else if (i === 1 && !existingPhotos.some((u) => u.includes('contact'))) field = 'photo_contact';
+        else field = `photo_extra_${i}`;
+        const b64 = await fileToBase64(f);
+        files.push({ field, ...b64 });
+      }
+
+      const result = await enqueueOrSend({
+        type: 'booth-checkin',
+        endpoint: `/api/events/${eventId}/check-in`,
+        method: 'POST',
+        body: { __form: true, fields, files },
+        meta: { booth_id: booth.id, booth_name: booth.company_name, event_id: eventId },
+      });
+
+      if (result.sent) {
+        if (markVisited) {
+          setSuccessMsg('Check-in realizado!');
+          setTimeout(() => { onUpdate(); }, 1200);
+        } else {
+          setSuccessMsg('Dados salvos!');
+          setTimeout(() => setSuccessMsg(null), 2000);
+        }
+      } else if (result.queued) {
+        setSuccessMsg(markVisited ? 'Offline — check-in salvo na fila' : 'Offline — dados salvos na fila');
+        setTimeout(() => { onUpdate(); }, 1500);
+      } else if (result.response) {
+        // Erro HTTP de negócio — reporta
+        setSuccessMsg('Erro ao enviar. Tente novamente.');
+        setTimeout(() => setSuccessMsg(null), 3000);
+      }
+    } catch {
+      // Em último caso, tenta enfileirar mesmo assim
+      setSuccessMsg('Erro inesperado');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } finally {
+      setSubmitting(null);
+    }
+  };
+
+  const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="fixed top-0 right-0 h-full z-50 w-full sm:w-[480px] bg-[#120826] border-l border-purple-800/20 flex flex-col" style={{ animation: 'slideInRight 0.3s ease-out' }}>
+        {/* Header */}
+        <div className="p-4 border-b border-purple-800/20 flex items-center gap-3 shrink-0">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-white truncate">{booth.company_name}</h2>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${BOOTH_STATUS_COLORS[booth.status]}`}>
+                {booth.status === 'VISITADO' ? 'Visitado' : 'Pendente'}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-xs text-purple-300/40">
+              {booth.booth_number && <span>Stand {booth.booth_number}</span>}
+              {booth.sector && <span>{booth.sector}</span>}
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-purple-800/30 text-purple-300/50 hover:text-white transition-colors shrink-0">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Success toast */}
+          {successMsg && (
+            <div className="p-3 rounded-lg bg-emerald-500/15 text-emerald-400 text-sm font-medium border border-emerald-500/20 text-center">
+              {successMsg}
+            </div>
+          )}
+
+          {/* Contact info card */}
+          <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
+            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3">Contato Vinculado</h4>
+            {loadingContact ? (
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-purple-800/30 border-t-emerald-500 rounded-full animate-spin" />
+                <span className="text-xs text-purple-300/40">Carregando...</span>
+              </div>
+            ) : contact ? (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <p className="text-sm text-white font-medium">{contact.name}</p>
+                  {contact.phone && <p className="text-xs text-purple-200/70">{contact.phone}</p>}
+                  {contact.email && <p className="text-xs text-purple-200/70">{contact.email}</p>}
+                  {contact.cargo && <p className="text-xs text-purple-300/50">Cargo: {contact.cargo}</p>}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => window.open(`/contacts?id=${contact.id}`, '_blank')} className="flex-1 px-3 py-2 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-500/25 transition-colors text-center">
+                    Abrir Contato
+                  </button>
+                  {contact.phone && (
+                    <a href={`https://wa.me/${contact.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-green-500/15 text-green-400 rounded-lg text-xs font-medium hover:bg-green-500/25 transition-colors">
+                      WhatsApp
+                    </a>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-purple-300/40">Evento sem pipeline configurado</p>
+            )}
+          </div>
+
+          {/* QR Code section */}
+          <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 space-y-3">
+            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">QR Code para Captura</h4>
+            {qrError && <div className="p-2 rounded-lg bg-red-500/15 text-red-400 text-xs border border-red-500/20">{qrError}</div>}
+            {qrLinks.length === 0 ? (
+              <button type="button" onClick={handleFetchQR} disabled={qrLoading} className="w-full py-2.5 bg-purple-600 text-white rounded-lg font-medium text-sm hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
+                {qrLoading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Buscando...</> : 'Mostrar QR Code'}
+              </button>
+            ) : (
+              <div className="space-y-3">
+                {qrLinks.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {qrLinks.map((l, idx) => (
+                      <button key={l.id} type="button" onClick={() => handleSelectQrLink(idx)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${selectedQrIdx === idx ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-purple-800/20 text-purple-300/60 border border-purple-700/20'}`}>
+                        {l.label || `Link ${idx + 1}`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {qrDataUrl && <div className="flex justify-center"><div className="bg-white rounded-xl p-3"><img src={qrDataUrl} alt="QR Code" className="w-48 h-48" /></div></div>}
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleDownloadQR} className="flex-1 py-2 bg-purple-800/30 text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-800/50 transition-colors text-center">Baixar</button>
+                  <button type="button" onClick={handleCopyLink} className="flex-1 py-2 bg-purple-800/30 text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-800/50 transition-colors text-center">
+                    {qrCopied ? <span className="text-emerald-400">Copiado!</span> : 'Copiar Link'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Separator */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 h-px bg-purple-700/30" />
+            <span className="text-xs text-purple-300/40">Dados da Visita</span>
+            <div className="flex-1 h-px bg-purple-700/30" />
+          </div>
+
+          {/* ===== Photos Gallery (#2) ===== */}
+          <div>
+            <label className="block text-xs font-medium text-purple-200/80 mb-2">Fotos</label>
+            <div className="grid grid-cols-3 gap-2">
+              {/* Existing photos */}
+              {existingPhotos.map((url, idx) => (
+                <div key={`ex-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-purple-700/30">
+                  <img src={url} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => handleRemoveExisting(idx)} className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ))}
+              {/* New photo previews */}
+              {newPreviews.map((url, idx) => (
+                <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-emerald-500/30">
+                  <img src={url} alt={`Nova ${idx + 1}`} className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => handleRemoveNew(idx)} className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+              ))}
+              {/* Add photo button */}
+              <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleAddPhotos(e.target.files); e.target.value = ''; }} />
+              <button type="button" onClick={() => photoInputRef.current?.click()} className="aspect-square rounded-lg border-2 border-dashed border-purple-700/30 hover:border-emerald-500/40 transition-colors flex flex-col items-center justify-center gap-1 bg-[#2a1245]">
+                <svg className="w-6 h-6 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>
+                <span className="text-[9px] text-purple-300/40">Adicionar</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ===== Contacts List (#5) ===== */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-purple-200/80">Contatos</label>
+              <button type="button" onClick={addContact} className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium flex items-center gap-1">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+                Adicionar contato
+              </button>
+            </div>
+            <div className="space-y-2">
+              {contacts.map((c, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <input type="text" placeholder="Nome" value={c.name} onChange={(e) => updateContact(idx, 'name', e.target.value)} className={`${inputClass} flex-1`} />
+                  <input type="text" placeholder="Cargo" value={c.cargo} onChange={(e) => updateContact(idx, 'cargo', e.target.value)} className={`${inputClass} w-28`} />
+                  {contacts.length > 1 && (
+                    <button type="button" onClick={() => removeContact(idx)} className="p-1.5 text-red-400/40 hover:text-red-400 shrink-0">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Prospect type */}
+          <div>
+            <label className="block text-xs font-medium text-purple-200/80 mb-1.5">Tipo de Prospecção</label>
+            <div className="flex gap-2">
+              {['COMPRADOR', 'FORNECEDOR', 'AMBOS'].map((type) => (
+                <button key={type} type="button" onClick={() => setProspectType(type as 'COMPRADOR' | 'FORNECEDOR' | 'AMBOS')} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${prospectType === type ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-purple-800/20 text-purple-300/60 border border-purple-700/20 hover:bg-purple-800/30'}`}>
+                  {PROSPECT_TYPE_LABELS[type]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-xs font-medium text-purple-200/80 mb-1">Observações</label>
+            <textarea placeholder="O que conversou, interesses, próximos passos..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+          </div>
+
+          {/* ===== Two Buttons (#4) ===== */}
+          <div className="flex gap-3 pb-2">
+            <button
+              type="button"
+              onClick={() => handleSubmit(false)}
+              disabled={submitting !== null}
+              className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            >
+              {submitting === 'save' ? 'Salvando...' : 'Salvar'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSubmit(true)}
+              disabled={submitting !== null}
+              className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-bold text-sm hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+            >
+              {submitting === 'visit' ? 'Registrando...' : 'Registrar Visita'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// --- Stands Tab ---
+function StandsTab({
+  eventId,
+  preselectedBoothId,
+  onClearPreselect,
+}: {
+  eventId: string;
+  preselectedBoothId?: string | null;
+  onClearPreselect?: () => void;
+}) {
+  const [booths, setBooths] = useState<EventBooth[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [showAdd, setShowAdd] = useState(false);
+  const [newBooth, setNewBooth] = useState({ company_name: '', booth_number: '', sector: '' });
+  const [adding, setAdding] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [creatingContacts, setCreatingContacts] = useState(false);
+  const [createMsg, setCreateMsg] = useState<string | null>(null);
+  const [selectedBooth, setSelectedBooth] = useState<EventBooth | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const xlsInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDownloadTemplate = async () => {
+    const input = prompt('Quantas linhas em branco deseja no modelo?', '50');
+    if (input === null) return; // cancelado
+    const count = Math.max(1, Math.min(10000, parseInt(input, 10) || 50));
+    const XLSX = await import('xlsx');
+    const CONTACT_SLOTS = 5;
+    const header: string[] = ['Empresa', 'Stand', 'Setor'];
+    for (let n = 1; n <= CONTACT_SLOTS; n++) {
+      header.push(`Contato ${n}`, `Cargo ${n}`, `Telefone ${n}`, `Email ${n}`);
+    }
+    const data: any[][] = [header];
+    const emptyRow = new Array(header.length).fill('');
+    for (let i = 0; i < count; i++) {
+      data.push([...emptyRow]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const cols: { wch: number }[] = [{ wch: 30 }, { wch: 10 }, { wch: 20 }];
+    for (let n = 0; n < CONTACT_SLOTS; n++) {
+      cols.push({ wch: 25 }, { wch: 20 }, { wch: 18 }, { wch: 30 });
+    }
+    ws['!cols'] = cols;
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Stands');
+    XLSX.writeFile(wb, `modelo-stands-${count}-linhas.xlsx`);
+  };
+
+  const handleExcelImport = async (file: File) => {
+    setImporting(true);
+    setCreateMsg(null);
+    try {
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+      if (rows.length < 2) {
+        setCreateMsg('Planilha vazia ou sem dados (precisa de header + linhas)');
+        setImporting(false);
+        return;
+      }
+
+      const headers = rows[0].map((h: any) => String(h || '').trim().toLowerCase());
+      const nameIdx = headers.findIndex((h) => /empresa|company|razao/i.test(h));
+      const numberIdx = headers.findIndex((h) => /^stand$|^booth|^n[úu]mero$|^num$|nº/i.test(h));
+      const sectorIdx = headers.findIndex((h) => /setor|sector|area|pavilhao/i.test(h));
+
+      // Detecta até N slots de contato. Suporta "Contato 1" ou apenas "Contato" (= slot 1).
+      const findContactColIdx = (slot: number, kind: 'name' | 'role' | 'phone' | 'email'): number => {
+        const patterns: Record<string, RegExp> = {
+          name: new RegExp(`^contato\\s*${slot}$|contato\\s*${slot}.*nome|nome.*contato\\s*${slot}`, 'i'),
+          role: new RegExp(`^cargo\\s*${slot}$|cargo.*${slot}`, 'i'),
+          phone: new RegExp(`^(telefone|celular|whatsapp|fone|phone)\\s*${slot}$`, 'i'),
+          email: new RegExp(`^e-?mail\\s*${slot}$`, 'i'),
+        };
+        let idx = headers.findIndex((h) => patterns[kind].test(h));
+        // Fallback: slot 1 aceita colunas sem número ("Contato", "Cargo", "Telefone", "Email")
+        if (idx === -1 && slot === 1) {
+          const legacyPatterns: Record<string, RegExp> = {
+            name: /^contato$|^nome.*contato$|^contact.*name$/i,
+            role: /^cargo$|^role$|^posi[cç][aã]o$/i,
+            phone: /^(telefone|celular|whatsapp|fone|phone)$/i,
+            email: /^e-?mail$/i,
+          };
+          idx = headers.findIndex((h) => legacyPatterns[kind].test(h));
+        }
+        return idx;
+      };
+
+      const MAX_SLOTS = 10;
+      const slotIdx: { name: number; role: number; phone: number; email: number }[] = [];
+      for (let s = 1; s <= MAX_SLOTS; s++) {
+        slotIdx.push({
+          name: findContactColIdx(s, 'name'),
+          role: findContactColIdx(s, 'role'),
+          phone: findContactColIdx(s, 'phone'),
+          email: findContactColIdx(s, 'email'),
+        });
+      }
+
+      if (nameIdx === -1) {
+        setCreateMsg('Planilha precisa ter coluna "Empresa" no header. Baixe o modelo para referência.');
+        setImporting(false);
+        return;
+      }
+
+      type ContactRow = { name: string; role: string; phone: string; email: string };
+      const items: {
+        company_name: string;
+        booth_number?: string;
+        sector?: string;
+        contacts?: ContactRow[];
+      }[] = [];
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const name = String(row[nameIdx] || '').trim();
+        if (!name) continue;
+
+        const contacts: ContactRow[] = [];
+        for (const sx of slotIdx) {
+          const cName = sx.name >= 0 ? String(row[sx.name] || '').trim() : '';
+          const cRole = sx.role >= 0 ? String(row[sx.role] || '').trim() : '';
+          const cPhone = sx.phone >= 0 ? String(row[sx.phone] || '').trim() : '';
+          const cEmail = sx.email >= 0 ? String(row[sx.email] || '').trim() : '';
+          if (cName || cPhone || cEmail) {
+            contacts.push({ name: cName, role: cRole, phone: cPhone, email: cEmail });
+          }
+        }
+
+        items.push({
+          company_name: name,
+          booth_number: numberIdx >= 0 ? String(row[numberIdx] || '').trim() : '',
+          sector: sectorIdx >= 0 ? String(row[sectorIdx] || '').trim() : '',
+          contacts: contacts.length > 0 ? contacts : undefined,
+        });
+      }
+
+      if (items.length === 0) {
+        setCreateMsg('Nenhum stand encontrado na planilha');
+        setImporting(false);
+        return;
+      }
+
+      const res = await fetch(`/api/events/${eventId}/booths`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(items),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const boothCount = data.booths?.length || items.length;
+        const contactCount = data.contactsCreated || 0;
+        const msg = contactCount > 0
+          ? `${boothCount} stands + ${contactCount} contatos importados com sucesso!`
+          : `${boothCount} stands importados com sucesso!`;
+        setCreateMsg(msg);
+        fetchBooths();
+      } else {
+        setCreateMsg(data.error || 'Erro ao importar');
+      }
+    } catch {
+      setCreateMsg('Erro ao processar planilha');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const handleDeleteBooth = async (boothId: string, companyName: string) => {
+    if (!confirm(`Deletar stand "${companyName}" e todas suas visitas?`)) return;
+    setDeleting(boothId);
+    try {
+      const res = await fetch(`/api/events/${eventId}/booths/${boothId}`, { method: 'DELETE' });
+      if (res.ok) fetchBooths();
+    } catch {
+      // silent
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const fetchBooths = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      const res = await fetch(`/api/events/${eventId}/booths?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBooths(data.booths || []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId, search, statusFilter]);
+
+  useEffect(() => { fetchBooths(); }, [fetchBooths]);
+
+  // Auto-open drawer when navigated from the map with a preselected booth
+  useEffect(() => {
+    if (!preselectedBoothId) return;
+    if (selectedBooth?.id === preselectedBoothId) return;
+    const found = booths.find((b) => b.id === preselectedBoothId);
+    if (found) {
+      setSelectedBooth(found);
+      onClearPreselect?.();
+    }
+  }, [preselectedBoothId, booths, selectedBooth, onClearPreselect]);
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newBooth.company_name) return;
+    setAdding(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/booths`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newBooth),
+      });
+      if (res.ok) {
+        setNewBooth({ company_name: '', booth_number: '', sector: '' });
+        setShowAdd(false);
+        fetchBooths();
+      }
+    } catch {
+      // silent
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleCreateContacts = async () => {
+    if (!confirm('Criar contatos no pipeline para todos os stands pendentes?')) return;
+    setCreatingContacts(true);
+    setCreateMsg(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/booths`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ create_contacts: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCreateMsg(data.message || `${data.created} contatos criados`);
+        fetchBooths();
+      } else {
+        setCreateMsg(data.error || 'Erro ao criar contatos');
+      }
+    } catch {
+      setCreateMsg('Erro de conexao');
+    } finally {
+      setCreatingContacts(false);
+    }
+  };
+
+  // Export (#3)
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      // Fetch all booths (no filter) + visits
+      const res = await fetch(`/api/events/${eventId}/booths`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const allBooths: EventBooth[] = data.booths || [];
+
+      const XLSX = await import('xlsx');
+      const rows = allBooths.map((b) => {
+        const v = b.visit;
+        const meta = parseNotesMeta(v?.notes || null);
+        const extraContactsStr = meta.extraContacts.map((c) => `${c.name} (${c.cargo})`).join('; ');
+        return {
+          'Empresa': b.company_name,
+          'Stand': b.booth_number || '',
+          'Setor': b.sector || '',
+          'Status': b.status === 'VISITADO' ? 'Visitado' : 'Pendente',
+          'Contato': v?.contact_name || '',
+          'Cargo': v?.contact_role || '',
+          'Outros Contatos': extraContactsStr,
+          'Tipo': v?.prospect_type || '',
+          'Observações': meta.userNotes,
+          'Vendedor': v?.user_name || '',
+          'Data Visita': v?.visited_at ? new Date(v.visited_at).toLocaleString('pt-BR') : '',
+        };
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [{ wch: 30 }, { wch: 8 }, { wch: 15 }, { wch: 10 }, { wch: 20 }, { wch: 15 }, { wch: 30 }, { wch: 12 }, { wch: 40 }, { wch: 15 }, { wch: 18 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Stands');
+      XLSX.writeFile(wb, `stands-export-${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch { /* silent */ } finally { setExporting(false); }
+  };
+
+  const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
+
+  return (
+    <div className="space-y-4">
+      {/* Toolbar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar stand..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={`${inputClass} pl-10`}
+          />
+        </div>
+        <div className="flex gap-2">
+          {['all', 'PENDENTE', 'VISITADO'].map((s) => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                statusFilter === s
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                  : 'bg-purple-800/20 text-purple-300/60 border border-purple-700/20 hover:bg-purple-800/30'
+              }`}
+            >
+              {s === 'all' ? 'Todos' : s === 'PENDENTE' ? 'Pendentes' : 'Visitados'}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={handleExport}
+          disabled={exporting || booths.length === 0}
+          className="px-3 py-2 bg-cyan-600 text-white rounded-lg text-xs font-medium hover:bg-cyan-700 disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+        >
+          {exporting ? (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          )}
+          Exportar
+        </button>
+        <button
+          onClick={handleCreateContacts}
+          disabled={creatingContacts || booths.length === 0}
+          className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 shrink-0"
+        >
+          {creatingContacts ? (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          )}
+          Criar Contatos
+        </button>
+        <input
+          ref={xlsInputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) handleExcelImport(f);
+            e.target.value = '';
+          }}
+        />
+        <button
+          onClick={handleDownloadTemplate}
+          className="px-3 py-2 bg-purple-800/30 text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-800/50 transition-colors flex items-center gap-1.5 shrink-0"
+          title="Baixar modelo Excel"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Modelo
+        </button>
+        <button
+          onClick={() => xlsInputRef.current?.click()}
+          disabled={importing}
+          className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2 shrink-0"
+        >
+          {importing ? (
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+          )}
+          Importar Excel
+        </button>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 shrink-0"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Novo Stand
+        </button>
+      </div>
+
+      {createMsg && (
+        <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 text-sm border border-emerald-500/20">
+          {createMsg}
+        </div>
+      )}
+
+      {/* Inline add form */}
+      {showAdd && (
+        <form onSubmit={handleAdd} className="bg-[#1e0f35] rounded-xl border border-emerald-500/30 p-4 flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            placeholder="Nome da empresa *"
+            required
+            value={newBooth.company_name}
+            onChange={(e) => setNewBooth((b) => ({ ...b, company_name: e.target.value }))}
+            className={`${inputClass} flex-1`}
+            autoFocus
+          />
+          <input
+            type="text"
+            placeholder="Nº Stand"
+            value={newBooth.booth_number}
+            onChange={(e) => setNewBooth((b) => ({ ...b, booth_number: e.target.value }))}
+            className={`${inputClass} w-full sm:w-28`}
+          />
+          <input
+            type="text"
+            placeholder="Setor"
+            value={newBooth.sector}
+            onChange={(e) => setNewBooth((b) => ({ ...b, sector: e.target.value }))}
+            className={`${inputClass} w-full sm:w-32`}
+          />
+          <div className="flex gap-2">
+            <button type="submit" disabled={adding} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 disabled:opacity-50">
+              {adding ? '...' : 'Adicionar'}
+            </button>
+            <button type="button" onClick={() => setShowAdd(false)} className="px-4 py-2 bg-purple-800/30 text-purple-300 rounded-lg text-sm hover:bg-purple-800/50">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Count */}
+      <p className="text-xs text-purple-300/40">{booths.length} stand(s)</p>
+
+      {/* Booth list */}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-14 bg-[#1e0f35] rounded-lg animate-pulse" />
+          ))}
+        </div>
+      ) : booths.length === 0 ? (
+        <div className="text-center py-12 bg-[#1e0f35] rounded-xl border border-purple-800/30">
+          <p className="text-purple-300/50 text-sm">Nenhum stand cadastrado</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {booths.map((booth) => (
+            <div
+              key={booth.id}
+              onClick={() => setSelectedBooth(booth)}
+              className={`bg-[#1e0f35] rounded-lg border p-3 flex items-center gap-3 cursor-pointer hover:bg-[#241547] transition-colors ${
+                booth.status === 'VISITADO' ? 'border-emerald-500/20' : 'border-purple-800/30'
+              }`}
+            >
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                booth.status === 'VISITADO' ? 'bg-emerald-500/20' : 'bg-purple-800/30'
+              }`}>
+                {booth.status === 'VISITADO' ? (
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4 text-purple-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white font-medium truncate">{booth.company_name}</p>
+                <div className="flex items-center gap-3 text-[10px] text-purple-300/40">
+                  {booth.booth_number && <span>Stand {booth.booth_number}</span>}
+                  {booth.sector && <span>{booth.sector}</span>}
+                  {booth.visit && (
+                    <span className="text-emerald-400/60">
+                      Visitado por {booth.visit.user_name} em {new Date(booth.visit.visited_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${BOOTH_STATUS_COLORS[booth.status]}`}>
+                  {booth.status === 'VISITADO' ? 'Visitado' : 'Pendente'}
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteBooth(booth.id, booth.company_name); }}
+                  disabled={deleting === booth.id}
+                  className="p-1.5 rounded-lg text-red-400/40 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-30"
+                  title="Deletar stand"
+                >
+                  {deleting === booth.id ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  )}
+                </button>
+                <svg className="w-4 h-4 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Booth Drawer */}
+      {selectedBooth && (
+        <BoothDrawer
+          booth={selectedBooth}
+          eventId={eventId}
+          onClose={() => setSelectedBooth(null)}
+          onUpdate={() => { setSelectedBooth(null); fetchBooths(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Check-in Tab ---
+function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }) {
+  const [booths, setBooths] = useState<EventBooth[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [selectedBooth, setSelectedBooth] = useState<EventBooth | null>(null);
+  const [showNewBooth, setShowNewBooth] = useState(false);
+
+  const fetchBooths = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      const res = await fetch(`/api/events/${eventId}/booths?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setBooths(data.booths || []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId, search]);
+
+  useEffect(() => { fetchBooths(); }, [fetchBooths]);
+
+  if (selectedBooth) {
+    return (
+      <CheckInForm
+        eventId={eventId}
+        booth={selectedBooth}
+        onBack={() => setSelectedBooth(null)}
+        onDone={() => {
+          setSelectedBooth(null);
+          fetchBooths();
+          onDone();
+        }}
+      />
+    );
+  }
+
+  const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
+
+  return (
+    <div className="space-y-4">
+      <p className="text-purple-300/50 text-sm">Selecione o stand para registrar a visita</p>
+
+      {/* Search */}
+      <div className="relative">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-400/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          placeholder="Buscar stand por nome ou número..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className={`${inputClass} pl-11 py-3 text-base`}
+          autoFocus
+        />
+      </div>
+
+      {/* Booth list for selection */}
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-[#1e0f35] rounded-xl animate-pulse" />)}
+        </div>
+      ) : (
+        <>
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            {booths.map((booth) => (
+              <button
+                key={booth.id}
+                onClick={() => setSelectedBooth(booth)}
+                className={`w-full text-left bg-[#1e0f35] rounded-xl border p-4 hover:border-emerald-500/40 transition-colors ${
+                  booth.status === 'VISITADO' ? 'border-emerald-500/20 opacity-60' : 'border-purple-800/30'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-white font-medium">{booth.company_name}</p>
+                    <div className="flex gap-3 text-xs text-purple-300/40 mt-0.5">
+                      {booth.booth_number && <span>Stand {booth.booth_number}</span>}
+                      {booth.sector && <span>{booth.sector}</span>}
+                    </div>
+                  </div>
+                  {booth.status === 'VISITADO' ? (
+                    <span className="text-[10px] text-emerald-400 font-bold">JÁ VISITADO</span>
+                  ) : (
+                    <svg className="w-5 h-5 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* New booth inline */}
+          <button
+            onClick={() => setShowNewBooth(true)}
+            className="w-full text-left bg-[#1e0f35] rounded-xl border border-dashed border-purple-700/30 p-4 hover:border-emerald-500/40 transition-colors"
+          >
+            <div className="flex items-center gap-3 text-emerald-400">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              <span className="font-medium text-sm">Cadastrar Novo Stand</span>
+            </div>
+          </button>
+
+          {showNewBooth && (
+            <NewBoothInline
+              eventId={eventId}
+              onCreated={(booth) => {
+                setShowNewBooth(false);
+                setSelectedBooth(booth);
+                fetchBooths();
+              }}
+              onCancel={() => setShowNewBooth(false)}
+            />
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// --- New Booth Inline ---
+function NewBoothInline({
+  eventId,
+  onCreated,
+  onCancel,
+}: {
+  eventId: string;
+  onCreated: (booth: EventBooth) => void;
+  onCancel: () => void;
+}) {
+  const [form, setForm] = useState({ company_name: '', booth_number: '', sector: '' });
+  const [loading, setLoading] = useState(false);
+
+  const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.company_name) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/booths`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onCreated(data.booths[0]);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-[#1e0f35] rounded-xl border border-emerald-500/30 p-4 space-y-3">
+      <input type="text" placeholder="Nome da empresa *" required value={form.company_name} onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))} className={inputClass} autoFocus />
+      <div className="grid grid-cols-2 gap-3">
+        <input type="text" placeholder="Nº Stand" value={form.booth_number} onChange={(e) => setForm((f) => ({ ...f, booth_number: e.target.value }))} className={inputClass} />
+        <input type="text" placeholder="Setor" value={form.sector} onChange={(e) => setForm((f) => ({ ...f, sector: e.target.value }))} className={inputClass} />
+      </div>
+      <div className="flex gap-2">
+        <button type="submit" disabled={loading} className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 disabled:opacity-50">
+          {loading ? '...' : 'Criar e Fazer Check-in'}
+        </button>
+        <button type="button" onClick={onCancel} className="px-4 py-2 bg-purple-800/30 text-purple-300 rounded-lg text-sm hover:bg-purple-800/50">
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// --- Check-In Form ---
+function CheckInForm({
+  eventId,
+  booth,
+  onBack,
+  onDone,
+}: {
+  eventId: string;
+  booth: EventBooth;
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const [form, setForm] = useState({
+    contact_name: '',
+    contact_role: '',
+    prospect_type: 'COMPRADOR',
+    notes: '',
+  });
+  const [facadeFile, setFacadeFile] = useState<File | null>(null);
+  const [contactFile, setContactFile] = useState<File | null>(null);
+  const [facadePreview, setFacadePreview] = useState<string | null>(null);
+  const [contactPreview, setContactPreview] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const facadeRef = useRef<HTMLInputElement>(null);
+  const contactRef = useRef<HTMLInputElement>(null);
+  const scanCardRef = useRef<HTMLInputElement>(null);
+
+  // Card scanner state
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scannedExtras, setScannedExtras] = useState<{ phone?: string; email?: string; company?: string } | null>(null);
+
+  // QR Code state
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrLinks, setQrLinks] = useState<{ id: string; token: string; label: string; url: string }[]>([]);
+  const [selectedQrIdx, setSelectedQrIdx] = useState(0);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const [qrCopied, setQrCopied] = useState(false);
+
+  const handleFetchQR = async () => {
+    setQrLoading(true);
+    setQrError(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/booths/${booth.id}/qr-link`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setQrError(data.error || 'Erro ao buscar QR Codes');
+        return;
+      }
+      setQrLinks(data.links);
+      setSelectedQrIdx(0);
+      // Generate QR for the first link
+      const QRCode = (await import('qrcode')).default;
+      const dataUrl = await QRCode.toDataURL(data.links[0].url, {
+        width: 300,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      setQrDataUrl(dataUrl);
+    } catch {
+      setQrError('Erro de conexao ao buscar QR Codes');
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const handleSelectQrLink = async (idx: number) => {
+    setSelectedQrIdx(idx);
+    try {
+      const QRCode = (await import('qrcode')).default;
+      const dataUrl = await QRCode.toDataURL(qrLinks[idx].url, {
+        width: 300,
+        margin: 2,
+        color: { dark: '#000000', light: '#ffffff' },
+      });
+      setQrDataUrl(dataUrl);
+    } catch { /* silent */ }
+  };
+
+  const handleDownloadQR = () => {
+    if (!qrDataUrl) return;
+    const a = document.createElement('a');
+    a.download = `qr-${booth.company_name.replace(/\s+/g, '-').toLowerCase()}.png`;
+    a.href = qrDataUrl;
+    a.click();
+  };
+
+  const handleCopyLink = async () => {
+    const url = qrLinks[selectedQrIdx]?.url;
+    if (!url) return;
+    try {
+      await navigator.clipboard.writeText(url);
+      setQrCopied(true);
+      setTimeout(() => setQrCopied(false), 2000);
+    } catch {
+      const input = document.createElement('input');
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      setQrCopied(true);
+      setTimeout(() => setQrCopied(false), 2000);
+    }
+  };
+
+  const handleFile = (file: File | null, type: 'facade' | 'contact') => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    if (type === 'facade') {
+      setFacadeFile(file);
+      setFacadePreview(url);
+    } else {
+      setContactFile(file);
+      setContactPreview(url);
+    }
+  };
+
+  const handleScanCard = async (file: File | null) => {
+    if (!file) return;
+    setScanLoading(true);
+    setScanError(null);
+    setScannedExtras(null);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch('/api/scan-card', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setScanError(data.error || 'Erro ao ler cartão');
+        return;
+      }
+      // Preenche campos do form
+      setForm((f) => ({
+        ...f,
+        contact_name: data.name || f.contact_name,
+        contact_role: data.cargo || f.contact_role,
+      }));
+      // Guarda campos extras para mostrar ao usuário
+      const extras: { phone?: string; email?: string; company?: string } = {};
+      if (data.phone) extras.phone = data.phone;
+      if (data.email) extras.email = data.email;
+      if (data.company) extras.company = data.company;
+      if (Object.keys(extras).length > 0) {
+        setScannedExtras(extras);
+      }
+      // Também usa a foto do cartão como foto de contato (se ainda não tem)
+      if (!contactFile) {
+        setContactFile(file);
+        setContactPreview(URL.createObjectURL(file));
+      }
+    } catch (e: any) {
+      setScanError(e.message || 'Erro ao ler cartão');
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      // Anexar extras do cartão escaneado às notes
+      let finalNotes = form.notes;
+      if (scannedExtras) {
+        const extraLines: string[] = [];
+        if (scannedExtras.phone) extraLines.push(`Telefone: ${scannedExtras.phone}`);
+        if (scannedExtras.email) extraLines.push(`Email: ${scannedExtras.email}`);
+        if (scannedExtras.company) extraLines.push(`Empresa (cartão): ${scannedExtras.company}`);
+        if (extraLines.length > 0) {
+          finalNotes = finalNotes
+            ? `${finalNotes}\n\n--- Dados do cartão ---\n${extraLines.join('\n')}`
+            : `--- Dados do cartão ---\n${extraLines.join('\n')}`;
+        }
+      }
+
+      const formData = new FormData();
+      formData.append('booth_id', booth.id);
+      formData.append('contact_name', form.contact_name);
+      formData.append('contact_role', form.contact_role);
+      formData.append('prospect_type', form.prospect_type);
+      formData.append('notes', finalNotes);
+      if (scannedExtras?.phone) formData.append('contact_phone', scannedExtras.phone);
+      if (scannedExtras?.email) formData.append('contact_email', scannedExtras.email);
+      if (facadeFile) formData.append('photo_facade', facadeFile);
+      if (contactFile) formData.append('photo_contact', contactFile);
+
+      const res = await fetch(`/api/events/${eventId}/check-in`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        setSuccess(true);
+        setTimeout(onDone, 1500);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
+
+  if (success) {
+    return (
+      <div className="text-center py-16">
+        <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg className="w-8 h-8 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <h3 className="text-white font-bold text-lg mb-1">Check-in Realizado!</h3>
+        <p className="text-purple-300/50 text-sm">{booth.company_name}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="text-purple-300/50 hover:text-emerald-400">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div>
+          <h3 className="text-white font-bold text-lg">Check-in: {booth.company_name}</h3>
+          <div className="flex gap-3 text-xs text-purple-300/40">
+            {booth.booth_number && <span>Stand {booth.booth_number}</span>}
+            {booth.sector && <span>{booth.sector}</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* QR Code Section */}
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 space-y-3">
+        <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+          </svg>
+          QR Code para Captura de Dados
+        </h4>
+        <p className="text-xs text-purple-300/50">
+          Mostre o QR Code para a pessoa no stand. Ela escaneia e preenche seus proprios dados.
+        </p>
+
+        {qrError && (
+          <div className="p-2 rounded-lg bg-red-500/15 text-red-400 text-xs border border-red-500/20">
+            {qrError}
+          </div>
+        )}
+
+        {qrLinks.length === 0 ? (
+          <button
+            type="button"
+            onClick={handleFetchQR}
+            disabled={qrLoading}
+            className="w-full py-3 bg-purple-600 text-white rounded-lg font-medium text-sm hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+          >
+            {qrLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Buscando...
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                </svg>
+                Mostrar QR Code
+              </>
+            )}
+          </button>
+        ) : (
+          <div className="space-y-3">
+            {/* Link selector if multiple */}
+            {qrLinks.length > 1 && (
+              <div className="space-y-1">
+                <p className="text-[10px] text-purple-300/40 uppercase font-bold tracking-wider">Selecionar link</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {qrLinks.map((l, idx) => (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => handleSelectQrLink(idx)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                        selectedQrIdx === idx
+                          ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                          : 'bg-purple-800/20 text-purple-300/60 border border-purple-700/20 hover:bg-purple-800/30'
+                      }`}
+                    >
+                      {l.label || `Link ${idx + 1}`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* QR Code Image */}
+            {qrDataUrl && (
+              <div className="flex justify-center">
+                <div className="bg-white rounded-xl p-3">
+                  <img src={qrDataUrl} alt="QR Code" className="w-56 h-56" />
+                </div>
+              </div>
+            )}
+            <p className="text-center text-xs text-purple-300/50">
+              {qrLinks[selectedQrIdx]?.label || 'Link de captura'}
+            </p>
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadQR}
+                className="flex-1 py-2.5 bg-purple-800/30 text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-800/50 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                Baixar PNG
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyLink}
+                className="flex-1 py-2.5 bg-purple-800/30 text-purple-300 rounded-lg text-sm font-medium hover:bg-purple-800/50 transition-colors flex items-center justify-center gap-2"
+              >
+                {qrCopied ? (
+                  <>
+                    <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <span className="text-emerald-400">Copiado!</span>
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    Copiar Link
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Separator */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 h-px bg-purple-700/30" />
+        <span className="text-xs text-purple-300/40">ou preencha manualmente</span>
+        <div className="flex-1 h-px bg-purple-700/30" />
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Photos */}
+        <div className="grid grid-cols-2 gap-4">
+          {/* Facade photo */}
+          <div>
+            <label className="block text-sm font-medium text-purple-200/80 mb-2">Foto da Fachada</label>
+            <input
+              ref={facadeRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0] || null, 'facade')}
+            />
+            <button
+              type="button"
+              onClick={() => facadeRef.current?.click()}
+              className="w-full aspect-[4/3] rounded-xl border-2 border-dashed border-purple-700/30 hover:border-emerald-500/40 transition-colors flex flex-col items-center justify-center gap-2 overflow-hidden bg-[#2a1245]"
+            >
+              {facadePreview ? (
+                <img src={facadePreview} alt="Fachada" className="w-full h-full object-cover rounded-lg" />
+              ) : (
+                <>
+                  <svg className="w-8 h-8 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  <span className="text-xs text-purple-300/40">Tirar foto</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Contact photo */}
+          <div>
+            <label className="block text-sm font-medium text-purple-200/80 mb-2">Foto com Contato</label>
+            <input
+              ref={contactRef}
+              type="file"
+              accept="image/*"
+              capture="user"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0] || null, 'contact')}
+            />
+            <button
+              type="button"
+              onClick={() => contactRef.current?.click()}
+              className="w-full aspect-[4/3] rounded-xl border-2 border-dashed border-purple-700/30 hover:border-emerald-500/40 transition-colors flex flex-col items-center justify-center gap-2 overflow-hidden bg-[#2a1245]"
+            >
+              {contactPreview ? (
+                <img src={contactPreview} alt="Contato" className="w-full h-full object-cover rounded-lg" />
+              ) : (
+                <>
+                  <svg className="w-8 h-8 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span className="text-xs text-purple-300/40">Tirar foto</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Contact info */}
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Quem nos atendeu</h4>
+            <div>
+              <input
+                ref={scanCardRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  handleScanCard(e.target.files?.[0] || null);
+                  if (scanCardRef.current) scanCardRef.current.value = '';
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => scanCardRef.current?.click()}
+                disabled={scanLoading}
+                className="px-3 py-1.5 bg-gradient-to-r from-cyan-500/20 to-emerald-500/20 hover:from-cyan-500/30 hover:to-emerald-500/30 text-cyan-200 border border-cyan-500/40 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                title="Fotografe o cartão de visita para preencher automaticamente"
+              >
+                {scanLoading ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-cyan-300 rounded-full animate-spin" />
+                    Lendo cartão...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Escanear cartão
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {scanError && (
+            <div className="p-2 rounded-lg bg-red-500/15 text-red-400 text-xs border border-red-500/20">
+              {scanError}
+            </div>
+          )}
+
+          {scannedExtras && (
+            <div className="p-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-xs space-y-0.5">
+              <p className="text-cyan-300 font-bold mb-1">Dados extraídos do cartão:</p>
+              {scannedExtras.phone && <p className="text-cyan-200/80">📞 {scannedExtras.phone}</p>}
+              {scannedExtras.email && <p className="text-cyan-200/80">✉️ {scannedExtras.email}</p>}
+              {scannedExtras.company && <p className="text-cyan-200/80">🏢 {scannedExtras.company}</p>}
+              <p className="text-cyan-300/60 mt-1 text-[10px]">
+                Adicionados às observações — serão salvos com o check-in.
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-purple-200/80 mb-1">Nome do contato</label>
+              <input
+                type="text"
+                placeholder="Ex: João Silva"
+                value={form.contact_name}
+                onChange={(e) => setForm((f) => ({ ...f, contact_name: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-purple-200/80 mb-1">Cargo</label>
+              <input
+                type="text"
+                placeholder="Ex: Gerente Comercial"
+                value={form.contact_role}
+                onChange={(e) => setForm((f) => ({ ...f, contact_role: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          {/* Prospect type */}
+          <div>
+            <label className="block text-sm font-medium text-purple-200/80 mb-2">Tipo de Prospecção</label>
+            <div className="flex gap-2">
+              {['COMPRADOR', 'FORNECEDOR', 'AMBOS'].map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, prospect_type: type }))}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    form.prospect_type === type
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'bg-purple-800/20 text-purple-300/60 border border-purple-700/20 hover:bg-purple-800/30'
+                  }`}
+                >
+                  {PROSPECT_TYPE_LABELS[type]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div>
+            <label className="block text-sm font-medium text-purple-200/80 mb-1">Observações</label>
+            <textarea
+              placeholder="O que conversou, interesses, próximos passos..."
+              rows={3}
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              className={inputClass}
+            />
+          </div>
+        </div>
+
+        {/* Submit */}
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-3 bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 disabled:opacity-50 transition-colors"
+        >
+          {loading ? 'Registrando...' : 'Registrar Visita'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// --- Timeline Tab ---
+function TimelineTab({ eventId }: { eventId: string }) {
+  const [visits, setVisits] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const fetchVisits = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/events/${eventId}/check-in`);
+      if (res.ok) {
+        const d = await res.json();
+        setVisits(d.visits || []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId]);
+
+  useEffect(() => { fetchVisits(); }, [fetchVisits]);
+
+  const handleDeleteVisit = async (visitId: string, companyName: string) => {
+    if (!confirm(`Deletar visita em "${companyName}"?`)) return;
+    setDeleting(visitId);
+    try {
+      const res = await fetch(`/api/events/${eventId}/check-in/${visitId}`, { method: 'DELETE' });
+      if (res.ok) fetchVisits();
+    } catch {
+      // silent
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        {[1, 2, 3].map((i) => <div key={i} className="h-32 bg-[#1e0f35] rounded-xl" />)}
+      </div>
+    );
+  }
+
+  if (visits.length === 0) {
+    return (
+      <div className="text-center py-12 bg-[#1e0f35] rounded-xl border border-purple-800/30">
+        <p className="text-purple-300/50 text-sm">Nenhuma visita registrada ainda</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {visits.map((visit: any) => (
+        <div key={visit.id} className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <p className="text-white font-semibold">{visit.event_booths?.company_name || 'Stand'}</p>
+              <div className="flex items-center gap-3 text-xs text-purple-300/40 mt-0.5">
+                <span>por {visit.user_name}</span>
+                <span>{new Date(visit.visited_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                {visit.event_booths?.booth_number && <span>Stand {visit.event_booths.booth_number}</span>}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${PROSPECT_TYPE_COLORS[visit.prospect_type] || 'bg-neutral-500/20 text-neutral-400'}`}>
+                {PROSPECT_TYPE_LABELS[visit.prospect_type] || visit.prospect_type}
+              </span>
+              <button
+                onClick={() => handleDeleteVisit(visit.id, visit.event_booths?.company_name || 'Stand')}
+                disabled={deleting === visit.id}
+                className="p-1.5 rounded-lg text-red-400/40 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-30"
+                title="Deletar visita"
+              >
+                {deleting === visit.id ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Contact info */}
+          {visit.contact_name && (
+            <p className="text-sm text-purple-200/70 mb-2">
+              Contato: <span className="text-white">{visit.contact_name}</span>
+              {visit.contact_role && <span className="text-purple-300/40"> — {visit.contact_role}</span>}
+            </p>
+          )}
+
+          {visit.notes && (
+            <p className="text-sm text-purple-300/50 mb-3">{visit.notes}</p>
+          )}
+
+          {/* Photos */}
+          {(visit.photo_facade_url || visit.photo_contact_url) && (
+            <div className="flex gap-3 mt-2">
+              {visit.photo_facade_url && (
+                <a href={visit.photo_facade_url} target="_blank" rel="noopener noreferrer" className="block w-24 h-18 rounded-lg overflow-hidden border border-purple-700/30 hover:border-emerald-500/30 transition-colors">
+                  <img src={visit.photo_facade_url} alt="Fachada" className="w-full h-full object-cover" />
+                </a>
+              )}
+              {visit.photo_contact_url && (
+                <a href={visit.photo_contact_url} target="_blank" rel="noopener noreferrer" className="block w-24 h-18 rounded-lg overflow-hidden border border-purple-700/30 hover:border-emerald-500/30 transition-colors">
+                  <img src={visit.photo_contact_url} alt="Contato" className="w-full h-full object-cover" />
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================
+// Follow-up pós-evento
+// ============================================
+
+function FollowUpTab({ eventId, event }: { eventId: string; event: FairEvent }) {
+  const [visits, setVisits] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'buyers' | 'no_contact'>('buyers');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [creatingFollowUpId, setCreatingFollowUpId] = useState<string | null>(null);
+  const [followUpCreated, setFollowUpCreated] = useState<Set<string>>(new Set());
+  const [templateOpen, setTemplateOpen] = useState(false);
+  const [template, setTemplate] = useState(
+    `Olá {{nome}}! Aqui é {{vendedor}} da Controlei. Foi um prazer conversar com você no {{evento}}. Gostaria de retomar nossa conversa sobre {{empresa}} e ver como podemos avançar. Tem 5 min essa semana?`
+  );
+
+  const fetchVisits = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/events/${eventId}/check-in`);
+      if (res.ok) {
+        const d = await res.json();
+        setVisits(d.visits || []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId]);
+
+  useEffect(() => { fetchVisits(); }, [fetchVisits]);
+
+  const filteredVisits = visits.filter((v) => {
+    if (filter === 'buyers') {
+      return v.prospect_type === 'COMPRADOR' || v.prospect_type === 'AMBOS';
+    }
+    if (filter === 'no_contact') {
+      return !v.contact_id;
+    }
+    return true;
+  });
+
+  const buyersCount = visits.filter((v) => v.prospect_type === 'COMPRADOR' || v.prospect_type === 'AMBOS').length;
+  const noContactCount = visits.filter((v) => !v.contact_id).length;
+
+  // Helper: extrair telefone das notes (quando foi escaneado do cartão)
+  const extractPhoneFromNotes = (notes?: string | null): string | null => {
+    if (!notes) return null;
+    // Formato salvo pelo scan-card: "Telefone: +55 11 99999-9999"
+    const m = notes.match(/Telefone:\s*([^\n\r]+)/i);
+    if (m && m[1]) return m[1].trim();
+    // Fallback: qualquer sequência com dígitos suficientes
+    const m2 = notes.match(/(\+?\d[\d\s().-]{8,}\d)/);
+    return m2 ? m2[1] : null;
+  };
+
+  const buildMessage = (visit: any, contactNameFallback?: string) =>
+    template
+      .replace(/\{\{nome\}\}/g, visit.contact_name || contactNameFallback || 'você')
+      .replace(/\{\{vendedor\}\}/g, visit.user_name || '')
+      .replace(/\{\{evento\}\}/g, event.name || '')
+      .replace(/\{\{empresa\}\}/g, visit.event_booths?.company_name || '');
+
+  const handleOpenWhatsApp = async (visit: any) => {
+    let phone: string | null = null;
+    let contactName: string | null = null;
+
+    // 1. Tenta buscar telefone do contato ligado
+    if (visit.contact_id) {
+      try {
+        const res = await fetch(`/api/contacts/${visit.contact_id}`);
+        if (res.ok) {
+          const d = await res.json();
+          phone = d?.contact?.phone_normalized || d?.contact?.phone || null;
+          contactName = d?.contact?.name || null;
+        }
+      } catch {
+        // silent
+      }
+    }
+
+    // 2. Fallback: extrair das notes (escaneado via cartão)
+    if (!phone) {
+      phone = extractPhoneFromNotes(visit.notes);
+    }
+
+    if (!phone) {
+      alert('Sem telefone disponível para este contato. Edite o contato e adicione um número, ou escaneie o cartão de visita no check-in.');
+      return;
+    }
+
+    // Limpa para formato internacional
+    let cleanPhone = phone.replace(/\D/g, '');
+    // Se não começar com código de país, assume Brasil (55)
+    if (cleanPhone.length === 10 || cleanPhone.length === 11) {
+      cleanPhone = '55' + cleanPhone;
+    }
+
+    const message = buildMessage(visit, contactName || undefined);
+    const url = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleCopyMessage = (visit: any) => {
+    const message = template
+      .replace(/\{\{nome\}\}/g, visit.contact_name || 'você')
+      .replace(/\{\{vendedor\}\}/g, visit.user_name || '')
+      .replace(/\{\{evento\}\}/g, event.name || '')
+      .replace(/\{\{empresa\}\}/g, visit.event_booths?.company_name || '');
+    navigator.clipboard?.writeText(message);
+    setCopiedId(visit.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Garante que a visita tenha um contato vinculado; se não tiver, cria
+  // via auto_create no endpoint de check-in (usa nome do stand se necessário)
+  const ensureContactForVisit = async (visit: any): Promise<string | null> => {
+    if (visit.contact_id) return visit.contact_id;
+    try {
+      const res = await fetch(`/api/events/${eventId}/check-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          booth_id: visit.booth_id,
+          auto_create: true,
+          mark_visited: false,
+          prospect_type: visit.prospect_type || 'COMPRADOR',
+        }),
+      });
+      if (!res.ok) return null;
+      const d = await res.json();
+      const newId = d?.contact?.id || null;
+      if (newId) {
+        setVisits((prev) => prev.map((v) => (v.id === visit.id ? { ...v, contact_id: newId } : v)));
+      }
+      return newId;
+    } catch {
+      return null;
+    }
+  };
+
+  const handleCreateFollowUp = async (visit: any) => {
+    setCreatingFollowUpId(visit.id);
+    try {
+      let contactId: string | null = visit.contact_id || null;
+      if (!contactId) {
+        contactId = await ensureContactForVisit(visit);
+      }
+      if (!contactId) {
+        alert('Não foi possível criar/encontrar um contato para esta visita. Verifique se o evento tem pipeline configurado.');
+        return;
+      }
+      const payload = {
+        contact_id: contactId,
+        type: 'FOLLOW_UP',
+        outcome: 'AGUARDANDO_RETORNO',
+        note: `Follow-up iniciado a partir do evento ${event.name}${visit.event_booths?.company_name ? ` · ${visit.event_booths.company_name}` : ''}${visit.notes ? `\n\nNotas da visita: ${visit.notes}` : ''}`,
+        happened_at: new Date().toISOString(),
+      };
+      const res = await fetch('/api/interactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        setFollowUpCreated((prev) => new Set(prev).add(visit.id));
+      } else {
+        const err = await res.json();
+        alert(`Erro ao criar follow-up: ${err.error || 'desconhecido'}`);
+      }
+    } catch (e: any) {
+      alert(`Erro: ${e.message}`);
+    } finally {
+      setCreatingFollowUpId(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        {[1, 2, 3].map((i) => <div key={i} className="h-32 bg-[#1e0f35] rounded-xl" />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header com stats + template */}
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 sm:p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-white mb-1">Follow-up pós-evento</h3>
+            <p className="text-xs text-purple-300/60">
+              Transforme visitas em deals e envie mensagens de acompanhamento via WhatsApp.
+            </p>
+          </div>
+          <button
+            onClick={() => setTemplateOpen(!templateOpen)}
+            className="px-3 py-1.5 bg-purple-800/30 text-purple-200 border border-purple-700/30 rounded-lg text-xs font-medium hover:bg-purple-800/50"
+          >
+            {templateOpen ? 'Fechar template' : 'Editar template WhatsApp'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="text-center">
+            <p className="text-[10px] uppercase tracking-wider text-purple-300/50 font-bold">Total visitas</p>
+            <p className="text-2xl font-bold text-white">{visits.length}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] uppercase tracking-wider text-purple-300/50 font-bold">Compradores</p>
+            <p className="text-2xl font-bold text-emerald-400">{buyersCount}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] uppercase tracking-wider text-purple-300/50 font-bold">Sem contato</p>
+            <p className="text-2xl font-bold text-amber-400">{noContactCount}</p>
+          </div>
+        </div>
+
+        {/* Template editor */}
+        {templateOpen && (
+          <div className="mt-3 p-3 bg-[#2a1245] rounded-lg border border-purple-700/30">
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-purple-300/60 mb-1">
+              Template de mensagem · Variáveis: {'{{nome}} {{vendedor}} {{evento}} {{empresa}}'}
+            </label>
+            <textarea
+              value={template}
+              onChange={(e) => setTemplate(e.target.value)}
+              rows={4}
+              className="w-full bg-[#1e0f35] border border-purple-700/30 rounded-lg px-3 py-2 text-sm text-white placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Filtros */}
+      <div className="flex gap-1 bg-purple-900/20 rounded-lg p-1 inline-flex">
+        {([
+          { key: 'buyers', label: `Compradores (${buyersCount})` },
+          { key: 'all', label: `Todos (${visits.length})` },
+          { key: 'no_contact', label: `Sem contato (${noContactCount})` },
+        ] as { key: 'all' | 'buyers' | 'no_contact'; label: string }[]).map((f) => (
+          <button
+            key={f.key}
+            onClick={() => setFilter(f.key)}
+            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              filter === f.key
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'text-purple-300/60 hover:text-white'
+            }`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Lista */}
+      {filteredVisits.length === 0 ? (
+        <div className="text-center py-12 bg-[#1e0f35] rounded-xl border border-purple-800/30">
+          <p className="text-purple-300/50 text-sm">Nenhuma visita neste filtro</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredVisits.map((visit) => {
+            const isBuyer = visit.prospect_type === 'COMPRADOR' || visit.prospect_type === 'AMBOS';
+            const isCreating = creatingFollowUpId === visit.id;
+            const wasCreated = followUpCreated.has(visit.id);
+            return (
+              <div key={visit.id} className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
+                <div className="flex items-start gap-3">
+                  {/* Foto da fachada ou avatar */}
+                  {visit.photo_facade_url ? (
+                    <img
+                      src={visit.photo_facade_url}
+                      alt={visit.event_booths?.company_name}
+                      className="w-16 h-16 rounded-lg object-cover shrink-0 border border-purple-700/30"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-purple-700/40 to-purple-900/40 flex items-center justify-center shrink-0 border border-purple-700/30">
+                      <span className="text-lg font-bold text-purple-300/60">
+                        {(visit.event_booths?.company_name || '?').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-start gap-2 mb-1">
+                      <h4 className="text-sm font-bold text-white">
+                        {visit.event_booths?.company_name || 'Stand'}
+                      </h4>
+                      {isBuyer && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                          COMPRADOR
+                        </span>
+                      )}
+                      {!visit.contact_id && (
+                        <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          SEM CONTATO
+                        </span>
+                      )}
+                    </div>
+                    {visit.contact_name && (
+                      <p className="text-xs text-purple-200/70 mb-1">
+                        {visit.contact_name}
+                        {visit.contact_role && <span className="text-purple-300/40"> — {visit.contact_role}</span>}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 text-[10px] text-purple-300/40">
+                      <span>{visit.user_name}</span>
+                      <span>·</span>
+                      <span>{new Date(visit.visited_at).toLocaleDateString('pt-BR')}</span>
+                      {visit.event_booths?.booth_number && (
+                        <>
+                          <span>·</span>
+                          <span>Stand {visit.event_booths.booth_number}</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Ações */}
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      <button
+                        onClick={() => handleCreateFollowUp(visit)}
+                        disabled={isCreating || wasCreated}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 ${
+                          wasCreated
+                            ? 'bg-emerald-500/30 text-emerald-200 cursor-not-allowed'
+                            : isCreating
+                            ? 'bg-emerald-500/10 text-emerald-300 cursor-wait'
+                            : 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                        }`}
+                        title={!visit.contact_id ? 'Criará um contato automaticamente e registrará o follow-up' : 'Registrar follow-up no contato'}
+                      >
+                        {wasCreated ? (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Follow-up registrado
+                          </>
+                        ) : isCreating ? (
+                          'Registrando...'
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Iniciar follow-up
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenWhatsApp(visit)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-600/30"
+                        title="Abrir conversa no WhatsApp"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                        </svg>
+                        WhatsApp
+                      </button>
+
+                      <button
+                        onClick={() => handleCopyMessage(visit)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-purple-800/30 text-purple-200 hover:bg-purple-800/50 flex items-center gap-1.5"
+                        title="Copiar mensagem personalizada"
+                      >
+                        {copiedId === visit.id ? (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                            Copiado
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            Copiar msg
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// Mapa Interativo do Evento
+// ============================================
+
+type MapFilter = 'all' | 'pending' | 'visited';
+
+function MapTab({
+  eventId,
+  event,
+  isAdmin,
+  onEventUpdated,
+  onOpenStand,
+}: {
+  eventId: string;
+  event: FairEvent;
+  isAdmin: boolean;
+  onEventUpdated: () => void;
+  onOpenStand: (boothId: string) => void;
+}) {
+  const [booths, setBooths] = useState<EventBooth[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<MapFilter>('all');
+  const [editMode, setEditMode] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [selectedBooth, setSelectedBooth] = useState<EventBooth | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sectorFilter, setSectorFilter] = useState<string | null>(null);
+  const [highlightBoothId, setHighlightBoothId] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<{ url: string; company: string; visitor?: string | null; contact?: string | null } | null>(null);
+  const mapFileInputRef = useRef<HTMLInputElement>(null);
+  const importFileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ created: number; skipped: number; errors: number } | null>(null);
+
+  // Live presence
+  const [livePresence, setLivePresence] = useState<{
+    recent_booth_ids: Record<string, { user_name: string; visited_at: string }>;
+    active_now: Array<{ user_id: string; user_name: string; last_active: string }>;
+    visits_last_1h: number;
+  }>({ recent_booth_ids: {}, active_now: [], visits_last_1h: 0 });
+
+  const fetchBooths = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/events/${eventId}/booths`);
+      if (res.ok) {
+        const data = await res.json();
+        setBooths(data.booths || []);
+      }
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [eventId]);
+
+  useEffect(() => { fetchBooths(); }, [fetchBooths]);
+
+  // Live presence polling (a cada 15s)
+  useEffect(() => {
+    let cancelled = false;
+    const fetchLive = async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/live`, { cache: 'no-store' });
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (cancelled) return;
+        setLivePresence({
+          recent_booth_ids: json.recent_booth_ids || {},
+          active_now: json.active_now || [],
+          visits_last_1h: json.summary?.visits_last_1h || 0,
+        });
+        // Quando uma nova visita entra, refetch booths pra refletir no mapa
+        const newBoothIds = Object.keys(json.recent_booth_ids || {});
+        if (newBoothIds.length > 0) {
+          fetchBooths();
+        }
+      } catch {
+        // silent
+      }
+    };
+    fetchLive();
+    const interval = setInterval(fetchLive, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [eventId, fetchBooths]);
+
+  const recentBoothIdSet = new Set(Object.keys(livePresence.recent_booth_ids));
+
+  // Stats
+  const total = booths.length;
+  const visited = booths.filter((b) => b.status === 'VISITADO').length;
+  const pending = total - visited;
+  const progressPct = total > 0 ? Math.round((visited / total) * 100) : 0;
+
+  const normSearch = searchTerm.trim().toLowerCase();
+  const filteredBooths = booths.filter((b) => {
+    if (filter === 'visited' && b.status !== 'VISITADO') return false;
+    if (filter === 'pending' && b.status === 'VISITADO') return false;
+    if (sectorFilter && (b.sector || 'Sem setor') !== sectorFilter) return false;
+    if (normSearch) {
+      const hay = `${b.company_name || ''} ${b.booth_number || ''} ${b.sector || ''}`.toLowerCase();
+      if (!hay.includes(normSearch)) return false;
+    }
+    return true;
+  });
+
+  // Lista de setores únicos (para filtro por setor)
+  const allSectors = Array.from(
+    new Set(booths.map((b) => b.sector || 'Sem setor'))
+  ).sort((a, b) => naturalCompare(a, b));
+
+  // Primeira correspondência da busca (para auto-scroll/highlight)
+  const searchMatch = normSearch ? filteredBooths[0] : null;
+
+  // Auto-scroll até o stand quando há highlight
+  useEffect(() => {
+    if (!highlightBoothId) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(`booth-card-${highlightBoothId}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+    const clear = setTimeout(() => setHighlightBoothId(null), 4500);
+    return () => { clearTimeout(t); clearTimeout(clear); };
+  }, [highlightBoothId]);
+
+  // Auto-scroll até primeira correspondência da busca
+  useEffect(() => {
+    if (!searchMatch) return;
+    const t = setTimeout(() => {
+      const el = document.getElementById(`booth-card-${searchMatch.id}`);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [searchMatch?.id]);
+
+  // Encontra próximo pendente a partir da ordem natural
+  const nextPending = (() => {
+    const pendingList = [...booths]
+      .filter((b) => b.status !== 'VISITADO')
+      .sort((a, b) => {
+        const sa = a.sector || '';
+        const sb = b.sector || '';
+        if (sa !== sb) return naturalCompare(sa, sb);
+        return naturalCompare(a.booth_number || '', b.booth_number || '');
+      });
+    return pendingList[0] || null;
+  })();
+
+  const handleGoToNextPending = () => {
+    if (!nextPending) return;
+    setSearchTerm('');
+    setSectorFilter(null);
+    setFilter('all');
+    setHighlightBoothId(nextPending.id);
+  };
+
+  const handleImportCSV = async (file: File) => {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`/api/events/${eventId}/booths/import`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setImportResult({ created: data.created || 0, skipped: data.skipped || 0, errors: data.errors || 0 });
+        fetchBooths();
+      } else {
+        setImportResult({ created: 0, skipped: 0, errors: 1 });
+      }
+    } catch {
+      setImportResult({ created: 0, skipped: 0, errors: 1 });
+    } finally {
+      setImporting(false);
+      setTimeout(() => setImportResult(null), 6000);
+    }
+  };
+
+  const updateBoothPosition = useCallback(
+    async (boothId: string, position_x: number | null, position_y: number | null) => {
+      // Optimistic update
+      setBooths((prev) =>
+        prev.map((b) => (b.id === boothId ? { ...b, position_x, position_y } : b))
+      );
+      try {
+        const res = await fetch(`/api/events/${eventId}/booths/${boothId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ position_x, position_y }),
+        });
+        if (!res.ok) {
+          // Refetch on failure to revert
+          fetchBooths();
+        }
+      } catch {
+        fetchBooths();
+      }
+    },
+    [eventId, fetchBooths]
+  );
+
+  const handleUploadMap = async (file: File) => {
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('map_image', file);
+      const res = await fetch(`/api/events/${eventId}`, { method: 'PUT', body: formData });
+      if (res.ok) {
+        onEventUpdated();
+      }
+    } catch {
+      // silent
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveMap = async () => {
+    if (!confirm('Remover a planta deste evento? As posições dos stands ficam salvas.')) return;
+    setUploading(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ map_image_remove: true }),
+      });
+      if (res.ok) {
+        setEditMode(false);
+        onEventUpdated();
+      }
+    } catch {
+      // silent
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const mapUrl = event.map_url;
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-24 bg-[#1e0f35] rounded-xl" />
+        <div className="h-64 bg-[#1e0f35] rounded-xl" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Stats header */}
+      <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 sm:p-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-purple-300/50 font-bold">Total</p>
+            <p className="text-2xl font-bold text-white">{total}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-purple-300/50 font-bold">Visitados</p>
+            <p className="text-2xl font-bold text-emerald-400">{visited}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-purple-300/50 font-bold">Pendentes</p>
+            <p className="text-2xl font-bold text-amber-400">{pending}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-purple-300/50 font-bold">Progresso</p>
+            <p className="text-2xl font-bold text-cyan-400">{progressPct}%</p>
+          </div>
+        </div>
+        <div className="w-full bg-purple-900/40 rounded-full h-2">
+          <div
+            className="bg-gradient-to-r from-emerald-600 to-emerald-400 h-2 rounded-full transition-all"
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Live presence banner */}
+      {livePresence.active_now.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 px-4 py-2.5 bg-gradient-to-r from-emerald-500/10 via-cyan-500/10 to-emerald-500/10 border border-emerald-500/30 rounded-xl">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400"></span>
+            </span>
+            <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">Ao Vivo</span>
+          </div>
+          <div className="flex items-center -space-x-2">
+            {livePresence.active_now.slice(0, 5).map((u) => (
+              <div
+                key={u.user_id}
+                className="w-6 h-6 rounded-full bg-gradient-to-br from-emerald-500 to-cyan-500 border-2 border-[#1a0a2e] flex items-center justify-center text-[10px] font-bold text-white"
+                title={`${u.user_name} ativo agora`}
+              >
+                {(u.user_name || '?').charAt(0).toUpperCase()}
+              </div>
+            ))}
+            {livePresence.active_now.length > 5 && (
+              <div className="w-6 h-6 rounded-full bg-purple-800 border-2 border-[#1a0a2e] flex items-center justify-center text-[9px] font-bold text-white">
+                +{livePresence.active_now.length - 5}
+              </div>
+            )}
+          </div>
+          <div className="text-xs text-emerald-200/80">
+            <span className="font-bold text-white">{livePresence.active_now.length}</span>{' '}
+            {livePresence.active_now.length === 1 ? 'pessoa ativa' : 'pessoas ativas'} ·{' '}
+            <span className="font-bold text-white">{livePresence.visits_last_1h}</span> visita
+            {livePresence.visits_last_1h !== 1 ? 's' : ''} na última hora
+          </div>
+        </div>
+      )}
+
+      {/* Barra de busca + próximo pendente + war room */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[240px]">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-300/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar empresa, stand ou setor..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-9 pr-9 py-2 bg-[#1e0f35] border border-purple-800/30 rounded-lg text-sm text-white placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center text-purple-300/50 hover:text-white"
+              title="Limpar busca"
+            >
+              ×
+            </button>
+          )}
+          {searchTerm && filteredBooths.length > 0 && (
+            <div className="absolute -bottom-5 left-0 text-[10px] text-emerald-400">
+              {filteredBooths.length} resultado{filteredBooths.length > 1 ? 's' : ''}
+            </div>
+          )}
+          {searchTerm && filteredBooths.length === 0 && (
+            <div className="absolute -bottom-5 left-0 text-[10px] text-amber-400">
+              Nenhum stand encontrado
+            </div>
+          )}
+        </div>
+
+        {nextPending && (
+          <button
+            onClick={handleGoToNextPending}
+            className="flex items-center gap-2 px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
+            title={`Próximo pendente: ${nextPending.company_name}`}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+            Próximo pendente
+          </button>
+        )}
+
+        <a
+          href={`/eventos/${eventId}/war-room`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 hover:from-emerald-500/30 hover:to-cyan-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-bold transition-colors whitespace-nowrap"
+          title="Abrir War Room (tela cheia)"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+          </svg>
+          War Room
+        </a>
+      </div>
+
+      {/* Filters status + por setor */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 bg-purple-900/20 rounded-lg p-1">
+            {(['all', 'pending', 'visited'] as MapFilter[]).map((f) => {
+              const count = f === 'all' ? total : f === 'visited' ? visited : pending;
+              return (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                    filter === f
+                      ? 'bg-emerald-500/20 text-emerald-400'
+                      : 'text-purple-300/60 hover:text-white'
+                  }`}
+                >
+                  {f === 'all' ? 'Todos' : f === 'pending' ? 'Pendentes' : 'Visitados'}
+                  <span className="ml-1.5 opacity-60">({count})</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Filtro por setor (aparece quando clicado) */}
+          {sectorFilter && (
+            <button
+              onClick={() => setSectorFilter(null)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 rounded-lg text-xs font-medium hover:bg-cyan-500/30"
+              title="Remover filtro de setor"
+            >
+              <span>Setor: {sectorFilter}</span>
+              <span className="text-base leading-none">×</span>
+            </button>
+          )}
+        </div>
+
+        {isAdmin && (
+          <div className="flex flex-wrap gap-2">
+            {mapUrl && (
+              <button
+                onClick={() => setEditMode((v) => !v)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  editMode
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-purple-800/30 text-purple-200/80 hover:bg-purple-800/50'
+                }`}
+              >
+                {editMode ? 'Sair do modo edição' : 'Posicionar stands'}
+              </button>
+            )}
+            <input
+              ref={mapFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleUploadMap(file);
+                if (mapFileInputRef.current) mapFileInputRef.current.value = '';
+              }}
+            />
+            <input
+              ref={importFileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImportCSV(file);
+                if (importFileInputRef.current) importFileInputRef.current.value = '';
+              }}
+            />
+            <button
+              onClick={() => importFileInputRef.current?.click()}
+              disabled={importing}
+              className="px-3 py-1.5 bg-cyan-500/10 text-cyan-300 border border-cyan-500/20 rounded-lg text-xs font-medium hover:bg-cyan-500/20 disabled:opacity-50"
+              title="Importar lista de expositores via CSV/XLSX"
+            >
+              {importing ? 'Importando...' : 'Importar CSV'}
+            </button>
+            <button
+              onClick={() => mapFileInputRef.current?.click()}
+              disabled={uploading}
+              className="px-3 py-1.5 bg-purple-800/30 text-purple-200/80 border border-purple-700/30 rounded-lg text-xs font-medium hover:bg-purple-800/50 disabled:opacity-50"
+            >
+              {uploading ? 'Enviando...' : mapUrl ? 'Trocar planta' : 'Enviar planta baixa'}
+            </button>
+            {mapUrl && (
+              <button
+                onClick={handleRemoveMap}
+                disabled={uploading}
+                className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium hover:bg-red-500/20 disabled:opacity-50"
+              >
+                Remover planta
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Chips de setores (navegação rápida) */}
+      {allSectors.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          {allSectors.map((s) => {
+            const sectorBooths = booths.filter((b) => (b.sector || 'Sem setor') === s);
+            const sectorVisited = sectorBooths.filter((b) => b.status === 'VISITADO').length;
+            const isActive = sectorFilter === s;
+            return (
+              <button
+                key={s}
+                onClick={() => setSectorFilter(isActive ? null : s)}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                  isActive
+                    ? 'bg-cyan-500/30 border-cyan-400 text-cyan-100'
+                    : 'bg-[#1e0f35] border-purple-800/30 text-purple-300/70 hover:border-cyan-500/40 hover:text-cyan-300'
+                }`}
+              >
+                {s}
+                <span className="ml-1.5 opacity-60">{sectorVisited}/{sectorBooths.length}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Feedback de import */}
+      {importResult && (
+        <div className={`p-3 rounded-lg text-sm border ${
+          importResult.errors > 0 && importResult.created === 0
+            ? 'bg-red-500/10 border-red-500/30 text-red-300'
+            : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+        }`}>
+          ✓ Import concluído: <strong>{importResult.created}</strong> stands criados
+          {importResult.skipped > 0 && <> · {importResult.skipped} duplicados ignorados</>}
+          {importResult.errors > 0 && <> · {importResult.errors} erros</>}
+        </div>
+      )}
+
+      {/* Main view */}
+      {booths.length === 0 ? (
+        <div className="text-center py-16 bg-[#1e0f35] rounded-xl border border-purple-800/30">
+          <p className="text-purple-300/50 text-sm">Nenhum stand cadastrado neste evento</p>
+        </div>
+      ) : mapUrl ? (
+        <MapImageView
+          mapUrl={mapUrl}
+          booths={filteredBooths}
+          allBooths={booths}
+          editMode={editMode && isAdmin}
+          highlightBoothId={highlightBoothId}
+          recentBoothIds={recentBoothIdSet}
+          onBoothClick={(b) => setSelectedBooth(b)}
+          onUpdatePosition={updateBoothPosition}
+        />
+      ) : (
+        <CorridorView
+          booths={filteredBooths}
+          highlightBoothId={highlightBoothId}
+          recentBoothIds={recentBoothIdSet}
+          onBoothClick={(b) => setSelectedBooth(b)}
+          onOpenLightbox={(b) => {
+            if (b.visit?.photo_facade_url) {
+              setLightbox({
+                url: b.visit.photo_facade_url,
+                company: b.company_name,
+                visitor: b.visit.user_name,
+                contact: b.visit.contact_name,
+              });
+            }
+          }}
+          onSectorClick={(sector) => setSectorFilter(sector === sectorFilter ? null : sector)}
+        />
+      )}
+
+      {/* Lightbox de foto */}
+      {lightbox && (
+        <PhotoLightbox
+          url={lightbox.url}
+          company={lightbox.company}
+          visitor={lightbox.visitor}
+          contact={lightbox.contact}
+          onClose={() => setLightbox(null)}
+        />
+      )}
+
+      {/* Popover */}
+      {selectedBooth && (
+        <BoothPopover
+          booth={selectedBooth}
+          editMode={editMode && isAdmin && !!mapUrl}
+          onClose={() => setSelectedBooth(null)}
+          onOpenStand={() => {
+            const id = selectedBooth.id;
+            setHighlightBoothId(id);
+            setSelectedBooth(null);
+            onOpenStand(id);
+          }}
+          onOpenLightbox={() => {
+            if (selectedBooth?.visit?.photo_facade_url) {
+              setLightbox({
+                url: selectedBooth.visit.photo_facade_url,
+                company: selectedBooth.company_name,
+                visitor: selectedBooth.visit.user_name,
+                contact: selectedBooth.visit.contact_name,
+              });
+            }
+          }}
+          onRemovePosition={async () => {
+            await updateBoothPosition(selectedBooth.id, null, null);
+            setSelectedBooth(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// --- Lightbox de foto do stand ---
+function PhotoLightbox({
+  url,
+  company,
+  visitor,
+  contact,
+  onClose,
+}: {
+  url: string;
+  company: string;
+  visitor?: string | null;
+  contact?: string | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[70] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white text-2xl font-light"
+        aria-label="Fechar"
+      >
+        ×
+      </button>
+      <div
+        className="relative max-w-5xl max-h-[90vh] flex flex-col gap-3"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={url}
+          alt={company}
+          className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
+        />
+        <div className="bg-[#1e0f35]/90 backdrop-blur-sm border border-purple-700/30 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-white">{company}</h3>
+          <div className="flex items-center gap-3 mt-1 text-xs text-purple-200/70">
+            {visitor && (
+              <span className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Visitado por <strong className="text-emerald-400">{visitor}</strong>
+              </span>
+            )}
+            {contact && (
+              <span className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+                Contato: <strong className="text-white">{contact}</strong>
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Natural sort helper ---
+const boothCollator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+const naturalCompare = (a: string, b: string) => boothCollator.compare(a, b);
+
+// --- Corridor View (auto-grid, sem imagem) ---
+function CorridorView({
+  booths,
+  highlightBoothId,
+  recentBoothIds,
+  onBoothClick,
+  onOpenLightbox,
+  onSectorClick,
+}: {
+  booths: EventBooth[];
+  highlightBoothId?: string | null;
+  recentBoothIds?: Set<string>;
+  onBoothClick: (b: EventBooth) => void;
+  onOpenLightbox?: (b: EventBooth) => void;
+  onSectorClick?: (sector: string) => void;
+}) {
+  const bySector: Record<string, EventBooth[]> = {};
+  booths.forEach((b) => {
+    const key = b.sector || 'Sem setor';
+    if (!bySector[key]) bySector[key] = [];
+    bySector[key].push(b);
+  });
+  Object.values(bySector).forEach((list) =>
+    list.sort((a, b) => naturalCompare(a.booth_number || '', b.booth_number || ''))
+  );
+
+  const sectorKeys = Object.keys(bySector).sort((a, b) => naturalCompare(a, b));
+
+  if (sectorKeys.length === 0) {
+    return (
+      <div className="text-center py-12 bg-[#1e0f35] rounded-xl border border-purple-800/30">
+        <p className="text-purple-300/50 text-sm">Nenhum stand no filtro atual</p>
+      </div>
+    );
+  }
+
+  // Estatísticas globais
+  const totalBooths = booths.length;
+  const totalVisited = booths.filter((b) => b.status === 'VISITADO').length;
+  const globalPct = totalBooths > 0 ? Math.round((totalVisited / totalBooths) * 100) : 0;
+
+  // Paleta de cores por setor (rodízio)
+  const sectorPalette = [
+    { border: 'border-emerald-500/60', label: 'text-emerald-400', bg: 'bg-emerald-500/5', bar: 'bg-emerald-500' },
+    { border: 'border-cyan-500/60', label: 'text-cyan-400', bg: 'bg-cyan-500/5', bar: 'bg-cyan-500' },
+    { border: 'border-amber-500/60', label: 'text-amber-400', bg: 'bg-amber-500/5', bar: 'bg-amber-500' },
+    { border: 'border-pink-500/60', label: 'text-pink-400', bg: 'bg-pink-500/5', bar: 'bg-pink-500' },
+    { border: 'border-violet-500/60', label: 'text-violet-400', bg: 'bg-violet-500/5', bar: 'bg-violet-500' },
+    { border: 'border-orange-500/60', label: 'text-orange-400', bg: 'bg-orange-500/5', bar: 'bg-orange-500' },
+  ];
+
+  // Rua entre setores: assumimos corredores nomeados pelo setor origem → setor destino.
+  const ruaLabels = ['Rua Central', 'Rua Principal', 'Rua Norte', 'Rua Sul', 'Rua Leste'];
+
+  // Ícones por tipo de prospect (compacto)
+  const prospectIcon = (t?: string) => {
+    if (t === 'COMPRADOR') return '🛒';
+    if (t === 'FORNECEDOR') return '📦';
+    if (t === 'AMBOS') return '↔️';
+    return '';
+  };
+
+  // Primeira letra do nome para avatar
+  const initial = (name?: string | null) => (name || '?').trim().charAt(0).toUpperCase();
+
+  return (
+    <div
+      className="relative rounded-xl border border-purple-800/30 p-4 sm:p-6 overflow-x-auto"
+      style={{
+        backgroundColor: '#1e0f35',
+        backgroundImage: `
+          linear-gradient(rgba(139, 92, 246, 0.06) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(139, 92, 246, 0.06) 1px, transparent 1px)
+        `,
+        backgroundSize: '24px 24px',
+      }}
+    >
+      {/* Header tipo "planta baixa" com stats */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 relative z-10">
+        <div className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+          </svg>
+          <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
+            Planta Baixa · Visão Geral
+          </h3>
+        </div>
+        <div className="flex items-center gap-3 text-[10px]">
+          <div className="flex items-center gap-1.5">
+            <span className="text-purple-300/60">Stands:</span>
+            <span className="font-bold text-white">{totalBooths}</span>
+          </div>
+          <div className="h-3 w-px bg-purple-700/40" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-purple-300/60">Visitados:</span>
+            <span className="font-bold text-emerald-400">{totalVisited}</span>
+          </div>
+          <div className="h-3 w-px bg-purple-700/40" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-purple-300/60">Cobertura:</span>
+            <span className={`font-bold ${globalPct >= 80 ? 'text-emerald-400' : globalPct >= 50 ? 'text-amber-400' : 'text-purple-300'}`}>
+              {globalPct}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Barra de progresso global */}
+      <div className="mb-4 relative z-10">
+        <div className="w-full h-1.5 bg-purple-900/40 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all"
+            style={{ width: `${globalPct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Entrada indicator */}
+      <div className="flex justify-center mb-4 relative z-10">
+        <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 border border-dashed border-emerald-500/40 rounded-full">
+          <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+          </svg>
+          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Entrada Principal</span>
+        </div>
+      </div>
+
+      {/* Container das quadras (setores) */}
+      <div className="flex flex-wrap gap-x-8 gap-y-10 justify-center items-start min-w-min relative z-10">
+        {sectorKeys.map((sectorKey, sectorIdx) => {
+          const list = bySector[sectorKey];
+          const sectorVisited = list.filter((b) => b.status === 'VISITADO').length;
+          const palette = sectorPalette[sectorIdx % sectorPalette.length];
+          const isLast = sectorIdx === sectorKeys.length - 1;
+
+          return (
+            <div key={sectorKey} className="flex items-start gap-6">
+              {/* Bloco do setor (quadra) */}
+              <div
+                className={`relative flex-shrink-0 border-2 ${palette.border} ${palette.bg} rounded-xl p-3 pt-5 shadow-lg`}
+              >
+                {/* Label do setor (chapa na borda superior - clicável) */}
+                <button
+                  type="button"
+                  onClick={() => onSectorClick?.(sectorKey)}
+                  className="absolute -top-3 left-4 flex items-center gap-1.5 bg-[#1e0f35] px-2 py-0.5 rounded hover:bg-[#2a1245] transition-colors cursor-pointer"
+                  title={`Filtrar por ${sectorKey}`}
+                >
+                  <span className={`text-[10px] font-bold uppercase tracking-wider ${palette.label}`}>
+                    {sectorKey}
+                  </span>
+                  <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">
+                    {sectorVisited}/{list.length}
+                  </span>
+                </button>
+
+                {/* Progress bar do setor */}
+                <div className="w-full h-0.5 bg-purple-900/60 rounded-full overflow-hidden mb-2 mt-0.5">
+                  <div
+                    className={`h-full ${palette.bar} transition-all`}
+                    style={{ width: `${list.length > 0 ? (sectorVisited / list.length) * 100 : 0}%` }}
+                  />
+                </div>
+
+                {/* Grid 2D de stands (2 colunas) */}
+                <div className="grid grid-cols-2 gap-2">
+                  {list.map((b) => {
+                    const isVisited = b.status === 'VISITADO';
+                    const facade = b.visit?.photo_facade_url;
+                    const visitorName = b.visit?.user_name;
+                    const contactName = b.visit?.contact_name;
+                    const pType = b.visit?.prospect_type;
+
+                    const isHighlighted = highlightBoothId === b.id;
+                    const isLive = recentBoothIds?.has(b.id) ?? false;
+                    return (
+                      <button
+                        key={b.id}
+                        id={`booth-card-${b.id}`}
+                        onClick={() => onBoothClick(b)}
+                        className={`group relative w-[132px] h-[96px] rounded-lg border-2 transition-all hover:scale-[1.06] hover:z-10 text-left overflow-hidden shadow-md hover:shadow-xl hover:shadow-emerald-500/10 ${
+                          isHighlighted
+                            ? 'border-yellow-300 ring-4 ring-yellow-400/60 scale-110 z-20 shadow-2xl shadow-yellow-500/40 animate-pulse'
+                            : isLive
+                            ? 'border-cyan-300 ring-2 ring-cyan-400/60 shadow-xl shadow-cyan-500/30'
+                            : isVisited
+                            ? 'border-emerald-400/80'
+                            : 'bg-[#2a1245] border-purple-500/40 hover:border-emerald-500/60 hover:bg-[#34165a]'
+                        }`}
+                        title={`${b.company_name}${b.booth_number ? ` — #${b.booth_number}` : ''}${visitorName ? ` · visitado por ${visitorName}` : ''}${isLive ? ' · VISITADO AGORA' : ''}`}
+                      >
+                        {/* Live indicator (visita nos últimos 5 min) */}
+                        {isLive && (
+                          <span className="absolute -top-1 -left-1 z-30 flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400 border-2 border-[#1e0f35]"></span>
+                          </span>
+                        )}
+                        {/* Foto da fachada como background (visitado) */}
+                        {isVisited && facade && (
+                          <>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={facade}
+                              alt={b.company_name}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
+                          </>
+                        )}
+                        {/* Fallback visitado sem foto */}
+                        {isVisited && !facade && (
+                          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/25 via-emerald-500/10 to-transparent" />
+                        )}
+
+                        {/* Badge número do stand (canto sup esquerdo) */}
+                        {b.booth_number && (
+                          <span
+                            className={`absolute top-1.5 left-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md ${
+                              isVisited
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-purple-500/80 text-white backdrop-blur-sm'
+                            }`}
+                          >
+                            {b.booth_number}
+                          </span>
+                        )}
+
+                        {/* Check icon ou tipo prospect (canto sup direito) */}
+                        {isVisited ? (
+                          <span className="absolute top-1.5 right-1.5 flex items-center gap-0.5">
+                            {pType && (
+                              <span className="text-xs drop-shadow-md" title={PROSPECT_TYPE_LABELS[pType] || pType}>
+                                {prospectIcon(pType)}
+                              </span>
+                            )}
+                            <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center shadow-md">
+                              <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400/70 animate-pulse" title="Pendente" />
+                        )}
+
+                        {/* Botão expandir foto (visível em hover) */}
+                        {isVisited && facade && onOpenLightbox && (
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(e) => { e.stopPropagation(); onOpenLightbox(b); }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onOpenLightbox(b); } }}
+                            className="absolute bottom-[30px] right-1.5 w-5 h-5 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                            title="Ver foto em tela cheia"
+                          >
+                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
+                          </span>
+                        )}
+
+                        {/* Rodapé: nome empresa + quem visitou */}
+                        <div className="absolute bottom-0 left-0 right-0 p-1.5 space-y-0.5">
+                          <p className={`text-[10px] font-bold leading-tight line-clamp-2 ${isVisited ? 'text-white drop-shadow-md' : 'text-white/90'}`}>
+                            {b.company_name}
+                          </p>
+                          {isVisited && (visitorName || contactName) && (
+                            <div className="flex items-center gap-1">
+                              {visitorName && (
+                                <span
+                                  className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-[8px] font-bold text-white flex items-center justify-center shrink-0 border border-white/30"
+                                  title={`Visitado por ${visitorName}`}
+                                >
+                                  {initial(visitorName)}
+                                </span>
+                              )}
+                              {contactName && (
+                                <p className="text-[8px] text-white/80 truncate drop-shadow-md">
+                                  {contactName}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Rua (corredor) entre setores */}
+              {!isLast && (
+                <div className="hidden lg:flex flex-col items-center justify-center self-stretch min-h-[200px] relative">
+                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] border-l-2 border-dashed border-purple-600/40" />
+                  <div className="relative bg-[#1e0f35] px-1 py-2">
+                    <span className="text-[9px] font-bold text-purple-300/50 uppercase tracking-widest [writing-mode:vertical-rl] rotate-180">
+                      {ruaLabels[sectorIdx % ruaLabels.length]}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Legenda */}
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-6 pt-4 border-t border-purple-800/30 relative z-10">
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded border border-purple-500/40 bg-[#2a1245] relative">
+            <div className="absolute top-0 right-0 w-1 h-1 rounded-full bg-amber-400/70" />
+          </div>
+          <span className="text-[10px] text-purple-300/60">Pendente</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded border border-emerald-400/80 bg-gradient-to-br from-emerald-500/40 to-emerald-500/10 relative">
+            <div className="absolute top-0 right-0 w-1 h-1 rounded-full bg-emerald-400" />
+          </div>
+          <span className="text-[10px] text-purple-300/60">Visitado</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px]">🛒</span>
+          <span className="text-[10px] text-purple-300/60">Comprador</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px]">📦</span>
+          <span className="text-[10px] text-purple-300/60">Fornecedor</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px]">↔️</span>
+          <span className="text-[10px] text-purple-300/60">Ambos</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full bg-emerald-500 text-[7px] font-bold text-white flex items-center justify-center border border-white/30">J</span>
+          <span className="text-[10px] text-purple-300/60">Quem visitou</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-purple-300/40">
+          <div className="w-4 border-t-2 border-dashed border-purple-600/40" />
+          <span className="text-[10px]">Rua / Corredor</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- Map Image View (modo imagem) ---
+function MapImageView({
+  mapUrl,
+  booths,
+  allBooths,
+  editMode,
+  highlightBoothId,
+  recentBoothIds,
+  onBoothClick,
+  onUpdatePosition,
+}: {
+  mapUrl: string;
+  booths: EventBooth[];
+  allBooths: EventBooth[];
+  editMode: boolean;
+  highlightBoothId?: string | null;
+  recentBoothIds?: Set<string>;
+  onBoothClick: (b: EventBooth) => void;
+  onUpdatePosition: (boothId: string, x: number | null, y: number | null) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDesktop, setIsDesktop] = useState(true);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [pendingBoothId, setPendingBoothId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(pointer: fine)');
+    setIsDesktop(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+
+  const placedBooths = booths.filter((b) => b.position_x != null && b.position_y != null);
+  const unplacedBooths = allBooths
+    .filter((b) => b.position_x == null || b.position_y == null)
+    .sort((a, b) => {
+      const sa = a.sector || '';
+      const sb = b.sector || '';
+      if (sa !== sb) return naturalCompare(sa, sb);
+      return naturalCompare(a.booth_number || '', b.booth_number || '');
+    });
+
+  // Calcula coordenadas em % dado um event clientX/Y
+  const getPct = (clientX: number, clientY: number): { x: number; y: number } | null => {
+    const el = containerRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+    return {
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+    };
+  };
+
+  // Drag handlers (desktop)
+  const handlePinPointerDown = (e: React.PointerEvent<HTMLDivElement>, booth: EventBooth) => {
+    if (!editMode || !isDesktop) return;
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    setDraggingId(booth.id);
+  };
+
+  const handlePinPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingId) return;
+    const pct = getPct(e.clientX, e.clientY);
+    if (!pct) return;
+    // Atualização optimistic imediata (visual only — o commit vai via pointerUp)
+    onUpdatePosition(draggingId, pct.x, pct.y);
+  };
+
+  const handlePinPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingId) return;
+    (e.target as Element).releasePointerCapture?.(e.pointerId);
+    setDraggingId(null);
+  };
+
+  // Click-to-place (mobile, ou desktop sem selecionar pin)
+  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!editMode || !pendingBoothId) return;
+    // Ignorar clicks em pins
+    if ((e.target as HTMLElement).closest('[data-pin]')) return;
+    const pct = getPct(e.clientX, e.clientY);
+    if (!pct) return;
+    onUpdatePosition(pendingBoothId, pct.x, pct.y);
+    setPendingBoothId(null);
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[1fr_240px] gap-4">
+      {/* Map container */}
+      <div
+        ref={containerRef}
+        onClick={handleContainerClick}
+        onPointerMove={draggingId ? handlePinPointerMove : undefined}
+        onPointerUp={draggingId ? handlePinPointerUp : undefined}
+        className={`relative bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden select-none ${
+          editMode && pendingBoothId ? 'cursor-crosshair' : ''
+        }`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={mapUrl}
+          alt="Planta do evento"
+          className="w-full h-auto block pointer-events-none"
+          draggable={false}
+        />
+        {/* Pins */}
+        {placedBooths.map((booth) => {
+          const isVisited = booth.status === 'VISITADO';
+          const isDragging = draggingId === booth.id;
+          const isHighlighted = highlightBoothId === booth.id;
+          const isLive = recentBoothIds?.has(booth.id) ?? false;
+          return (
+            <div
+              key={booth.id}
+              id={`booth-card-${booth.id}`}
+              data-pin
+              onPointerDown={(e) => handlePinPointerDown(e, booth)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (draggingId) return;
+                onBoothClick(booth);
+              }}
+              style={{
+                left: `${booth.position_x}%`,
+                top: `${booth.position_y}%`,
+                transform: 'translate(-50%, -50%)',
+                zIndex: isHighlighted || isLive ? 40 : isDragging ? 30 : 10,
+                touchAction: editMode ? 'none' : undefined,
+              }}
+              className={`absolute w-9 h-9 rounded-full flex items-center justify-center text-[10px] font-bold shadow-lg transition-transform hover:scale-110 border-2 ${
+                isHighlighted
+                  ? 'bg-yellow-400 border-yellow-200 text-black ring-4 ring-yellow-400/50 scale-125 animate-pulse'
+                  : isLive
+                  ? 'bg-cyan-500 border-cyan-200 text-white ring-4 ring-cyan-400/50 scale-110 animate-pulse'
+                  : isVisited
+                  ? 'bg-emerald-500 border-emerald-300 text-white'
+                  : 'bg-purple-600 border-purple-300 text-white'
+              } ${editMode && isDesktop ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+              title={`${booth.company_name}${booth.booth_number ? ` — #${booth.booth_number}` : ''}${isLive ? ' · VISITADO AGORA' : ''}`}
+            >
+              {booth.booth_number ? booth.booth_number.slice(0, 3) : '•'}
+              {isLive && (
+                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-300 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-300 border border-white"></span>
+                </span>
+              )}
+            </div>
+          );
+        })}
+
+        {editMode && pendingBoothId && (
+          <div className="absolute top-2 left-2 right-2 bg-emerald-500/90 text-white text-xs font-medium px-3 py-2 rounded-lg shadow-lg pointer-events-none">
+            Toque no mapa para posicionar o stand selecionado
+          </div>
+        )}
+      </div>
+
+      {/* Side panel — edit mode only */}
+      {editMode ? (
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-3 max-h-[70vh] overflow-y-auto">
+          <h4 className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-2">
+            Stands sem posição
+          </h4>
+          {unplacedBooths.length === 0 ? (
+            <p className="text-xs text-purple-300/40">Todos posicionados</p>
+          ) : (
+            <div className="space-y-1.5">
+              {unplacedBooths.map((b) => {
+                const isPending = pendingBoothId === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => setPendingBoothId(isPending ? null : b.id)}
+                    className={`w-full text-left rounded-lg p-2 border transition-colors ${
+                      isPending
+                        ? 'bg-emerald-500/20 border-emerald-400/60'
+                        : 'bg-[#2a1245] border-purple-700/30 hover:border-emerald-500/30'
+                    }`}
+                  >
+                    {b.booth_number && (
+                      <span className="text-[10px] font-bold text-purple-300 bg-purple-500/20 px-1.5 py-0.5 rounded mr-1">
+                        #{b.booth_number}
+                      </span>
+                    )}
+                    <span className="text-xs text-white">{b.company_name}</span>
+                    {b.sector && (
+                      <p className="text-[10px] text-purple-300/40 mt-0.5 truncate">{b.sector}</p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <p className="text-[10px] text-purple-300/40 mt-3 leading-relaxed">
+            {isDesktop
+              ? 'Desktop: arraste os pins no mapa, ou toque num stand aqui e clique no mapa.'
+              : 'Toque num stand desta lista e depois toque no mapa para posicionar.'}
+          </p>
+        </div>
+      ) : (
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-3">
+          <h4 className="text-[10px] font-bold text-purple-300/60 uppercase tracking-widest mb-2">Legenda</h4>
+          <div className="space-y-2 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-emerald-500 border-2 border-emerald-300" />
+              <span className="text-purple-200/70">Visitado</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-purple-600 border-2 border-purple-300" />
+              <span className="text-purple-200/70">Pendente</span>
+            </div>
+          </div>
+          <p className="text-[10px] text-purple-300/40 mt-3">
+            Posicionados: {placedBooths.length} · Sem posição: {unplacedBooths.length}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Booth Popover ---
+function BoothPopover({
+  booth,
+  editMode,
+  onClose,
+  onOpenStand,
+  onOpenLightbox,
+  onRemovePosition,
+}: {
+  booth: EventBooth;
+  editMode: boolean;
+  onClose: () => void;
+  onOpenStand: () => void;
+  onOpenLightbox?: () => void;
+  onRemovePosition: () => void;
+}) {
+  const isVisited = booth.status === 'VISITADO';
+  const visit = booth.visit;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-[#1e0f35] rounded-xl border border-purple-800/30 w-full max-w-md p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex-1 min-w-0">
+            <h3 className="text-lg font-bold text-white truncate">{booth.company_name}</h3>
+            <div className="flex items-center gap-2 text-xs text-purple-300/60 mt-0.5">
+              {booth.booth_number && <span>Stand #{booth.booth_number}</span>}
+              {booth.sector && <span>· {booth.sector}</span>}
+            </div>
+          </div>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+              BOOTH_STATUS_COLORS[booth.status] || 'bg-neutral-500/20 text-neutral-400'
+            }`}
+          >
+            {isVisited ? 'Visitado' : 'Pendente'}
+          </span>
+        </div>
+
+        {visit && (
+          <div className="bg-[#2a1245] rounded-lg p-3 mb-4 text-xs">
+            {/* Thumbnail da foto (clicável) */}
+            {visit.photo_facade_url && (
+              <button
+                type="button"
+                onClick={onOpenLightbox}
+                className="w-full h-32 rounded-lg overflow-hidden mb-2 relative group cursor-zoom-in"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={visit.photo_facade_url}
+                  alt={booth.company_name}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                  <svg className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m-3-3h6" />
+                  </svg>
+                </div>
+              </button>
+            )}
+            {visit.contact_name && (
+              <p className="text-white font-medium mb-1">
+                {visit.contact_name}
+                {visit.contact_role && <span className="text-purple-300/60"> — {visit.contact_role}</span>}
+              </p>
+            )}
+            <p className="text-purple-300/60">
+              Visitado por <span className="text-purple-200/80">{visit.user_name}</span> em{' '}
+              {new Date(visit.visited_at).toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </p>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={onOpenStand}
+            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-bold text-sm shadow-lg shadow-emerald-500/20 transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+            Abrir stand
+          </button>
+          {editMode && booth.position_x != null && (
+            <button
+              onClick={onRemovePosition}
+              className="w-full py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium hover:bg-red-500/20 transition-colors"
+            >
+              Remover posição do mapa
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="w-full py-2 bg-purple-800/30 text-purple-200/80 rounded-lg text-xs font-medium hover:bg-purple-800/50 transition-colors"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
