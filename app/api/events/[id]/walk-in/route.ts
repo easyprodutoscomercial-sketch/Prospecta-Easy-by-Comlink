@@ -54,6 +54,7 @@ export async function POST(
     let prospectType: string = 'COMPRADOR';
     let notes: string | null = null;
     let photoContactUrl: string | null = null;
+    let photoPersonUrl: string | null = null;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -65,9 +66,14 @@ export async function POST(
       prospectType = (formData.get('prospect_type') as string) || 'COMPRADOR';
       notes = (formData.get('notes') as string) || null;
 
+      // Foto do cartao (photo_contact) + foto da pessoa (photo_person)
       const contactFile = formData.get('photo_contact') as File | null;
       if (contactFile && contactFile.size > 0) {
-        photoContactUrl = await uploadFile(admin, contactFile, profile.organization_id, eventId, 'walkin');
+        photoContactUrl = await uploadFile(admin, contactFile, profile.organization_id, eventId, 'walkin-card');
+      }
+      const personFile = formData.get('photo_person') as File | null;
+      if (personFile && personFile.size > 0) {
+        photoPersonUrl = await uploadFile(admin, personFile, profile.organization_id, eventId, 'walkin-person');
       }
     } else {
       const body = await request.json();
@@ -79,6 +85,7 @@ export async function POST(
       prospectType = body.prospect_type || 'COMPRADOR';
       notes = body.notes || null;
       photoContactUrl = body.photo_contact_url || null;
+      photoPersonUrl = body.photo_person_url || null;
     }
 
     if (!contactName || contactName.trim().length < 2) {
@@ -108,16 +115,27 @@ export async function POST(
     const emailNorm = normalizeEmail(contactEmail);
 
     // Tenta encontrar duplicata na mesma org por phone/email normalizado.
-    // Se ja existe, atualiza os campos faltantes e amarra ao evento atual.
+    // IMPORTANTE: query builder do supabase-js e imutavel — cada .eq() retorna
+    // um novo builder. Por isso a gente reatribui em q = q.eq(...). O bug
+    // antigo mutava o original e o filtro sumia, fazendo maybeSingle() explodir
+    // com "mais de uma linha" em orgs com varios contatos.
     let createdContact: any = null;
     if (phoneNorm || emailNorm) {
-      const q = admin
+      let q = admin
         .from('contacts')
         .select('id, phone, email, event_id, name')
         .eq('organization_id', profile.organization_id)
         .limit(1);
-      if (phoneNorm) q.eq('phone_normalized', phoneNorm);
-      const { data: dup } = await q.maybeSingle();
+      if (phoneNorm) {
+        q = q.eq('phone_normalized', phoneNorm);
+      } else if (emailNorm) {
+        q = q.eq('email_normalized', emailNorm);
+      }
+      const { data: dup, error: dupErr } = await q.maybeSingle();
+      if (dupErr) {
+        console.error('[walk-in] dedup query error:', dupErr);
+        // Nao trava o fluxo — segue e cria contato novo.
+      }
       if (dup?.id) {
         // Update: preserva nome/company originais, so completa o que tiver faltando
         const patch: any = {};
@@ -138,13 +156,16 @@ export async function POST(
       }
     }
 
-    // Monta as notes. Se tem foto do cartao, adiciona como link no fim —
-    // assim o vendedor consegue clicar e ver a imagem no detalhe do contato.
+    // Monta as notes. Fotos viram links no fim — o detalhe do contato
+    // renderiza links clicaveis em notes.
     // Marker [Avulso] fica no inicio pra diferenciar de stand no relatorio
     // e export (busca por prefixo de notes).
     let packedNotes = notes?.trim()
       ? `[Avulso] ${notes.trim()}`
       : '[Avulso]';
+    if (photoPersonUrl) {
+      packedNotes += `\n\nFoto da pessoa: ${photoPersonUrl}`;
+    }
     if (photoContactUrl) {
       packedNotes += `\n\nFoto do cartao: ${photoContactUrl}`;
     }
@@ -186,19 +207,25 @@ export async function POST(
 
       if (insertErr) throw insertErr;
       createdContact = newContact;
-    } else if (photoContactUrl) {
-      // Duplicata: append a foto nas notes existentes se ainda nao tem
+    } else if (photoContactUrl || photoPersonUrl) {
+      // Duplicata: append fotos novas nas notes existentes se ainda nao tem
       const { data: existing } = await admin
         .from('contacts')
         .select('notes')
         .eq('id', createdContact.id)
         .single();
-      if (existing && !(existing.notes || '').includes(photoContactUrl)) {
+      const currentNotes = existing?.notes || '';
+      let updated = currentNotes;
+      if (photoPersonUrl && !currentNotes.includes(photoPersonUrl)) {
+        updated += `\n\nFoto da pessoa (revisita): ${photoPersonUrl}`;
+      }
+      if (photoContactUrl && !currentNotes.includes(photoContactUrl)) {
+        updated += `\n\nFoto do cartao (revisita): ${photoContactUrl}`;
+      }
+      if (updated !== currentNotes) {
         await admin
           .from('contacts')
-          .update({
-            notes: `${existing.notes || ''}\n\nFoto do cartao (revisita): ${photoContactUrl}`.trim(),
-          })
+          .update({ notes: updated.trim() })
           .eq('id', createdContact.id);
       }
     }

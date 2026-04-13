@@ -3133,11 +3133,15 @@ function WalkInForm({
   const [cardFile, setCardFile] = useState<File | null>(null);
   const [cardPreview, setCardPreview] = useState<string | null>(null);
   const [cardB64, setCardB64] = useState<{ name: string; type: string; dataUrl: string } | null>(null);
+  const [personFile, setPersonFile] = useState<File | null>(null);
+  const [personPreview, setPersonPreview] = useState<string | null>(null);
+  const [personB64, setPersonB64] = useState<{ name: string; type: string; dataUrl: string } | null>(null);
   const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const cardInputRef = useRef<HTMLInputElement>(null);
+  const personInputRef = useRef<HTMLInputElement>(null);
 
   // Rascunho persistente — sobrevive a reload, fechamento de aba, celular dormir.
   const draftKey = `walkin-${eventId}`;
@@ -3152,6 +3156,7 @@ function WalkInForm({
         const saved = await draftLoad<{
           form: typeof form;
           cardPhoto: { name: string; type: string; dataUrl: string } | null;
+          personPhoto: { name: string; type: string; dataUrl: string } | null;
         }>(draftKey);
         if (cancelled || !saved || !saved.data) {
           draftReadyRef.current = true;
@@ -3167,6 +3172,14 @@ function WalkInForm({
             setCardB64(d.cardPhoto);
           } catch { /* ignora */ }
         }
+        if (d.personPhoto) {
+          try {
+            const f = await dataUrlToFile(d.personPhoto.dataUrl, d.personPhoto.name);
+            setPersonFile(f);
+            setPersonPreview(d.personPhoto.dataUrl);
+            setPersonB64(d.personPhoto);
+          } catch { /* ignora */ }
+        }
         setDraftRestoredAt(saved.updatedAt);
       } catch { /* silent */ } finally {
         draftReadyRef.current = true;
@@ -3179,10 +3192,10 @@ function WalkInForm({
   useEffect(() => {
     if (!draftReadyRef.current) return;
     const t = setTimeout(() => {
-      draftSave(draftKey, { form, cardPhoto: cardB64 }).catch(() => {});
+      draftSave(draftKey, { form, cardPhoto: cardB64, personPhoto: personB64 }).catch(() => {});
     }, 500);
     return () => clearTimeout(t);
-  }, [draftKey, form, cardB64]);
+  }, [draftKey, form, cardB64, personB64]);
 
   const handleDismissDraft = async () => {
     await draftClear(draftKey).catch(() => {});
@@ -3199,6 +3212,20 @@ function WalkInForm({
     setCardFile(null);
     setCardPreview(null);
     setCardB64(null);
+    setPersonFile(null);
+    setPersonPreview(null);
+    setPersonB64(null);
+  };
+
+  const handlePersonFile = async (file: File | null) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setPersonFile(file);
+    setPersonPreview(url);
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setPersonB64({ name: file.name, type: file.type || 'application/octet-stream', dataUrl });
+    } catch { /* silent */ }
   };
 
   const handleCardFile = async (file: File | null) => {
@@ -3264,6 +3291,10 @@ function WalkInForm({
       if (cardFile) {
         const b64 = await fileToBase64(cardFile);
         files.push({ field: 'photo_contact', ...b64 });
+      }
+      if (personFile) {
+        const b64 = await fileToBase64(personFile);
+        files.push({ field: 'photo_person', ...b64 });
       }
 
       const result = await enqueueOrSend({
@@ -3345,6 +3376,57 @@ function WalkInForm({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Foto da pessoa — opcional, mesmo motivo do check-in em stand:
+            ajuda a lembrar de quem e quando for olhar o contato depois. */}
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
+          <label className="block text-xs font-bold text-cyan-400 uppercase tracking-widest mb-2">
+            Foto da Pessoa
+          </label>
+          <p className="text-[11px] text-purple-300/50 mb-3">
+            Opcional. Ajuda a lembrar de quem se trata quando voltar pro contato depois.
+          </p>
+
+          {personPreview ? (
+            <div className="relative">
+              <img src={personPreview} alt="Pessoa" className="w-full max-h-64 object-contain rounded-lg border border-purple-700/30 bg-[#2a1245]" />
+              <button
+                type="button"
+                onClick={() => {
+                  setPersonFile(null);
+                  setPersonPreview(null);
+                  setPersonB64(null);
+                }}
+                className="absolute top-2 right-2 p-1.5 bg-black/70 rounded-full text-white hover:bg-black"
+                aria-label="Remover foto"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => personInputRef.current?.click()}
+              className="w-full py-4 min-h-[64px] bg-[#2a1245] border-2 border-dashed border-cyan-500/30 hover:border-cyan-500/60 text-cyan-300 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Tirar foto da pessoa
+            </button>
+          )}
+
+          <input
+            ref={personInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => handlePersonFile(e.target.files?.[0] || null)}
+          />
+        </div>
+
         {/* Foto do cartao (com OCR automatico) */}
         <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
           <label className="block text-xs font-bold text-cyan-400 uppercase tracking-widest mb-2">

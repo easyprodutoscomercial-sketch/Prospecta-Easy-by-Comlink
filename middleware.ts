@@ -64,15 +64,34 @@ export async function middleware(request: NextRequest) {
     // Supabase unreachable — treat as unauthenticated
   }
 
+  // Arquivos publicos do PWA que NUNCA podem ser redirecionados pro login —
+  // o navegador chama eles sem cookie de auth (manifest/sw/icones), entao
+  // se redirecionar vira HTML do login e o parser do PWA explode com
+  // "Manifest: Syntax error". Mesma logica pra sw.js e qualquer asset
+  // servido direto do /public.
+  const pathname = request.nextUrl.pathname;
+  const isPublicPwaAsset =
+    pathname === '/manifest.json' ||
+    pathname === '/manifest.webmanifest' ||
+    pathname === '/sw.js' ||
+    pathname === '/offline' ||
+    pathname === '/robots.txt' ||
+    pathname === '/favicon.ico' ||
+    pathname.startsWith('/icons/') ||
+    pathname.startsWith('/splash/') ||
+    pathname.endsWith('.webmanifest') ||
+    /^\/worker-[a-z0-9]+\.js$/.test(pathname);
+
   // Redirecionar para login se não autenticado (exceto na própria página de login)
   if (
     !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/lead-capture') &&
-    !request.nextUrl.pathname.startsWith('/quiz') &&
-    !request.nextUrl.pathname.startsWith('/portal') &&
-    !request.nextUrl.pathname.startsWith('/api') &&
-    !request.nextUrl.pathname.startsWith('/_next')
+    !isPublicPwaAsset &&
+    !pathname.startsWith('/login') &&
+    !pathname.startsWith('/lead-capture') &&
+    !pathname.startsWith('/quiz') &&
+    !pathname.startsWith('/portal') &&
+    !pathname.startsWith('/api') &&
+    !pathname.startsWith('/_next')
   ) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
