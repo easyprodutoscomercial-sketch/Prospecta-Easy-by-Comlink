@@ -1,0 +1,51 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git status:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(echo:*)",
+      "Bash(find:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && echo '=== SESSÃO INICIADA ===' && git branch --show-current && git log -1 --oneline && git status --short | head -n 15"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && CHANGED=$(git status --short | wc -l | tr -d ' ') && if [ \"$CHANGED\" != \"0\" ]; then echo \"⚠️  $CHANGED arquivos não commitados!\"; else echo '✅ Tudo commitado.'; fi"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-destructive.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
