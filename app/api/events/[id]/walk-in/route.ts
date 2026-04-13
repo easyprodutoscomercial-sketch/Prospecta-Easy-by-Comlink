@@ -135,35 +135,28 @@ export async function POST(
     let createdContact: any = null;
     if (phoneNorm || emailNorm) {
       step = 'dedupQuery';
-      const queries: Promise<any>[] = [];
+      let dup: any = null;
       if (phoneNorm) {
-        queries.push(
-          admin
-            .from('contacts')
-            .select('id, phone, email, event_id, name')
-            .eq('organization_id', profile.organization_id)
-            .eq('phone_normalized', phoneNorm)
-            .limit(1)
-            .maybeSingle()
-        );
+        const { data, error: dupErr } = await admin
+          .from('contacts')
+          .select('id, phone, email, event_id, name')
+          .eq('organization_id', profile.organization_id)
+          .eq('phone_normalized', phoneNorm)
+          .limit(1)
+          .maybeSingle();
+        if (dupErr) console.error('[walk-in] dedup by phone error:', dupErr);
+        if (data) dup = data;
       }
-      if (emailNorm) {
-        queries.push(
-          admin
-            .from('contacts')
-            .select('id, phone, email, event_id, name')
-            .eq('organization_id', profile.organization_id)
-            .eq('email_normalized', emailNorm)
-            .limit(1)
-            .maybeSingle()
-        );
-      }
-      const results = await Promise.all(queries);
-      const dup = results.find(r => r?.data?.id)?.data || null;
-      const dupErr = results.find(r => r?.error)?.error || null;
-      if (dupErr) {
-        console.error('[walk-in] dedup query error:', dupErr);
-        // Nao trava o fluxo — segue e cria contato novo.
+      if (!dup && emailNorm) {
+        const { data, error: dupErr } = await admin
+          .from('contacts')
+          .select('id, phone, email, event_id, name')
+          .eq('organization_id', profile.organization_id)
+          .eq('email_normalized', emailNorm)
+          .limit(1)
+          .maybeSingle();
+        if (dupErr) console.error('[walk-in] dedup by email error:', dupErr);
+        if (data) dup = data;
       }
       if (dup?.id) {
         // Update: preserva nome/company originais, so completa o que tiver faltando
