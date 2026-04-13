@@ -239,11 +239,23 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
     return () => clearInterval(interval);
   }, []);
 
+  // Lista interna de chaves que JA existiam quando o admin pode ter salvo
+  // visible_menus pela ultima vez. Menus novos adicionados ao codigo depois
+  // disso aparecem por padrao — so escondem se o admin marcar ativamente.
+  // Isso evita a armadilha "feature nova some silenciosamente pra vendedor".
+  const KNOWN_MENU_KEYS = new Set([
+    'dashboard', 'contacts', 'kanban', 'suporte', 'pedidos', 'calendar',
+    'ai', 'reports', 'requests', 'eventos', 'quiz-feira', 'settings',
+  ]);
+
   const filteredNavItems = navItems.filter((item) => {
     if ('adminOnly' in item && item.adminOnly && userRole !== 'admin' && userRole !== 'gerente') return false;
-    // If visibleMenus is set and user is not admin, filter by allowed keys
+    // Filtro por visible_menus — SO esconde menus "conhecidos" na epoca em
+    // que o admin salvou. Menus novos (adicionados depois) passam livres.
     if (visibleMenus && visibleMenus.length > 0 && userRole !== 'admin' && !('adminOnly' in item)) {
-      if (!visibleMenus.includes(item.key)) return false;
+      if (!('key' in item) || !item.key) return true;
+      const isKnown = KNOWN_MENU_KEYS.has(item.key);
+      if (isKnown && !visibleMenus.includes(item.key)) return false;
     }
     return true;
   });
@@ -414,13 +426,16 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
         <div className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
       )}
 
-      {/* Mobile sidebar */}
-      <aside className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-[#120826] flex flex-col transform transition-transform duration-200 ease-in-out ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Mobile sidebar — overflow-y-auto + overscroll-contain pra menu longo
+          em telas curtas (iPhone SE, landscape). Sem isso, os ultimos itens
+          (Configuracoes, Admin) somem embaixo sem jeito de rolar. */}
+      <aside className={`lg:hidden fixed inset-y-0 left-0 z-50 w-64 bg-[#120826] flex flex-col overflow-y-auto overscroll-contain transform transition-transform duration-200 ease-in-out ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {navContent}
       </aside>
 
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col bg-[#120826]">
+      {/* Desktop sidebar — mesmo motivo: laptop 13" ou janela reduzida
+          nao tem altura pra 13 menus + logo + search + banner + selectors. */}
+      <aside className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 lg:w-64 lg:flex-col bg-[#120826] overflow-y-auto overscroll-contain">
         {navContent}
       </aside>
     </>
