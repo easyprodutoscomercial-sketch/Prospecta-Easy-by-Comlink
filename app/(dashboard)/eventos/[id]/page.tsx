@@ -707,9 +707,9 @@ function DashboardTab({ eventId, event }: { eventId: string; event: FairEvent })
 
       {/* Secondary KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Visitas" value={stats.total_visits} color="purple" />
-        <StatCard label="Dias do Evento" value={stats.total_event_days} color="purple" />
-        <StatCard label="Dias com Visitas" value={stats.days_with_visits} color="emerald" />
+        <StatCard label="Visitas Stand" value={stats.total_visits} color="purple" />
+        <StatCard label="Leads Avulsos" value={stats.total_walk_ins || 0} color="cyan" />
+        <StatCard label="Total de Leads" value={stats.total_leads_event || stats.total_visits} color="emerald" />
         <StatCard label="Media/Dia" value={stats.avg_visits_per_day} color="cyan" />
       </div>
 
@@ -2095,7 +2095,13 @@ function StandsTab({
 }
 
 // --- Check-in Tab ---
+// Mode: 'choose' = 2 botoes iniciais (stand ou avulso)
+//        'stand' = lista de stands + busca
+//        'walkin' = formulario de contato avulso
+type CheckInMode = 'choose' | 'stand' | 'walkin';
+
 function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }) {
+  const [mode, setMode] = useState<CheckInMode>('choose');
   const [booths, setBooths] = useState<EventBooth[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -2146,10 +2152,89 @@ function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }
     );
   }
 
+  // Modo "avulso": formulario sem stand
+  if (mode === 'walkin') {
+    return (
+      <WalkInForm
+        eventId={eventId}
+        onBack={() => setMode('choose')}
+        onDone={() => {
+          setMode('choose');
+          onDone();
+        }}
+      />
+    );
+  }
+
   const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
+
+  // Modo "choose": tela inicial com 2 botoes grandes — Stand ou Avulso
+  if (mode === 'choose') {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-bold text-white mb-1">Novo Check-in</h2>
+          <p className="text-purple-300/60 text-sm">Escolha como voce encontrou o contato</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Botao STAND */}
+          <button
+            onClick={() => setMode('stand')}
+            className="group text-left bg-[#1e0f35] rounded-2xl border-2 border-purple-800/30 p-6 hover:border-emerald-500/60 hover:bg-[#1e0f35]/80 active:scale-[0.98] transition-all min-h-[160px]"
+          >
+            <div className="w-12 h-12 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mb-3 group-hover:bg-emerald-500/25 transition-colors">
+              <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+              </svg>
+            </div>
+            <h3 className="text-white font-bold text-base mb-1">Stand</h3>
+            <p className="text-xs text-purple-300/60 leading-relaxed">
+              Estou no stand de uma empresa. Vou tirar foto da fachada e do cartao.
+            </p>
+          </button>
+
+          {/* Botao AVULSO */}
+          <button
+            onClick={() => setMode('walkin')}
+            className="group text-left bg-[#1e0f35] rounded-2xl border-2 border-purple-800/30 p-6 hover:border-cyan-500/60 hover:bg-[#1e0f35]/80 active:scale-[0.98] transition-all min-h-[160px]"
+          >
+            <div className="w-12 h-12 rounded-xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center mb-3 group-hover:bg-cyan-500/25 transition-colors">
+              <svg className="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+            <h3 className="text-white font-bold text-base mb-1">Contato Avulso</h3>
+            <p className="text-xs text-purple-300/60 leading-relaxed">
+              Encontrei alguem fora de um stand (corredor, cafe, palestra). So tiro foto do cartao.
+            </p>
+          </button>
+        </div>
+
+        <div className="bg-purple-900/10 border border-purple-800/20 rounded-lg p-3 flex items-start gap-2">
+          <svg className="w-4 h-4 text-purple-400/60 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-[11px] text-purple-300/60 leading-relaxed">
+            Os 2 caminhos funcionam offline. Se nao tiver internet, o contato fica salvo na fila e sincroniza sozinho quando voltar.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
+      {/* Botao voltar pra tela de escolha */}
+      <button
+        onClick={() => setMode('choose')}
+        className="inline-flex items-center gap-2 text-purple-300/70 hover:text-white text-xs transition-colors"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        Voltar
+      </button>
       <p className="text-purple-300/50 text-sm">Selecione o stand para registrar a visita</p>
 
       {/* Search */}
@@ -3017,6 +3102,420 @@ function CheckInForm({
           className="w-full py-4 min-h-[56px] bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 active:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-emerald-900/30"
         >
           {loading ? 'Registrando...' : '✓ Registrar Visita'}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// --- Walk-In Form (contato avulso, sem stand) ---
+// Reusa a mesma infra do CheckInForm: OCR via /api/scan-card, fila offline
+// via enqueueOrSend, rascunho persistente via draftSave/Load/Clear.
+// Diferencas: sem seletor de stand, sem foto da fachada, empresa e campo livre.
+function WalkInForm({
+  eventId,
+  onBack,
+  onDone,
+}: {
+  eventId: string;
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const [form, setForm] = useState({
+    contact_name: '',
+    company: '',
+    contact_role: '',
+    contact_phone: '',
+    contact_email: '',
+    prospect_type: 'COMPRADOR' as 'COMPRADOR' | 'FORNECEDOR' | 'AMBOS',
+    notes: '',
+  });
+  const [cardFile, setCardFile] = useState<File | null>(null);
+  const [cardPreview, setCardPreview] = useState<string | null>(null);
+  const [cardB64, setCardB64] = useState<{ name: string; type: string; dataUrl: string } | null>(null);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const cardInputRef = useRef<HTMLInputElement>(null);
+
+  // Rascunho persistente — sobrevive a reload, fechamento de aba, celular dormir.
+  const draftKey = `walkin-${eventId}`;
+  const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
+  const draftReadyRef = useRef(false);
+
+  // Restaura rascunho ao montar
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await draftLoad<{
+          form: typeof form;
+          cardPhoto: { name: string; type: string; dataUrl: string } | null;
+        }>(draftKey);
+        if (cancelled || !saved || !saved.data) {
+          draftReadyRef.current = true;
+          return;
+        }
+        const d = saved.data;
+        if (d.form) setForm(d.form);
+        if (d.cardPhoto) {
+          try {
+            const f = await dataUrlToFile(d.cardPhoto.dataUrl, d.cardPhoto.name);
+            setCardFile(f);
+            setCardPreview(d.cardPhoto.dataUrl);
+            setCardB64(d.cardPhoto);
+          } catch { /* ignora */ }
+        }
+        setDraftRestoredAt(saved.updatedAt);
+      } catch { /* silent */ } finally {
+        draftReadyRef.current = true;
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [draftKey]);
+
+  // Auto-save debounced
+  useEffect(() => {
+    if (!draftReadyRef.current) return;
+    const t = setTimeout(() => {
+      draftSave(draftKey, { form, cardPhoto: cardB64 }).catch(() => {});
+    }, 500);
+    return () => clearTimeout(t);
+  }, [draftKey, form, cardB64]);
+
+  const handleDismissDraft = async () => {
+    await draftClear(draftKey).catch(() => {});
+    setDraftRestoredAt(null);
+    setForm({
+      contact_name: '',
+      company: '',
+      contact_role: '',
+      contact_phone: '',
+      contact_email: '',
+      prospect_type: 'COMPRADOR',
+      notes: '',
+    });
+    setCardFile(null);
+    setCardPreview(null);
+    setCardB64(null);
+  };
+
+  const handleCardFile = async (file: File | null) => {
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    setCardFile(file);
+    setCardPreview(url);
+    // Converte pra base64 pro draft
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      setCardB64({ name: file.name, type: file.type || 'application/octet-stream', dataUrl });
+    } catch { /* silent */ }
+
+    // OCR via OpenAI pra pre-preencher os campos
+    setScanLoading(true);
+    setScanError(null);
+    try {
+      const fd = new FormData();
+      fd.append('image', file);
+      const res = await fetch('/api/scan-card', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) {
+        setScanError(data.error || 'Erro ao ler cartao');
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        contact_name: data.name || f.contact_name,
+        contact_role: data.cargo || f.contact_role,
+        contact_phone: data.phone || f.contact_phone,
+        contact_email: data.email || f.contact_email,
+        company: data.company || f.company,
+      }));
+    } catch (e: any) {
+      setScanError(e.message || 'Erro ao ler cartao');
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.contact_name.trim() || form.contact_name.trim().length < 2) {
+      setSuccessMsg('Nome e obrigatorio');
+      setTimeout(() => setSuccessMsg(null), 2500);
+      return;
+    }
+    setLoading(true);
+    setSuccessMsg(null);
+
+    try {
+      const fields: Record<string, string> = {
+        contact_name: form.contact_name.trim(),
+        company: form.company.trim(),
+        contact_role: form.contact_role.trim(),
+        contact_phone: form.contact_phone.trim(),
+        contact_email: form.contact_email.trim(),
+        prospect_type: form.prospect_type,
+        notes: form.notes.trim(),
+      };
+
+      const files: Array<{ field: string; name: string; type: string; base64: string }> = [];
+      if (cardFile) {
+        const b64 = await fileToBase64(cardFile);
+        files.push({ field: 'photo_contact', ...b64 });
+      }
+
+      const result = await enqueueOrSend({
+        type: 'walk-in',
+        endpoint: `/api/events/${eventId}/walk-in`,
+        method: 'POST',
+        body: { __form: true, fields, files },
+        meta: { event_id: eventId, contact_name: form.contact_name.trim() },
+      });
+
+      if (result.sent) {
+        draftClear(draftKey).catch(() => {});
+        setSuccessMsg('Contato avulso registrado!');
+        setTimeout(onDone, 1200);
+      } else if (result.queued) {
+        draftClear(draftKey).catch(() => {});
+        setSuccessMsg('Offline — contato salvo na fila');
+        setTimeout(onDone, 1500);
+      } else if (result.response) {
+        // Erro HTTP — tenta ler a mensagem
+        let errMsg = 'Erro ao enviar. Tente novamente.';
+        try {
+          const data = await result.response.json();
+          if (data?.error) errMsg = data.error;
+        } catch { /* ignora */ }
+        setSuccessMsg(errMsg);
+        setTimeout(() => setSuccessMsg(null), 3000);
+      }
+    } catch {
+      setSuccessMsg('Erro inesperado');
+      setTimeout(() => setSuccessMsg(null), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inputClass = 'w-full px-3 py-3 text-base border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-cyan-500 border-purple-700/30';
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <button onClick={onBack} className="text-purple-300/60 hover:text-cyan-400 transition-colors" aria-label="Voltar">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div>
+          <h3 className="text-white font-bold text-lg">Contato Avulso</h3>
+          <p className="text-xs text-cyan-300/60">Sem vinculo com stand (corredor, cafe, palestra)</p>
+        </div>
+      </div>
+
+      {/* Draft restaurado */}
+      {draftRestoredAt && (
+        <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center gap-3">
+          <svg className="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div className="flex-1 min-w-0 text-xs">
+            <div className="font-semibold text-amber-300">Rascunho restaurado</div>
+            <div className="text-amber-200/70">Salvo {formatDraftAge(draftRestoredAt)}. Continue de onde parou.</div>
+          </div>
+          <button
+            type="button"
+            onClick={handleDismissDraft}
+            className="shrink-0 px-2.5 py-1.5 text-[11px] font-semibold rounded-md bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 transition-colors"
+          >
+            Descartar
+          </button>
+        </div>
+      )}
+
+      {/* Status banner (sucesso/erro) */}
+      {successMsg && (
+        <div className="p-3 rounded-lg bg-cyan-500/15 text-cyan-300 text-sm font-medium border border-cyan-500/20 text-center">
+          {successMsg}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Foto do cartao (com OCR automatico) */}
+        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
+          <label className="block text-xs font-bold text-cyan-400 uppercase tracking-widest mb-2">
+            Foto do Cartao de Visita
+          </label>
+          <p className="text-[11px] text-purple-300/50 mb-3">
+            A foto e opcional, mas se tirar, a IA le os dados e preenche o formulario sozinha.
+          </p>
+
+          {cardPreview ? (
+            <div className="relative">
+              <img src={cardPreview} alt="Cartao de visita" className="w-full max-h-64 object-contain rounded-lg border border-purple-700/30 bg-[#2a1245]" />
+              <button
+                type="button"
+                onClick={() => {
+                  setCardFile(null);
+                  setCardPreview(null);
+                  setCardB64(null);
+                }}
+                className="absolute top-2 right-2 p-1.5 bg-black/70 rounded-full text-white hover:bg-black"
+                aria-label="Remover foto"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              {scanLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">
+                  <div className="bg-cyan-500/90 text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2">
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Lendo cartao...
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => cardInputRef.current?.click()}
+              className="w-full py-4 min-h-[64px] bg-[#2a1245] border-2 border-dashed border-cyan-500/30 hover:border-cyan-500/60 text-cyan-300 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Tirar foto do cartao
+            </button>
+          )}
+
+          <input
+            ref={cardInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => handleCardFile(e.target.files?.[0] || null)}
+          />
+
+          {scanError && (
+            <div className="mt-2 p-2 rounded-lg bg-red-500/15 text-red-400 text-xs border border-red-500/20">
+              {scanError}
+            </div>
+          )}
+        </div>
+
+        {/* Campos do contato */}
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-purple-200/80 mb-1">Nome *</label>
+            <input
+              type="text"
+              value={form.contact_name}
+              onChange={(e) => setForm((f) => ({ ...f, contact_name: e.target.value }))}
+              className={inputClass}
+              placeholder="Nome da pessoa"
+              required
+              autoComplete="name"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-purple-200/80 mb-1">Empresa</label>
+            <input
+              type="text"
+              value={form.company}
+              onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
+              className={inputClass}
+              placeholder="Nome da empresa (opcional)"
+              autoComplete="organization"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-purple-200/80 mb-1">Cargo</label>
+            <input
+              type="text"
+              value={form.contact_role}
+              onChange={(e) => setForm((f) => ({ ...f, contact_role: e.target.value }))}
+              className={inputClass}
+              placeholder="Cargo (opcional)"
+              autoComplete="organization-title"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-purple-200/80 mb-1">Telefone</label>
+              <input
+                type="tel"
+                value={form.contact_phone}
+                onChange={(e) => setForm((f) => ({ ...f, contact_phone: e.target.value }))}
+                className={inputClass}
+                placeholder="(11) 99999-9999"
+                inputMode="tel"
+                autoComplete="tel"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-purple-200/80 mb-1">Email</label>
+              <input
+                type="email"
+                value={form.contact_email}
+                onChange={(e) => setForm((f) => ({ ...f, contact_email: e.target.value }))}
+                className={inputClass}
+                placeholder="email@empresa.com"
+                inputMode="email"
+                autoComplete="email"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-purple-200/80 mb-1">Tipo de prospect</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['COMPRADOR', 'FORNECEDOR', 'AMBOS'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, prospect_type: t }))}
+                  className={`py-2.5 rounded-lg text-xs font-semibold transition-colors ${
+                    form.prospect_type === t
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                      : 'bg-[#2a1245] text-purple-300/60 border border-purple-700/30 hover:border-purple-600/50'
+                  }`}
+                >
+                  {t === 'COMPRADOR' ? 'Comprador' : t === 'FORNECEDOR' ? 'Fornecedor' : 'Ambos'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-purple-200/80 mb-1">
+              Observacoes <span className="text-purple-300/40">(onde encontrou, contexto, etc)</span>
+            </label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+              className={inputClass}
+              rows={3}
+              placeholder="Ex: conheci na fila do cafe, interessado em trator XYZ..."
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full py-4 min-h-[56px] bg-cyan-500 text-white rounded-xl font-bold text-base hover:bg-cyan-600 active:bg-cyan-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-cyan-900/30"
+        >
+          {loading ? 'Registrando...' : '✓ Registrar Contato Avulso'}
         </button>
       </form>
     </div>
