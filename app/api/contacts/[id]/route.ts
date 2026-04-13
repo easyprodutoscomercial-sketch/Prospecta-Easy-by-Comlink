@@ -246,6 +246,26 @@ export async function DELETE(
 
     const admin = getAdminClient();
 
+    // Valida que o contato pertence a org (senao admin de outra org poderia
+    // apagar daqui — na pratica a gente so tem 1 org, mas defesa em camadas).
+    const { data: existing } = await admin
+      .from('contacts')
+      .select('id, name, organization_id')
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id)
+      .single();
+
+    if (!existing) {
+      return NextResponse.json({ error: 'Contato nao encontrado' }, { status: 404 });
+    }
+
+    // Conta filhos pro audit
+    const [intCount, meetCount, attCount] = await Promise.all([
+      admin.from('interactions').select('id', { count: 'exact', head: true }).eq('contact_id', id),
+      admin.from('meetings').select('id', { count: 'exact', head: true }).eq('contact_id', id),
+      admin.from('contact_attachments').select('id', { count: 'exact', head: true }).eq('contact_id', id),
+    ]);
+
     // Deletar anexos do storage primeiro
     const { data: attachments } = await admin
       .from('contact_attachments')
@@ -257,23 +277,36 @@ export async function DELETE(
       await admin.storage.from('attachments').remove(filePaths);
     }
 
-    // Deletar registros de anexos
-    await admin.from('contact_attachments').delete().eq('contact_id', id);
-
-    // Deletar interações
-    await admin.from('interactions').delete().eq('contact_id', id);
-
-    // Deletar reuniões, notificações e solicitações de acesso
-    await admin.from('meetings').delete().eq('contact_id', id);
-    await admin.from('notifications').delete().eq('contact_id', id);
-    await admin.from('access_requests').delete().eq('contact_id', id);
-
-    // Deletar contato
-    const { error } = await admin.from('contacts').delete().eq('id', id);
+    // Deletar contato — o banco cuida dos filhos via FK CASCADE.
+    const { error } = await admin
+      .from('contacts')
+      .delete()
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id);
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true });
+    // Audit log
+    try {
+      await admin.from('audit_log').insert({
+        organization_id: profile.organization_id,
+        user_id: user.id,
+        user_name: profile.name || 'Sem nome',
+        entity: 'contact',
+        entity_id: id,
+        action: 'delete',
+        old_values: { name: existing.name },
+        metadata: {
+          cascade_interactions: intCount.count || 0,
+          cascade_meetings: meetCount.count || 0,
+          cascade_attachments: attCount.count || 0,
+        },
+      });
+    } catch (e) {
+      console.error('[delete contact] audit log failed:', e);
+    }
+
+    return NextResponse.json({ success: true, deleted: { name: existing.name } });
   } catch (error: any) {
     console.error('Error deleting contact:', error);
     return NextResponse.json(

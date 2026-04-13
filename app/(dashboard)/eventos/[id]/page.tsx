@@ -17,6 +17,7 @@ import {
   DRAFT_MAX_AGE_MS,
 } from '@/lib/offline/drafts';
 import EditEventModal from '@/components/eventos/edit-event-modal';
+import DeleteConfirmModal from '@/components/ui/delete-confirm-modal';
 
 // Parser seguro de data ISO vinda do banco. Aceita tanto 'YYYY-MM-DD' quanto
 // 'YYYY-MM-DDT...' (com tempo/zona), sempre fixando ao meio-dia local pra
@@ -37,8 +38,8 @@ export default function EventDetailPage() {
   const [event, setEvent] = useState<FairEvent | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [loading, setLoading] = useState(true);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [deletingEvent, setDeletingEvent] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePreview, setDeletePreview] = useState<any>(null);
   const [showEdit, setShowEdit] = useState(false);
   const [userRole, setUserRole] = useState<string>('user');
   const [preselectedBoothId, setPreselectedBoothId] = useState<string | null>(null);
@@ -156,54 +157,24 @@ export default function EventDetailPage() {
             Editar
           </button>
           {isAdmin && (
-            <>
-              {!showDeleteConfirm ? (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                  Excluir
-                </button>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-xs text-red-400">Excluir este evento?</span>
-                  <button
-                    onClick={async () => {
-                      setDeletingEvent(true);
-                      try {
-                        const res = await fetch(`/api/events/${id}`, { method: 'DELETE' });
-                        if (res.ok) {
-                          router.push('/eventos');
-                        } else {
-                          const data = await res.json();
-                          alert(data.error || 'Erro ao excluir');
-                          setDeletingEvent(false);
-                          setShowDeleteConfirm(false);
-                        }
-                      } catch {
-                        alert('Erro ao excluir evento');
-                        setDeletingEvent(false);
-                        setShowDeleteConfirm(false);
-                      }
-                    }}
-                    disabled={deletingEvent}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded-lg text-xs font-medium hover:bg-red-700 disabled:opacity-50"
-                  >
-                    {deletingEvent ? 'Excluindo...' : 'Confirmar'}
-                  </button>
-                  <button
-                    onClick={() => setShowDeleteConfirm(false)}
-                    disabled={deletingEvent}
-                    className="px-3 py-1.5 bg-purple-800/30 text-purple-300/60 rounded-lg text-xs font-medium hover:bg-purple-800/50 disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              )}
-            </>
+            <button
+              onClick={async () => {
+                // Busca preview antes de abrir o modal
+                try {
+                  const res = await fetch(`/api/events/${id}/delete-preview`);
+                  if (res.ok) {
+                    setDeletePreview(await res.json());
+                    setShowDeleteModal(true);
+                  }
+                } catch { /* silent */ }
+              }}
+              className="px-3 py-1.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg text-xs font-medium hover:bg-red-500/20 transition-colors flex items-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              Excluir
+            </button>
           )}
         </div>
       </div>
@@ -280,6 +251,7 @@ export default function EventDetailPage() {
           preselectedBoothId={preselectedBoothId}
           onClearPreselect={() => setPreselectedBoothId(null)}
           initialSearch={globalSearch}
+          isAdmin={isAdmin}
         />
       )}
       {tab === 'map' && (
@@ -304,6 +276,38 @@ export default function EventDetailPage() {
           event={event}
           onClose={() => setShowEdit(false)}
           onSaved={() => { setShowEdit(false); fetchEvent(); }}
+        />
+      )}
+
+      {/* Delete Modal — admin-only, digite-o-nome pra confirmar */}
+      {showDeleteModal && event && deletePreview && (
+        <DeleteConfirmModal
+          open={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirmed={() => {
+            setShowDeleteModal(false);
+            router.push('/eventos');
+          }}
+          title={`Apagar Feira: ${event.name}`}
+          confirmName={event.name}
+          description="Essa feira e TUDO ligado a ela sera apagado: stands, visitas, contatos, interacoes, reunioes e anexos. Um snapshot automatico vai ser gerado antes — voce podera ver o resumo historico depois em 'Historico de Feiras'."
+          items={[
+            { label: 'Stands cadastrados', value: deletePreview.counts?.booths || 0 },
+            { label: 'Check-ins (visitas)', value: deletePreview.counts?.visits || 0 },
+            { label: 'Contatos da feira', value: deletePreview.counts?.contacts || 0, critical: (deletePreview.counts?.contacts || 0) > 0 },
+            { label: 'Interacoes (ligacoes, whatsapp...)', value: deletePreview.counts?.interactions || 0 },
+            { label: 'Reunioes agendadas', value: deletePreview.counts?.meetings || 0 },
+            { label: 'Anexos (fotos, arquivos)', value: deletePreview.counts?.attachments || 0 },
+            { label: 'Leads quentes', value: deletePreview.counts?.hot_leads || 0 },
+            { label: 'Deals com valor', value: deletePreview.counts?.high_value_deals || 0 },
+            {
+              label: 'Valor total em pipeline',
+              value: (deletePreview.counts?.total_value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+              prefix: 'R$ ',
+              critical: (deletePreview.counts?.total_value || 0) > 0,
+            },
+          ]}
+          deleteUrl={`/api/events/${id}`}
         />
       )}
     </div>
@@ -1024,14 +1028,18 @@ function parseNotesMeta(notes: string | null): { userNotes: string; extraPhotos:
 function BoothDrawer({
   booth,
   eventId,
+  isAdmin,
   onClose,
   onUpdate,
 }: {
   booth: EventBooth;
   eventId: string;
+  isAdmin?: boolean;
   onClose: () => void;
   onUpdate: () => void;
 }) {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePreview, setDeletePreview] = useState<any>(null);
   const visit = booth.visit;
   const parsed = parseNotesMeta(visit?.notes || null);
 
@@ -1332,6 +1340,26 @@ function BoothDrawer({
               {booth.sector && <span>{booth.sector}</span>}
             </div>
           </div>
+          {isAdmin && (
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch(`/api/events/${eventId}/booths/${booth.id}/delete-preview`);
+                  if (res.ok) {
+                    setDeletePreview(await res.json());
+                    setShowDeleteModal(true);
+                  }
+                } catch { /* silent */ }
+              }}
+              className="p-2 rounded-lg hover:bg-red-500/20 text-red-400/60 hover:text-red-400 transition-colors shrink-0"
+              title="Excluir stand (admin)"
+              aria-label="Excluir stand"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-purple-800/30 text-purple-300/50 hover:text-white transition-colors shrink-0">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
@@ -1541,6 +1569,25 @@ function BoothDrawer({
           </div>
         </div>
       </div>
+
+      {/* Delete stand modal — admin-only */}
+      {showDeleteModal && deletePreview && (
+        <DeleteConfirmModal
+          open={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirmed={() => {
+            setShowDeleteModal(false);
+            onUpdate();
+          }}
+          title={`Apagar Stand: ${booth.company_name}`}
+          confirmName={booth.company_name}
+          description="Esse stand e as visitas feitas nele serao apagados. Contatos capturados neste stand permanecem no CRM (so perdem o vinculo com o stand)."
+          items={[
+            { label: 'Visitas (check-ins) neste stand', value: deletePreview.counts?.visits || 0, critical: (deletePreview.counts?.visits || 0) > 0 },
+          ]}
+          deleteUrl={`/api/events/${eventId}/booths/${booth.id}`}
+        />
+      )}
     </>
   );
 }
@@ -1551,11 +1598,13 @@ function StandsTab({
   preselectedBoothId,
   onClearPreselect,
   initialSearch,
+  isAdmin,
 }: {
   eventId: string;
   preselectedBoothId?: string | null;
   onClearPreselect?: () => void;
   initialSearch?: string;
+  isAdmin?: boolean;
 }) {
   const [booths, setBooths] = useState<EventBooth[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2086,6 +2135,7 @@ function StandsTab({
         <BoothDrawer
           booth={selectedBooth}
           eventId={eventId}
+          isAdmin={isAdmin}
           onClose={() => setSelectedBooth(null)}
           onUpdate={() => { setSelectedBooth(null); fetchBooths(); }}
         />

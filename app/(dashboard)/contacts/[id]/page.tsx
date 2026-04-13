@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Contact, Interaction, Meeting, ContactAttachment, TelefoneAdicional } from '@/lib/types';
 import ContactForm from '@/components/contacts/contact-form';
 import ConfirmModal from '@/components/ui/confirm-modal';
+import DeleteConfirmModal from '@/components/ui/delete-confirm-modal';
 import MotivoModal from '@/components/ui/motivo-modal';
 import Tabs from '@/components/ui/tabs';
 import ContactSidebar from '@/components/contacts/contact-sidebar';
@@ -46,6 +47,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deletePreview, setDeletePreview] = useState<any>(null);
 
   const [showMotivoModal, setShowMotivoModal] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<'CONVERTIDO' | 'PERDIDO' | null>(null);
@@ -162,6 +164,21 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     const r = await fetch(`/api/contacts/${id}`, { method: 'DELETE' });
     if (r.ok) { toast.success('Contato deletado'); router.push('/contacts'); } else toast.error('Erro ao deletar');
     setDeleteLoading(false); setShowDeleteModal(false);
+  };
+
+  // Abre o modal de delete com preview do cascade. Admin-only (ja validado no bot\u00e3o).
+  const openDeleteModal = async () => {
+    try {
+      const r = await fetch(`/api/contacts/${id}/delete-preview`);
+      if (r.ok) {
+        setDeletePreview(await r.json());
+        setShowDeleteModal(true);
+      } else {
+        toast.error('Erro ao carregar preview');
+      }
+    } catch {
+      toast.error('Erro ao carregar preview');
+    }
   };
 
   const handleEditSubmit = async (formData: Record<string, any>) => {
@@ -300,7 +317,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             </button>
             {isAdmin && (
               <button
-                onClick={() => setShowDeleteModal(true)}
+                onClick={openDeleteModal}
                 className="inline-flex items-center justify-center p-2 text-red-400 bg-red-500/10 border border-red-500/25 rounded-lg hover:bg-red-500/15 hover:border-red-400 transition-colors min-h-[40px] min-w-[40px]"
                 aria-label="Deletar contato"
                 title="Deletar contato"
@@ -326,7 +343,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
             onStatusChange={handleStatusChange}
             onTerminalStageClick={handleTerminalStageClick}
             onEdit={() => setIsEditing(true)}
-            onDelete={() => setShowDeleteModal(true)}
+            onDelete={openDeleteModal}
             onClaim={handleClaimContact}
             onRequestAccess={handleRequestAccess}
             onUpdatePhones={handleUpdatePhones}
@@ -397,8 +414,34 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Modals */}
-      <ConfirmModal isOpen={showDeleteModal} onClose={() => setShowDeleteModal(false)} onConfirm={handleDelete}
-        title="Deletar contato" message={`Deletar "${contact.name}"? Irreversivel.`} variant="danger" confirmLabel="Deletar" loading={deleteLoading} />
+      {showDeleteModal && deletePreview && contact && (
+        <DeleteConfirmModal
+          open={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          onConfirmed={() => {
+            setShowDeleteModal(false);
+            toast.success('Contato deletado');
+            router.push('/contacts');
+          }}
+          title={`Apagar Contato: ${contact.name}`}
+          confirmName={contact.name}
+          description="Esse contato e tudo ligado a ele sera apagado: interacoes, reunioes, anexos, notificacoes e historico de score. Visitas de stand associadas ficam anonimas (nao sao apagadas)."
+          items={[
+            { label: 'Interacoes (ligacoes, whatsapp, email)', value: deletePreview.counts?.interactions || 0 },
+            { label: 'Reunioes agendadas', value: deletePreview.counts?.meetings || 0 },
+            { label: 'Anexos (fotos, arquivos)', value: deletePreview.counts?.attachments || 0 },
+            { label: 'Notificacoes', value: deletePreview.counts?.notifications || 0 },
+            { label: 'Historico de lead score', value: deletePreview.counts?.score_history || 0 },
+            {
+              label: 'Valor estimado',
+              value: (deletePreview.counts?.valor_estimado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+              prefix: 'R$ ',
+              critical: (deletePreview.counts?.valor_estimado || 0) > 0,
+            },
+          ]}
+          deleteUrl={`/api/contacts/${id}`}
+        />
+      )}
       {pendingStatus && <MotivoModal isOpen={showMotivoModal} onClose={() => { setShowMotivoModal(false); setPendingStatus(null); setPendingTerminalStageId(null); }} onConfirm={handleMotivoConfirm} tipo={pendingStatus} loading={motivoLoading} />}
     </div>
   );

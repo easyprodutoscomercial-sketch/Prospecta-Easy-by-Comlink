@@ -140,6 +140,11 @@ export async function PUT(
       updates.map_url = null;
     }
 
+    // Detecta transi\u00e7\u00e3o pra ENCERRADO pra gerar snapshot auto depois.
+    const becameEncerrado =
+      updates.status === 'ENCERRADO' &&
+      (existing as any).status !== 'ENCERRADO';
+
     const { data: event, error } = await admin
       .from('events')
       .update(updates)
@@ -148,6 +153,26 @@ export async function PUT(
       .single();
 
     if (error) throw error;
+
+    // Auto-snapshot ao encerrar o evento. Fire-and-forget: se falhar, loga
+    // mas nao trava o PUT (o evento ja foi atualizado).
+    if (becameEncerrado) {
+      try {
+        const origin = request.nextUrl.origin;
+        // Repasse o cookie de auth pra chamada interna ficar autenticada.
+        const cookieHeader = request.headers.get('cookie') || '';
+        await fetch(`${origin}/api/events/${id}/snapshot`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            cookie: cookieHeader,
+          },
+          body: JSON.stringify({ trigger: 'auto_encerrado' }),
+        }).catch((e) => console.error('[encerrar] snapshot fetch failed:', e));
+      } catch (e) {
+        console.error('[encerrar] snapshot error:', e);
+      }
+    }
 
     // If pipeline_id or stage_id changed, migrate all contacts linked to this event
     const pipelineChanged = updates.pipeline_id !== undefined && updates.pipeline_id !== existing.pipeline_id;
@@ -192,7 +217,17 @@ export async function PUT(
   }
 }
 
-// DELETE /api/events/[id] — admin only
+// DELETE /api/events/[id] — hard delete em cascata. Admin-only.
+//
+// Fluxo:
+//  1. Valida admin
+//  2. Gera snapshot pre-dele\u00e7\u00e3o (protecao contra erro humano — depois do
+//     delete, o snapshot fica orfao mas preservado em event_snapshots)
+//  3. Limpa arquivos do Storage (o banco nao limpa sozinho)
+//  4. DELETE na tabela — o banco cascade apaga event_booths, booth_visits,
+//     contacts (event_id CASCADE), e tudo que depende dos contatos
+//     (interactions, meetings, attachments, lead_score_history, etc)
+//  5. Grava audit_log
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -224,6 +259,68 @@ export async function DELETE(
       return NextResponse.json({ error: 'Apenas administradores podem excluir eventos' }, { status: 403 });
     }
 
+    // Busca evento pra pegar metadata do audit
+    const { data: event } = await admin
+      .from('events')
+      .select('id, name, status')
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id)
+      .single();
+
+    if (!event) {
+      return NextResponse.json({ error: 'Evento nao encontrado' }, { status: 404 });
+    }
+
+    // 1) Gera snapshot pre-delecao pra preservar historico (fire-and-forget).
+    try {
+      const origin = request.nextUrl.origin;
+      const cookieHeader = request.headers.get('cookie') || '';
+      await fetch(`${origin}/api/events/${id}/snapshot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', cookie: cookieHeader },
+        body: JSON.stringify({ trigger: 'manual' }),
+      }).catch((e) => console.error('[delete] pre-snapshot failed:', e));
+    } catch (e) {
+      console.error('[delete] pre-snapshot error:', e);
+    }
+
+    // 2) Conta filhos pra gravar no audit antes do delete
+    const [boothsR, visitsR, contactsR] = await Promise.all([
+      admin
+        .from('event_booths')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', id)
+        .eq('organization_id', profile.organization_id),
+      admin
+        .from('booth_visits')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', id)
+        .eq('organization_id', profile.organization_id),
+      admin
+        .from('contacts')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', id)
+        .eq('organization_id', profile.organization_id),
+    ]);
+
+    // 3) Limpa arquivos do Storage (pasta do evento).
+    // O banco nao limpa Storage — precisa manual. Lista todos os files
+    // em attachments/{org}/events/{id}/* e apaga em batch.
+    try {
+      const folder = `${profile.organization_id}/events/${id}`;
+      const { data: files } = await admin.storage
+        .from('attachments')
+        .list(folder, { limit: 1000 });
+      if (files && files.length > 0) {
+        const paths = files.map((f) => `${folder}/${f.name}`);
+        await admin.storage.from('attachments').remove(paths);
+      }
+    } catch (e) {
+      console.error('[delete] storage cleanup failed:', e);
+      // Segue mesmo assim — o delete do evento tem prioridade.
+    }
+
+    // 4) DELETE em cascata (o banco faz o trabalho)
     const { error } = await admin
       .from('events')
       .delete()
@@ -232,8 +329,37 @@ export async function DELETE(
 
     if (error) throw error;
 
-    return NextResponse.json({ ok: true });
+    // 5) Audit log
+    try {
+      await admin.from('audit_log').insert({
+        organization_id: profile.organization_id,
+        user_id: user.id,
+        user_name: profile.name || 'Sem nome',
+        entity: 'event',
+        entity_id: id,
+        action: 'delete',
+        old_values: { name: event.name, status: event.status },
+        metadata: {
+          cascade_booths: boothsR.count || 0,
+          cascade_visits: visitsR.count || 0,
+          cascade_contacts: contactsR.count || 0,
+        },
+      });
+    } catch (e) {
+      console.error('[delete] audit log failed:', e);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      deleted: {
+        event_name: event.name,
+        booths: boothsR.count || 0,
+        visits: visitsR.count || 0,
+        contacts: contactsR.count || 0,
+      },
+    });
   } catch (error: any) {
+    console.error('[delete event] error:', error);
     return NextResponse.json({ error: error.message || 'Erro ao deletar evento' }, { status: 500 });
   }
 }

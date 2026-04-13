@@ -83,12 +83,16 @@ export async function DELETE(
     const profile = await ensureProfile(supabase, user);
     if (!profile) return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
 
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas administradores podem excluir stands' }, { status: 403 });
+    }
+
     const admin = getAdminClient();
 
     // Verify booth belongs to this event and org
     const { data: booth } = await admin
       .from('event_booths')
-      .select('id')
+      .select('id, company_name, booth_number')
       .eq('id', boothId)
       .eq('event_id', id)
       .eq('organization_id', profile.organization_id)
@@ -98,22 +102,40 @@ export async function DELETE(
       return NextResponse.json({ error: 'Stand não encontrado' }, { status: 404 });
     }
 
-    // Delete visits first (cascade should handle, but be explicit)
-    await admin
+    // Conta visitas pro audit
+    const { count: visitsCount } = await admin
       .from('booth_visits')
-      .delete()
+      .select('id', { count: 'exact', head: true })
       .eq('booth_id', boothId);
 
-    // Delete booth
+    // Delete booth — banco faz cascade em booth_visits (CASCADE ja configurado).
     const { error } = await admin
       .from('event_booths')
       .delete()
-      .eq('id', boothId);
+      .eq('id', boothId)
+      .eq('organization_id', profile.organization_id);
 
     if (error) throw error;
 
-    return NextResponse.json({ ok: true });
+    // Audit
+    try {
+      await admin.from('audit_log').insert({
+        organization_id: profile.organization_id,
+        user_id: user.id,
+        user_name: profile.name || 'Sem nome',
+        entity: 'booth',
+        entity_id: boothId,
+        action: 'delete',
+        old_values: { company_name: booth.company_name, booth_number: booth.booth_number },
+        metadata: { cascade_visits: visitsCount || 0, event_id: id },
+      });
+    } catch (e) {
+      console.error('[delete booth] audit log failed:', e);
+    }
+
+    return NextResponse.json({ ok: true, deleted: { company_name: booth.company_name, visits: visitsCount || 0 } });
   } catch (error: any) {
+    console.error('[delete booth] error:', error);
     return NextResponse.json({ error: error.message || 'Erro ao deletar stand' }, { status: 500 });
   }
 }
