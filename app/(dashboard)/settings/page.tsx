@@ -183,38 +183,14 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Banner Toggle Section */}
+        {/* Banner Toggle Section — descontinuado (Avatar Runner removido) */}
+        {/*
         {bannerToggleVisible && (
           <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-medium text-neutral-100 mb-1">Animacao do Banner (Avatar Runner)</h2>
-                <p className="text-xs text-purple-300/60">
-                  Oculte o banner animado no topo da pagina.
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  const newValue = !bannerHidden;
-                  setBannerHidden(newValue);
-                  localStorage.setItem('banner_hidden', String(newValue));
-                }}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 focus:ring-offset-[#1e0f35] ${
-                  !bannerHidden ? 'bg-emerald-500' : 'bg-purple-800/50'
-                }`}
-              >
-                <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    !bannerHidden ? 'translate-x-5' : 'translate-x-0'
-                  }`}
-                />
-              </button>
-            </div>
-            <p className="text-[10px] text-purple-300/40 mt-2">
-              {bannerHidden ? 'Banner oculto — ative para exibir novamente.' : 'Banner visivel — desative para ocultar.'}
-            </p>
+            ...toggle do banner animado removido da UI...
           </div>
         )}
+        */}
 
         {/* Password Section */}
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">

@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import Sidebar from '@/components/sidebar';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { Providers } from '@/components/providers';
-import DashboardBanner from '@/components/dashboard-banner';
+// import DashboardBanner from '@/components/dashboard-banner'; // desativado — banner animado (Avatar Runner) foi descontinuado por feedback do dono
 import CommandPalette from '@/components/command-palette';
 import { ProductTour } from '@/components/onboarding/product-tour';
 import OfflineIndicator from '@/components/offline/offline-indicator';
@@ -38,7 +38,7 @@ export default async function DashboardLayout({
       <Sidebar profileName={profile?.name ?? null} userRole={profile?.role ?? 'user'} visibleMenus={profile?.visible_menus ?? []} signOutAction={handleSignOut} />
 
       <main id="main-content" className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
-        <DashboardBanner />
+        {/* <DashboardBanner /> — desativado (banner animado Avatar Runner descontinuado) */}
         <div className="px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10 max-w-[1600px]">
           <Providers>
             {children}
