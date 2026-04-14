@@ -277,6 +277,11 @@ mini-crm/
 - `quiz_configuracoes` — config por org, `valor_exato`, `dias_config JSONB`, `token_publico`, `telefone_vip`
 - `quiz_participantes` — participações com `palpite`, `dia_feira`, link a `contact_id`
 
+#### Associações (ORPLANA e outras)
+- `associations` — grupos/conglomerados de empresas (ex: SOCICANA, UNICANA, ACAER). **Um nível acima de "empresa"** — uma associação agrega N empresas/fornecedores. Colunas: `sigla`, `nome_completo`, `presidente`, `telefone`, `email`, `website`, `cidade`, `estado`, `endereco`, `cep`, `logo_url`, `grupo` (ex: "ORPLANA"), `notas`. Unique em `(organization_id, sigla)`.
+- `contacts.association_id` — FK opcional que liga um contato à associação de origem. Coexiste com o campo legacy `contacts.associacao` (texto livre, usado em check-in de feira com `events.uses_association=true`).
+- Seed inicial: 35 associações ORPLANA (fornecedores de cana do agro). Ver `scripts/run-associations-via-api.mjs`.
+
 #### Lead Capture
 - `lead_capture_links` — links públicos por `slug` para captura de leads
 
@@ -763,6 +768,13 @@ export function useX() { return useContext(Ctx) }
 | GET | `/api/events/[id]/live` | Dados real-time | ✅ |
 | GET | `/api/events/[id]/report-data` | Dados para relatório | ✅ |
 | GET | `/api/events/[id]/stats` | Estatísticas | ✅ |
+
+### Associações (2)
+
+| Método | Rota | Descrição | Auth |
+|---|---|---|---|
+| GET/POST | `/api/associations` | Listar / criar associação (POST admin/gerente) | ✅ |
+| GET/PATCH/DELETE | `/api/associations/[id]` | CRUD individual (PATCH admin/gerente, DELETE admin) | ✅ |
 
 ### Quiz Feira (6)
 
