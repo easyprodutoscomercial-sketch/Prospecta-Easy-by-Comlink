@@ -431,6 +431,7 @@ export default function EventDetailPage() {
           key={activeDraftContactId}
           eventId={id}
           contactId={activeDraftContactId}
+          usesAssociation={!!event.uses_association}
           onBack={() => {
             setShowWalkIn(false);
             refreshDrafts();
@@ -3385,11 +3386,13 @@ function CheckInForm({
 function WalkInForm({
   eventId,
   contactId,
+  usesAssociation,
   onBack,
   onDone,
 }: {
   eventId: string;
   contactId: string;
+  usesAssociation?: boolean;
   onBack: () => void;
   onDone: () => void;
 }) {
@@ -3401,6 +3404,7 @@ function WalkInForm({
     contact_email: '',
     prospect_type: 'COMPRADOR' as 'COMPRADOR' | 'FORNECEDOR' | 'AMBOS',
     notes: '',
+    associacao: '',
   });
   const [cardFile, setCardFile] = useState<File | null>(null);
   const [cardPreview, setCardPreview] = useState<string | null>(null);
@@ -3461,6 +3465,7 @@ function WalkInForm({
         contact_role: c.cargo || prev.contact_role,
         contact_phone: c.phone || prev.contact_phone,
         contact_email: c.email || prev.contact_email,
+        associacao: c.associacao || prev.associacao,
       }));
       setSyncedAt(Date.now());
       setTimeout(() => setSyncedAt(null), 3000);
@@ -3533,6 +3538,7 @@ function WalkInForm({
       if (form.contact_role.trim()) patchPayload.cargo = form.contact_role.trim();
       if (form.contact_phone.trim()) patchPayload.phone = form.contact_phone.trim();
       if (form.contact_email.trim()) patchPayload.email = form.contact_email.trim();
+      if (form.associacao.trim()) patchPayload.associacao = form.associacao.trim();
       if (Object.keys(patchPayload).length > 0) {
         fetch(`/api/contacts/${contactId}`, {
           method: 'PATCH',
@@ -3555,6 +3561,7 @@ function WalkInForm({
       contact_email: '',
       prospect_type: 'COMPRADOR',
       notes: '',
+      associacao: '',
     });
     setCardFile(null);
     setCardPreview(null);
@@ -3638,6 +3645,7 @@ function WalkInForm({
         contact_email: form.contact_email.trim(),
         prospect_type: form.prospect_type,
         notes: form.notes.trim(),
+        associacao: form.associacao.trim(),
         // contact_id diz pro walk-in endpoint "este rascunho ja existe no
         // banco, em vez de criar um novo contato, finaliza este (is_draft=false)".
         contact_id: contactId,
@@ -3943,6 +3951,21 @@ function WalkInForm({
               autoComplete="organization"
             />
           </div>
+
+          {usesAssociation && (
+            <div>
+              <label className="block text-xs font-semibold text-purple-200/80 mb-1">
+                Associação / Cooperativa
+              </label>
+              <input
+                type="text"
+                value={form.associacao}
+                onChange={(e) => setForm((f) => ({ ...f, associacao: e.target.value }))}
+                className={inputClass}
+                placeholder="Ex: COPERCANA, ORPLANA, ..."
+              />
+            </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-purple-200/80 mb-1">Cargo</label>

@@ -35,6 +35,7 @@ export const contactSchema = z.object({
   valor_estimado: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
   sem_documento: z.boolean().optional().default(false),
   event_id: z.string().uuid().optional().nullable(),
+  associacao: z.string().max(200).optional().nullable(),
 }).refine((data) => {
   if (data.sem_documento) return true;
   const cpfDigits = data.cpf?.replace(/\D/g, '') || '';
@@ -98,6 +99,7 @@ export const contactUpdateSchema = z.object({
   proxima_acao_data: z.string().optional().nullable(),
   motivo_ganho_perdido: z.string().optional().nullable(),
   valor_estimado: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
+  associacao: z.string().max(200).optional().nullable(),
   inexistente: z.boolean().optional(),
   telefones_adicionais: z.array(z.object({
     phone: z.string().min(1),

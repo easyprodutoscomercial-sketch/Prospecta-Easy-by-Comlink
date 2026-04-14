@@ -129,6 +129,7 @@ export async function PATCH(
       'telefones_adicionais',
       'temperatura', 'segmento', 'origem', 'proxima_acao_tipo', 'proxima_acao_data',
       'motivo_ganho_perdido', 'valor_estimado',
+      'associacao',
     ]);
 
     // Se stage_id foi enviado, sincronizar o campo status com o slug do stage

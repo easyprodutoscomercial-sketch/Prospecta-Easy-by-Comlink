@@ -27,7 +27,7 @@ export async function GET(
 
     const { data: contact } = await admin
       .from('contacts')
-      .select('id, name, company, cargo, phone, email, is_draft, event_id, notes, created_by_user_id')
+      .select('id, name, company, cargo, phone, email, associacao, is_draft, event_id, notes, created_by_user_id')
       .eq('id', contactId)
       .maybeSingle();
 
@@ -40,10 +40,11 @@ export async function GET(
 
     // Se tem evento vinculado, valida que esta ativo
     let eventName: string | null = null;
+    let usesAssociation = false;
     if (contact.event_id) {
       const { data: event } = await admin
         .from('events')
-        .select('id, name, status')
+        .select('id, name, status, uses_association')
         .eq('id', contact.event_id)
         .maybeSingle();
 
@@ -54,6 +55,7 @@ export async function GET(
         );
       }
       eventName = event.name;
+      usesAssociation = !!event.uses_association;
     }
 
     // Busca dados do vendedor (quem criou o rascunho) pra mostrar pro cliente
@@ -83,6 +85,8 @@ export async function GET(
       cargo: contact.cargo || '',
       phone: contact.phone || '',
       email: contact.email || '',
+      associacao: contact.associacao || '',
+      uses_association: usesAssociation,
       seller,
       event_name: eventName,
     });
@@ -110,6 +114,7 @@ export async function POST(
     const cargo: string = (body.cargo || '').trim();
     const phone: string = (body.phone || '').trim();
     const email: string = (body.email || '').trim();
+    const associacao: string = (body.associacao || '').trim();
 
     if (!name || name.length < 2) {
       return NextResponse.json(
@@ -165,6 +170,7 @@ export async function POST(
       const emailNorm = normalizeEmail(email);
       if (emailNorm) patch.email_normalized = emailNorm;
     }
+    if (associacao) patch.associacao = associacao;
 
     const { error: updateErr } = await admin
       .from('contacts')

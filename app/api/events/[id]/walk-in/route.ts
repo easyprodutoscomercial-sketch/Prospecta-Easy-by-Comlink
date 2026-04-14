@@ -61,6 +61,7 @@ export async function POST(
     let notes: string | null = null;
     let photoContactUrl: string | null = null;
     let photoPersonUrl: string | null = null;
+    let associacao: string | null = null;
     // Se vier contact_id, significa que e a FINALIZACAO de um rascunho existente
     // (contato com is_draft=true criado la atras via POST /api/contacts/draft).
     let finalizeContactId: string | null = null;
@@ -75,6 +76,7 @@ export async function POST(
       company = (formData.get('company') as string) || null;
       prospectType = (formData.get('prospect_type') as string) || 'COMPRADOR';
       notes = (formData.get('notes') as string) || null;
+      associacao = (formData.get('associacao') as string) || null;
       finalizeContactId = (formData.get('contact_id') as string) || null;
 
       // Foto do cartao (photo_contact) + foto da pessoa (photo_person)
@@ -100,6 +102,7 @@ export async function POST(
       notes = body.notes || null;
       photoContactUrl = body.photo_contact_url || null;
       photoPersonUrl = body.photo_person_url || null;
+      associacao = body.associacao || null;
       finalizeContactId = body.contact_id || null;
     }
 
@@ -259,6 +262,7 @@ export async function POST(
         name_normalized: contactName.trim().toLowerCase(),
         temperatura: 'QUENTE',
         avatar_url: avatarUrl,
+        associacao: associacao?.trim() || null,
       };
       if (contactPhone) {
         payload.phone = contactPhone;

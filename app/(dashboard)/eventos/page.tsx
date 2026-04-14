@@ -362,6 +362,7 @@ function CreateEventModal({
     end_date: '',
     pipeline_id: '',
     stage_id: '',
+    uses_association: false,
   });
   const [pipelines, setPipelines] = useState<any[]>([]);
   const [stages, setStages] = useState<any[]>([]);
@@ -506,6 +507,21 @@ function CreateEventModal({
               </select>
             </div>
           )}
+
+          <label className="flex items-start gap-3 p-3 rounded-lg bg-[#2a1245] border border-purple-700/30 cursor-pointer hover:border-cyan-500/40 transition-colors">
+            <input
+              type="checkbox"
+              checked={form.uses_association}
+              onChange={(e) => setForm((f) => ({ ...f, uses_association: e.target.checked }))}
+              className="mt-0.5 rounded border-purple-700/30 bg-[#2a1245] text-cyan-500 focus:ring-cyan-500"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-white">Usa associação / cooperativa?</div>
+              <div className="text-xs text-purple-300/60 mt-0.5">
+                Adiciona o campo "Associação" no cadastro de contatos desta feira (ex: ORPLANA).
+              </div>
+            </div>
+          </label>
 
           <div className="flex gap-3 pt-2">
             <button

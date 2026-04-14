@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const admin = getAdminClient();
     const body = await request.json();
 
-    const { name, location, start_date, end_date, map_url, pipeline_id, stage_id, status } = body;
+    const { name, location, start_date, end_date, map_url, pipeline_id, stage_id, status, uses_association } = body;
 
     if (!name || !start_date || !end_date) {
       return NextResponse.json({ error: 'Nome, data início e data fim são obrigatórios' }, { status: 400 });
@@ -88,6 +88,7 @@ export async function POST(request: NextRequest) {
         pipeline_id: pipeline_id || null,
         stage_id: stage_id || null,
         status: status || 'RASCUNHO',
+        uses_association: uses_association === true || uses_association === 'true',
         created_by_user_id: user.id,
       })
       .select()

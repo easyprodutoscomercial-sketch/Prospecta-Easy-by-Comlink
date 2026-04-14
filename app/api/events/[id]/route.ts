@@ -112,6 +112,11 @@ export async function PUT(
       updates.status = body.status;
     }
     if (body.cover_image_url !== undefined) updates.cover_image_url = body.cover_image_url;
+    if (body.uses_association !== undefined) {
+      // Aceita "true"/"false" string (vindo do multipart) ou boolean
+      updates.uses_association =
+        body.uses_association === true || body.uses_association === 'true';
+    }
 
     // Upload cover image if provided
     if (coverFile && coverFile.size > 0) {

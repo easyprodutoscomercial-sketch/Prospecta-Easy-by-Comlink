@@ -628,6 +628,7 @@ export interface FairEvent {
   pipeline_id: string | null;
   stage_id: string | null;
   status: EventStatus;
+  uses_association: boolean;
   created_by_user_id: string;
   created_at: string;
   updated_at: string;

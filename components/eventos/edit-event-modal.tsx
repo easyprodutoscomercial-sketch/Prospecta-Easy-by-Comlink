@@ -22,6 +22,7 @@ export default function EditEventModal({ event, onClose, onSaved }: EditEventMod
     end_date: event.end_date,
     pipeline_id: event.pipeline_id || '',
     stage_id: event.stage_id || '',
+    uses_association: !!event.uses_association,
   });
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(event.cover_image_url || null);
@@ -71,6 +72,7 @@ export default function EditEventModal({ event, onClose, onSaved }: EditEventMod
         formData.append('end_date', form.end_date);
         formData.append('pipeline_id', form.pipeline_id);
         formData.append('stage_id', form.stage_id);
+        formData.append('uses_association', String(form.uses_association));
         formData.append('cover_image', coverFile);
         res = await fetch(`/api/events/${event.id}`, { method: 'PUT', body: formData });
       } else {
@@ -220,6 +222,21 @@ export default function EditEventModal({ event, onClose, onSaved }: EditEventMod
               </select>
             </div>
           )}
+
+          <label className="flex items-start gap-3 p-3 rounded-lg bg-[#2a1245] border border-purple-700/30 cursor-pointer hover:border-cyan-500/40 transition-colors">
+            <input
+              type="checkbox"
+              checked={form.uses_association}
+              onChange={(e) => setForm((f) => ({ ...f, uses_association: e.target.checked }))}
+              className="mt-0.5 rounded border-purple-700/30 bg-[#2a1245] text-cyan-500 focus:ring-cyan-500"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-white">Usa associacao / cooperativa?</div>
+              <div className="text-xs text-purple-300/60 mt-0.5">
+                Adiciona o campo "Associacao" no cadastro de contatos desta feira.
+              </div>
+            </div>
+          </label>
 
           <div className="flex gap-3 pt-2">
             <button

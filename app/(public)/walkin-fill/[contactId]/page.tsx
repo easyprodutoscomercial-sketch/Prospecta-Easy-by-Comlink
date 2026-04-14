@@ -18,9 +18,11 @@ export default function WalkInFillPage() {
     cargo: '',
     phone: '',
     email: '',
+    associacao: '',
   });
   const [seller, setSeller] = useState<{ name: string; avatar_url: string | null } | null>(null);
   const [eventName, setEventName] = useState<string | null>(null);
+  const [usesAssociation, setUsesAssociation] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -38,9 +40,11 @@ export default function WalkInFillPage() {
           cargo: data.cargo || '',
           phone: data.phone || '',
           email: data.email || '',
+          associacao: data.associacao || '',
         });
         setSeller(data.seller || null);
         setEventName(data.event_name || null);
+        setUsesAssociation(!!data.uses_association);
       } catch {
         setLoadError('Erro de conexao');
       } finally {
@@ -187,6 +191,20 @@ export default function WalkInFillPage() {
               className={inputClass}
             />
           </div>
+          {usesAssociation && (
+            <div>
+              <label className="block text-sm font-medium text-purple-200/80 mb-1">
+                Associação / Cooperativa
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: COPERCANA, ORPLANA..."
+                value={form.associacao}
+                onChange={(e) => setForm((f) => ({ ...f, associacao: e.target.value }))}
+                className={inputClass}
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-purple-200/80 mb-1">Cargo</label>
             <input
