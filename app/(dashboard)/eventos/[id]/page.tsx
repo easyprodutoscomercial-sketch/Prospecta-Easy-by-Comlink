@@ -3425,6 +3425,15 @@ function WalkInForm({
   const [showQr, setShowQr] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncedAt, setSyncedAt] = useState<number | null>(null);
+  const [associacoes, setAssociacoes] = useState<Array<{ sigla: string; nome_completo: string }>>([]);
+
+  useEffect(() => {
+    if (!usesAssociation) return;
+    fetch('/api/associations')
+      .then((r) => (r.ok ? r.json() : { associations: [] }))
+      .then((d) => setAssociacoes(d.associations || []))
+      .catch(() => {});
+  }, [usesAssociation]);
 
   useEffect(() => {
     // Gera o QR code apontando pra pagina publica deste rascunho.
@@ -3612,6 +3621,7 @@ function WalkInForm({
         contact_phone: data.phone || f.contact_phone,
         contact_email: data.email || f.contact_email,
         company: data.company || f.company,
+        associacao: data.associacao || f.associacao,
       }));
     } catch (e: any) {
       setScanError(e.message || 'Erro ao ler cartao');
@@ -3959,11 +3969,18 @@ function WalkInForm({
               </label>
               <input
                 type="text"
+                list="walkin-associacoes"
                 value={form.associacao}
                 onChange={(e) => setForm((f) => ({ ...f, associacao: e.target.value }))}
                 className={inputClass}
-                placeholder="Ex: COPERCANA, ORPLANA, ..."
+                placeholder={associacoes.length > 0 ? `Escolha da lista ou digite (${associacoes.length} cadastradas)` : 'Ex: COPERCANA, ORPLANA, ...'}
+                autoComplete="off"
               />
+              <datalist id="walkin-associacoes">
+                {associacoes.map((a) => (
+                  <option key={a.sigla} value={a.sigla}>{a.nome_completo}</option>
+                ))}
+              </datalist>
             </div>
           )}
 

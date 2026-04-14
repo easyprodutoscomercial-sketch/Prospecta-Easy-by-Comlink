@@ -45,6 +45,7 @@ Extract contact information and return ONLY a valid JSON object with these field
 - "cargo": job title / position (translate to Portuguese if the card is in another language)
 - "cidade": city name
 - "estado": state, province or region (use abbreviation if Brazilian, e.g. SP, RJ, MG)
+- "associacao": association/cooperative/union the person or company belongs to, if mentioned. Common examples in Brazilian sugarcane/agro sector: ORPLANA, COPERCANA, SOCICANA, UNICANA, CANAOESTE, ACAER, APROCANA, ASCANA, ASSOBARI, APLANA, APMP, APROVALE, AFOCAPI, CANASOL, CANACAMPO, CANAROEIRA, CANAUSSU, NOVOCANA, OLICANA, ORICANA, SULCANAS, ASSOVALE, ASSOCANA, ASSOCAP, ASSOCICANA, ASFORAMA, ASPROVAC, AFCOP, AFIBB, AFOCAN, AFOCANA, AFOPORTO, APCA, APCRO, APLACANA. Return ONLY the acronym/short name (e.g. "SOCICANA"), not the full "Associação dos ...". Do NOT invent — only extract if clearly present on the card (logo, text, footer, side bar).
 
 Rules:
 - The card can be in Portuguese, English, Spanish, French, German, Italian, Chinese, Japanese, Korean, Arabic, Russian, or any other language
@@ -59,7 +60,7 @@ Rules:
             ],
           },
         ],
-        max_tokens: 300,
+        max_tokens: 400,
         temperature: 0,
       }),
     });

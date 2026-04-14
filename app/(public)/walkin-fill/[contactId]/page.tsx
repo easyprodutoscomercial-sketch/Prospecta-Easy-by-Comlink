@@ -23,6 +23,7 @@ export default function WalkInFillPage() {
   const [seller, setSeller] = useState<{ name: string; avatar_url: string | null } | null>(null);
   const [eventName, setEventName] = useState<string | null>(null);
   const [usesAssociation, setUsesAssociation] = useState(false);
+  const [associations, setAssociations] = useState<Array<{ sigla: string; nome_completo: string }>>([]);
 
   useEffect(() => {
     (async () => {
@@ -45,6 +46,7 @@ export default function WalkInFillPage() {
         setSeller(data.seller || null);
         setEventName(data.event_name || null);
         setUsesAssociation(!!data.uses_association);
+        setAssociations(data.associations || []);
       } catch {
         setLoadError('Erro de conexao');
       } finally {
@@ -198,11 +200,18 @@ export default function WalkInFillPage() {
               </label>
               <input
                 type="text"
-                placeholder="Ex: COPERCANA, ORPLANA..."
+                list="walkin-fill-associacoes"
+                placeholder={associations.length > 0 ? `Escolha da lista ou digite (${associations.length} cadastradas)` : 'Ex: COPERCANA, ORPLANA...'}
                 value={form.associacao}
                 onChange={(e) => setForm((f) => ({ ...f, associacao: e.target.value }))}
                 className={inputClass}
+                autoComplete="off"
               />
+              <datalist id="walkin-fill-associacoes">
+                {associations.map((a) => (
+                  <option key={a.sigla} value={a.sigla}>{a.nome_completo}</option>
+                ))}
+              </datalist>
             </div>
           )}
           <div>

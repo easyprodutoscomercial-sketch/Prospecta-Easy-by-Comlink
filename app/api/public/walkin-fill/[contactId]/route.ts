@@ -27,7 +27,7 @@ export async function GET(
 
     const { data: contact } = await admin
       .from('contacts')
-      .select('id, name, company, cargo, phone, email, associacao, is_draft, event_id, notes, created_by_user_id')
+      .select('id, organization_id, name, company, cargo, phone, email, associacao, is_draft, event_id, notes, created_by_user_id')
       .eq('id', contactId)
       .maybeSingle();
 
@@ -41,6 +41,7 @@ export async function GET(
     // Se tem evento vinculado, valida que esta ativo
     let eventName: string | null = null;
     let usesAssociation = false;
+    let associationsList: Array<{ sigla: string; nome_completo: string }> = [];
     if (contact.event_id) {
       const { data: event } = await admin
         .from('events')
@@ -56,6 +57,15 @@ export async function GET(
       }
       eventName = event.name;
       usesAssociation = !!event.uses_association;
+
+      if (usesAssociation && contact.organization_id) {
+        const { data: assocs } = await admin
+          .from('associations')
+          .select('sigla, nome_completo')
+          .eq('organization_id', contact.organization_id)
+          .order('sigla', { ascending: true });
+        associationsList = assocs || [];
+      }
     }
 
     // Busca dados do vendedor (quem criou o rascunho) pra mostrar pro cliente
@@ -87,6 +97,7 @@ export async function GET(
       email: contact.email || '',
       associacao: contact.associacao || '',
       uses_association: usesAssociation,
+      associations: associationsList,
       seller,
       event_name: eventName,
     });
