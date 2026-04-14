@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import Link from 'next/link';
 
 type Association = {
   id: string;
@@ -100,9 +101,10 @@ export default function AssociacoesPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map((a) => (
-            <div
+            <Link
               key={a.id}
-              className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 hover:border-emerald-500/40 transition-colors"
+              href={`/associacoes/${a.id}`}
+              className="bg-[#1e0f35] border border-purple-800/30 rounded-xl p-5 hover:border-emerald-500/40 transition-colors block"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="min-w-0">
@@ -171,7 +173,7 @@ export default function AssociacoesPage() {
                   </span>
                 </div>
               )}
-            </div>
+            </Link>
           ))}
         </div>
       )}

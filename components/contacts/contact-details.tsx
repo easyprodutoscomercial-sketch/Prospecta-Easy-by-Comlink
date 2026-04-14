@@ -71,6 +71,7 @@ export default function ContactDetails({ contact }: ContactDetailsProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div><Label>Nome</Label><FieldValue value={contact.name} /></div>
           <div><Label>Empresa</Label><FieldValue value={contact.company} /></div>
+          <div><Label>Associação</Label><FieldValue value={(contact as any).associacao} /></div>
           <div><Label>Email</Label><FieldValue value={contact.email} /></div>
           <div><Label>Telefone</Label><FieldValue value={contact.phone} /></div>
           <div><Label>WhatsApp</Label><FieldValue value={contact.whatsapp} /></div>
