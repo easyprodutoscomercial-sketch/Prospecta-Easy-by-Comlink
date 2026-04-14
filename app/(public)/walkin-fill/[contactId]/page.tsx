@@ -19,6 +19,8 @@ export default function WalkInFillPage() {
     phone: '',
     email: '',
   });
+  const [seller, setSeller] = useState<{ name: string; avatar_url: string | null } | null>(null);
+  const [eventName, setEventName] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -37,6 +39,8 @@ export default function WalkInFillPage() {
           phone: data.phone || '',
           email: data.email || '',
         });
+        setSeller(data.seller || null);
+        setEventName(data.event_name || null);
       } catch {
         setLoadError('Erro de conexao');
       } finally {
@@ -127,10 +131,37 @@ export default function WalkInFillPage() {
   return (
     <div className="min-h-screen flex items-start justify-center p-4 py-8">
       <div className="max-w-md w-full space-y-4">
+        {/* Bloco do vendedor — da confianca pro cliente de que sabe pra quem
+            esta preenchendo os dados. */}
+        {seller && (
+          <div className="bg-[#1e0f35] rounded-2xl border border-cyan-500/30 p-4 flex items-center gap-3">
+            {seller.avatar_url ? (
+              <img
+                src={seller.avatar_url}
+                alt={seller.name}
+                className="w-14 h-14 rounded-full object-cover border-2 border-cyan-400/40"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-cyan-500/15 border-2 border-cyan-400/40 flex items-center justify-center text-cyan-300 font-bold text-xl">
+                {seller.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-widest text-cyan-300/60 font-bold">
+                Voce esta cadastrando com
+              </div>
+              <div className="text-white font-bold text-base truncate">{seller.name}</div>
+              {eventName && (
+                <div className="text-xs text-purple-300/60 truncate">{eventName}</div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white">Preencha seus dados</h1>
           <p className="text-purple-300/60 text-sm mt-1">
-            Seu contato vai direto pro vendedor que abriu este link.
+            Seu contato vai direto pro vendedor acima.
           </p>
         </div>
 

@@ -27,7 +27,7 @@ export async function GET(
 
     const { data: contact } = await admin
       .from('contacts')
-      .select('id, name, company, cargo, phone, email, is_draft, event_id, notes')
+      .select('id, name, company, cargo, phone, email, is_draft, event_id, notes, created_by_user_id')
       .eq('id', contactId)
       .maybeSingle();
 
@@ -39,6 +39,7 @@ export async function GET(
     }
 
     // Se tem evento vinculado, valida que esta ativo
+    let eventName: string | null = null;
     if (contact.event_id) {
       const { data: event } = await admin
         .from('events')
@@ -52,6 +53,24 @@ export async function GET(
           { status: 403 }
         );
       }
+      eventName = event.name;
+    }
+
+    // Busca dados do vendedor (quem criou o rascunho) pra mostrar pro cliente
+    // — isso da confianca pro cliente de que esta preenchendo pra pessoa certa.
+    let seller: { name: string; avatar_url: string | null } | null = null;
+    if (contact.created_by_user_id) {
+      const { data: profile } = await admin
+        .from('profiles')
+        .select('name, avatar_url')
+        .eq('user_id', contact.created_by_user_id)
+        .maybeSingle();
+      if (profile) {
+        seller = {
+          name: profile.name || 'Vendedor',
+          avatar_url: profile.avatar_url || null,
+        };
+      }
     }
 
     // Nao expoe nome placeholder ao cliente
@@ -64,6 +83,8 @@ export async function GET(
       cargo: contact.cargo || '',
       phone: contact.phone || '',
       email: contact.email || '',
+      seller,
+      event_name: eventName,
     });
   } catch (error: any) {
     return NextResponse.json(
