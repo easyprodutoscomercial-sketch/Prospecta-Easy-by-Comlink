@@ -3410,16 +3410,20 @@ function WalkInForm({
 
   // QR code pra captura publica: cliente escaneia e preenche no celular dele.
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrUrl, setQrUrl] = useState<string>('');
   const [showQr, setShowQr] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncedAt, setSyncedAt] = useState<number | null>(null);
 
   useEffect(() => {
     // Gera o QR code apontando pra pagina publica deste rascunho.
+    // window.location so existe no client — por isso tudo dentro do useEffect
+    // pra nao criar hydration mismatch com SSR.
     (async () => {
       try {
-        const QRCode = (await import('qrcode')).default;
         const url = `${window.location.origin}/walkin-fill/${contactId}`;
+        setQrUrl(url);
+        const QRCode = (await import('qrcode')).default;
         const data = await QRCode.toDataURL(url, {
           width: 280,
           margin: 2,
@@ -3609,6 +3613,12 @@ function WalkInForm({
       setTimeout(() => setSuccessMsg(null), 2500);
       return;
     }
+    const phoneDigits = form.contact_phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      setSuccessMsg('Telefone e obrigatorio (min 10 digitos com DDD)');
+      setTimeout(() => setSuccessMsg(null), 2500);
+      return;
+    }
     setLoading(true);
     setSuccessMsg(null);
 
@@ -3738,7 +3748,7 @@ function WalkInForm({
               className="w-48 h-48 rounded-lg bg-white p-2"
             />
             <p className="text-[10px] text-purple-300/50 text-center break-all px-2">
-              {typeof window !== 'undefined' ? `${window.location.origin}/walkin-fill/${contactId}` : ''}
+              {qrUrl}
             </p>
           </div>
         )}
@@ -3941,7 +3951,7 @@ function WalkInForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-purple-200/80 mb-1">Telefone</label>
+              <label className="block text-xs font-semibold text-purple-200/80 mb-1">Telefone *</label>
               <input
                 type="tel"
                 value={form.contact_phone}
@@ -3950,6 +3960,7 @@ function WalkInForm({
                 placeholder="(11) 99999-9999"
                 inputMode="tel"
                 autoComplete="tel"
+                required
               />
             </div>
             <div>

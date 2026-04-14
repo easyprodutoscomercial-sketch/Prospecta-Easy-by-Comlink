@@ -51,6 +51,11 @@ export default function WalkInFillPage() {
       alert('Digite seu nome');
       return;
     }
+    const phoneDigits = form.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 10) {
+      alert('Digite seu telefone com DDD (min 10 digitos)');
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch(`/api/public/walkin-fill/${contactId}`, {
@@ -162,10 +167,11 @@ export default function WalkInFillPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-purple-200/80 mb-1">Telefone / WhatsApp</label>
+            <label className="block text-sm font-medium text-purple-200/80 mb-1">Telefone / WhatsApp *</label>
             <input
               type="tel"
               inputMode="tel"
+              required
               placeholder="(11) 99999-9999"
               value={form.phone}
               onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
