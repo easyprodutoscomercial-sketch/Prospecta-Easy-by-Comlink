@@ -28,6 +28,7 @@ export default function EventosPage() {
   const [deleting, setDeleting] = useState(false);
   const [userRole, setUserRole] = useState<string>('user');
   const [editId, setEditId] = useState<string | null>(null);
+  const [togglingStatusId, setTogglingStatusId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/api/me').then((r) => r.json()).then((d) => setUserRole(d.role || 'user')).catch(() => {});
@@ -53,6 +54,27 @@ export default function EventosPage() {
   }, [filter]);
 
   useEffect(() => { fetchEvents(); }, [fetchEvents]);
+
+  const handleToggleStatus = async (eventId: string, nextStatus: 'ATIVO' | 'ENCERRADO') => {
+    setTogglingStatusId(eventId);
+    try {
+      const res = await fetch(`/api/events/${eventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Erro ao mudar status');
+        return;
+      }
+      fetchEvents();
+    } catch {
+      alert('Erro ao mudar status do evento');
+    } finally {
+      setTogglingStatusId(null);
+    }
+  };
 
   const handleDeleteEvent = async (eventId: string) => {
     setDeleting(true);
@@ -147,10 +169,8 @@ export default function EventosPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {events.map((event) => (
-            <div
-              key={event.id}
-              className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden hover:border-emerald-500/30 transition-all group relative"
-            >
+            <div key={event.id} className="flex flex-col gap-2">
+              <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden hover:border-emerald-500/30 transition-all group relative">
               {/* Cover area with action buttons */}
               <div className="relative">
                 <Link href={`/eventos/${event.id}`} className="block">
@@ -251,6 +271,48 @@ export default function EventosPage() {
                   </div>
                 </div>
               </Link>
+              </div>
+
+              {/* Faixa admin: Ativar / Encerrar / Reabrir — FORA da caixa do card */}
+              {isAdmin && (
+                <>
+                  {event.status === 'RASCUNHO' && (
+                    <button
+                      onClick={() => handleToggleStatus(event.id, 'ATIVO')}
+                      disabled={togglingStatusId === event.id}
+                      className="w-full px-4 py-2.5 bg-emerald-500 text-white rounded-lg text-sm font-bold hover:bg-emerald-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
+                      title="So admin pode ativar. Uma vez ativa, a feira aceita check-ins e contatos avulsos."
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      {togglingStatusId === event.id ? 'Ativando...' : 'Ativar Feira'}
+                    </button>
+                  )}
+                  {event.status === 'ATIVO' && (
+                    <button
+                      onClick={() => handleToggleStatus(event.id, 'ENCERRADO')}
+                      disabled={togglingStatusId === event.id}
+                      className="w-full px-4 py-2.5 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2 shadow-lg shadow-purple-900/30"
+                      title="Ao encerrar, o sistema gera um snapshot historico automatico."
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {togglingStatusId === event.id ? 'Encerrando...' : 'Encerrar Feira'}
+                    </button>
+                  )}
+                  {event.status === 'ENCERRADO' && (
+                    <button
+                      onClick={() => handleToggleStatus(event.id, 'ATIVO')}
+                      disabled={togglingStatusId === event.id}
+                      className="w-full px-4 py-2.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-lg text-sm font-bold hover:bg-emerald-500/30 disabled:opacity-50 transition-colors"
+                    >
+                      {togglingStatusId === event.id ? 'Reabrindo...' : 'Reabrir Feira'}
+                    </button>
+                  )}
+                </>
+              )}
             </div>
           ))}
         </div>

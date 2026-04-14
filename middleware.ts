@@ -90,6 +90,7 @@ export async function middleware(request: NextRequest) {
     !pathname.startsWith('/lead-capture') &&
     !pathname.startsWith('/quiz') &&
     !pathname.startsWith('/portal') &&
+    !pathname.startsWith('/walkin-fill') &&
     !pathname.startsWith('/api') &&
     !pathname.startsWith('/_next')
   ) {

@@ -8,9 +8,18 @@
 //   useEffect(() => { const t = setTimeout(() => draftSave(key, state), 500); return () => clearTimeout(t); }, [state]);  // auto-save debounced
 //   await draftClear(key);  // ao submeter com sucesso
 
-import { draftSave, draftLoad, draftClear, draftPruneOld } from './db';
+import { draftSave, draftLoad, draftClear, draftPruneOld, draftListByPrefix } from './db';
+export type { DraftItem } from './db';
 
-export { draftSave, draftLoad, draftClear, draftPruneOld };
+export { draftSave, draftLoad, draftClear, draftPruneOld, draftListByPrefix };
+
+/**
+ * Gera um id curto unico pra identificar um rascunho novo. Suficiente pra
+ * evitar colisao num mesmo dispositivo (timestamp base36 + random).
+ */
+export function generateDraftId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
 
 /**
  * Converte um File em base64 (data URL completo: `data:image/png;base64,...`).

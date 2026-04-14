@@ -119,6 +119,25 @@ export async function POST(
       return NextResponse.json({ error: 'Stand não encontrado' }, { status: 404 });
     }
 
+    // Bloqueio: so aceita check-in se a feira estiver ATIVA. Admin ativa/encerra
+    // na lista de feiras (/eventos). Regra pedida pelo dono pra evitar capturas
+    // fora do intervalo oficial da feira.
+    const { data: eventStatusRow } = await admin
+      .from('events')
+      .select('status')
+      .eq('id', eventId)
+      .single();
+
+    if (!eventStatusRow || eventStatusRow.status !== 'ATIVO') {
+      return NextResponse.json(
+        {
+          error: 'Esta feira não está ativa. Peça ao admin para ativá-la antes de registrar visitas.',
+          event_status: eventStatusRow?.status || null,
+        },
+        { status: 403 }
+      );
+    }
+
     // Auto-create: just create/link a contact without creating a visit or marking as visited
     if (autoCreate) {
       const { data: event } = await admin

@@ -174,6 +174,32 @@ export async function draftClear(key: string): Promise<void> {
   });
 }
 
+// Lista todos os drafts cuja chave comeca com o prefixo dado.
+// Usado quando o usuario pode ter VARIOS rascunhos do mesmo tipo em paralelo
+// (ex: multiplos contatos avulsos em feira), pra mostrar a lista de pendentes.
+// Ordenado do mais recente pro mais antigo.
+export async function draftListByPrefix(prefix: string): Promise<DraftItem[]> {
+  if (!isBrowser()) return [];
+  return tx(STORE_DRAFTS, 'readonly', (store) => {
+    return new Promise<DraftItem[]>((resolve, reject) => {
+      const range = IDBKeyRange.bound(prefix, prefix + '\uffff');
+      const items: DraftItem[] = [];
+      const req = store.openCursor(range);
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          items.push(cursor.value as DraftItem);
+          cursor.continue();
+        } else {
+          items.sort((a, b) => b.updatedAt - a.updatedAt);
+          resolve(items);
+        }
+      };
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
 // Remove drafts mais antigos que maxAgeMs (ex: 7 dias = 604800000 ms).
 // Útil pra não acumular rascunhos esquecidos indefinidamente.
 export async function draftPruneOld(maxAgeMs: number): Promise<number> {

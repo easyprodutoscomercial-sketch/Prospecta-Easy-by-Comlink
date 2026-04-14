@@ -99,7 +99,7 @@ export async function PATCH(
     // Ownership enforcement: buscar contato atual
     const { data: existingContact } = await admin
       .from('contacts')
-      .select('assigned_to_user_id, stage_id, organization_id')
+      .select('assigned_to_user_id, stage_id, organization_id, is_draft')
       .eq('id', id)
       .single();
 
@@ -180,21 +180,24 @@ export async function PATCH(
 
     if (error) throw error;
 
-    // Recalculate lead score after update
-    try {
-      const { data: interactions } = await admin
-        .from('interactions')
-        .select('outcome, happened_at')
-        .eq('contact_id', id)
-        .order('happened_at', { ascending: false })
-        .limit(50);
-      const detailed = computeLeadScoreDetailed({ ...contact, interactions: interactions || [] });
-      await admin.from('contacts').update({ lead_score: detailed.total }).eq('id', id);
-      contact.lead_score = detailed.total;
-    } catch { /* non-blocking */ }
+    // Recalculate lead score after update — pula rascunhos pra economizar ciclo
+    // e nao poluir o historico com scores de dados incompletos.
+    if (!existingContact.is_draft) {
+      try {
+        const { data: interactions } = await admin
+          .from('interactions')
+          .select('outcome, happened_at')
+          .eq('contact_id', id)
+          .order('happened_at', { ascending: false })
+          .limit(50);
+        const detailed = computeLeadScoreDetailed({ ...contact, interactions: interactions || [] });
+        await admin.from('contacts').update({ lead_score: detailed.total }).eq('id', id);
+        contact.lead_score = detailed.total;
+      } catch { /* non-blocking */ }
+    }
 
-    // Process stage change automations
-    if (validated.stage_id && validated.stage_id !== existingContact.stage_id) {
+    // Process stage change automations — tambem pula rascunhos.
+    if (!existingContact.is_draft && validated.stage_id && validated.stage_id !== existingContact.stage_id) {
       try {
         await processStageChangeAutomations(
           admin,
@@ -240,8 +243,8 @@ export async function DELETE(
     }
 
     const profile = await ensureProfile(supabase, user);
-    if (!profile || profile.role !== 'admin') {
-      return NextResponse.json({ error: 'Apenas administradores podem deletar contatos' }, { status: 403 });
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile nao encontrado' }, { status: 404 });
     }
 
     const admin = getAdminClient();
@@ -250,13 +253,27 @@ export async function DELETE(
     // apagar daqui — na pratica a gente so tem 1 org, mas defesa em camadas).
     const { data: existing } = await admin
       .from('contacts')
-      .select('id, name, organization_id')
+      .select('id, name, organization_id, is_draft, created_by_user_id')
       .eq('id', id)
       .eq('organization_id', profile.organization_id)
       .single();
 
     if (!existing) {
       return NextResponse.json({ error: 'Contato nao encontrado' }, { status: 404 });
+    }
+
+    // Permissao de delete:
+    //   - rascunhos: o criador ou admin pode deletar
+    //   - contatos finalizados: so admin
+    const canDelete =
+      profile.role === 'admin' ||
+      (existing.is_draft && existing.created_by_user_id === user.id);
+
+    if (!canDelete) {
+      return NextResponse.json(
+        { error: 'Apenas administradores podem deletar contatos ja finalizados' },
+        { status: 403 }
+      );
     }
 
     // Conta filhos pro audit

@@ -34,6 +34,7 @@ export const contactSchema = z.object({
   motivo_ganho_perdido: z.string().optional().nullable(),
   valor_estimado: z.union([z.number(), z.string().transform((v) => v === '' ? null : Number(v)), z.null()]).optional().nullable(),
   sem_documento: z.boolean().optional().default(false),
+  event_id: z.string().uuid().optional().nullable(),
 }).refine((data) => {
   if (data.sem_documento) return true;
   const cpfDigits = data.cpf?.replace(/\D/g, '') || '';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { FairEvent, EventBooth, BoothVisit } from '@/lib/types';
 import { EVENT_STATUS_LABELS, EVENT_STATUS_COLORS, BOOTH_STATUS_COLORS, PROSPECT_TYPE_LABELS, PROSPECT_TYPE_COLORS } from '@/lib/utils/labels';
@@ -31,11 +31,12 @@ function formatEventDate(raw: string | null | undefined): string {
   return d.toLocaleDateString('pt-BR');
 }
 
-type Tab = 'dashboard' | 'stands' | 'map' | 'checkin' | 'timeline' | 'followup' | 'contatos';
+type Tab = 'dashboard' | 'stands' | 'map' | 'timeline' | 'followup' | 'contatos';
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [event, setEvent] = useState<FairEvent | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [loading, setLoading] = useState(true);
@@ -45,6 +46,92 @@ export default function EventDetailPage() {
   const [userRole, setUserRole] = useState<string>('user');
   const [preselectedBoothId, setPreselectedBoothId] = useState<string | null>(null);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [openStandFormNonce, setOpenStandFormNonce] = useState(0);
+  const [showWalkIn, setShowWalkIn] = useState(false);
+  const [activeDraftContactId, setActiveDraftContactId] = useState<string | null>(null);
+  const [walkInDrafts, setWalkInDrafts] = useState<any[]>([]);
+  const [showDraftsList, setShowDraftsList] = useState(false);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+  const [discardingDraftId, setDiscardingDraftId] = useState<string | null>(null);
+
+  const refreshDrafts = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/contacts?drafts=true&event_id=${id}&limit=100`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setWalkInDrafts(data.contacts || []);
+    } catch {
+      // silent — se a rede cair, a lista fica como esta
+    }
+  }, [id]);
+
+  useEffect(() => {
+    refreshDrafts();
+  }, [refreshDrafts]);
+
+  // Auto-resume: abre o walk-in form direto num rascunho especifico passado
+  // via query param. Usado pela pagina /contacts/rascunhos pra saltar direto
+  // na continuacao do cadastro.
+  useEffect(() => {
+    const resumeId = searchParams.get('resumeDraft');
+    if (resumeId && !showWalkIn) {
+      setActiveDraftContactId(resumeId);
+      setShowWalkIn(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const openNewWalkIn = async () => {
+    if (creatingDraft) return;
+    setCreatingDraft(true);
+    try {
+      const res = await fetch('/api/contacts/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || 'Erro ao criar rascunho');
+        return;
+      }
+      const draft = await res.json();
+      setActiveDraftContactId(draft.id);
+      setShowWalkIn(true);
+      setShowDraftsList(false);
+      refreshDrafts();
+    } catch {
+      alert('Sem conexao — tente novamente');
+    } finally {
+      setCreatingDraft(false);
+    }
+  };
+
+  const openExistingDraft = (contactId: string) => {
+    setActiveDraftContactId(contactId);
+    setShowWalkIn(true);
+    setShowDraftsList(false);
+  };
+
+  const discardDraft = async (contactId: string) => {
+    // Trava contra clique duplo: se ja esta deletando este id, ignora.
+    if (discardingDraftId === contactId) return;
+    setDiscardingDraftId(contactId);
+    // Remove otimisticamente da lista — se a chamada falhar, o refresh joga de volta.
+    setWalkInDrafts((prev) => prev.filter((d: any) => d.id !== contactId));
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, { method: 'DELETE' });
+      // 404 = ja foi deletado antes (ex: clique duplo). Trata como sucesso.
+      if (!res.ok && res.status !== 404) {
+        // Erro real: recarrega a lista pra recuperar o item removido otimisticamente
+        await refreshDrafts();
+      }
+    } catch {
+      await refreshDrafts();
+    } finally {
+      setDiscardingDraftId(null);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/me').then((r) => r.json()).then((d) => setUserRole(d.role || 'user')).catch(() => {});
@@ -129,15 +216,92 @@ export default function EventDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 ml-8 sm:ml-0">
           <button
-            onClick={() => setTab('checkin')}
+            onClick={() => {
+              setShowWalkIn(false);
+              setTab('stands');
+              setOpenStandFormNonce((n) => n + 1);
+            }}
             className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+            title="Cadastrar um novo stand neste evento"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
             </svg>
-            Fazer Check-in
+            Novo Stand
           </button>
-          <StatusToggle event={event} onUpdate={fetchEvent} />
+          <button
+            onClick={openNewWalkIn}
+            disabled={event.status !== 'ATIVO' || creatingDraft}
+            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-cyan-500"
+            title={event.status === 'ATIVO' ? 'Contato encontrado fora de stand (corredor, café, palestra)' : 'Ative a feira em Feiras & Eventos para capturar contatos'}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            {creatingDraft ? 'Abrindo...' : 'Contato Avulso'}
+          </button>
+          {walkInDrafts.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowDraftsList((v) => !v)}
+                className="px-3 py-2 bg-amber-500/15 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold hover:bg-amber-500/25 transition-colors flex items-center gap-1.5"
+                title="Contatos avulsos iniciados mas nao finalizados"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Rascunhos ({walkInDrafts.length})
+              </button>
+              {showDraftsList && (
+                <>
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setShowDraftsList(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto bg-[#1e0f35] border border-amber-500/30 rounded-xl shadow-2xl shadow-black/40 z-40 p-2">
+                    <div className="px-3 py-2 text-[11px] uppercase tracking-widest text-amber-300/70 font-bold border-b border-purple-800/30">
+                      Rascunhos pendentes
+                    </div>
+                    {walkInDrafts.map((draft: any) => {
+                      const displayName = draft.name && draft.name !== '(rascunho)' ? draft.name : '(sem nome)';
+                      const displayCompany = draft.company || '';
+                      const updatedAt = draft.updated_at ? new Date(draft.updated_at).getTime() : Date.now();
+                      return (
+                        <div
+                          key={draft.id}
+                          className="flex items-center gap-2 p-2 hover:bg-purple-900/30 rounded-lg transition-colors"
+                        >
+                          <button
+                            onClick={() => openExistingDraft(draft.id)}
+                            className="flex-1 min-w-0 text-left"
+                          >
+                            <div className="text-sm text-white font-medium truncate">
+                              {displayName}
+                            </div>
+                            {displayCompany && (
+                              <div className="text-xs text-purple-300/60 truncate">{displayCompany}</div>
+                            )}
+                            <div className="text-[10px] text-amber-300/60 mt-0.5">
+                              {formatDraftAge(updatedAt)}
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => discardDraft(draft.id)}
+                            className="shrink-0 p-1.5 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                            title="Descartar rascunho"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <a
             href={`/api/events/${id}/export-contacts`}
             download
@@ -181,8 +345,29 @@ export default function EventDetailPage() {
         </div>
       </div>
 
+      {/* Banner: feira nao ativa — contatos bloqueados ate o admin ativar */}
+      {event.status !== 'ATIVO' && (
+        <div className={`rounded-xl border p-4 flex items-start gap-3 ${
+          event.status === 'RASCUNHO'
+            ? 'bg-amber-500/10 border-amber-500/40'
+            : 'bg-purple-500/10 border-purple-500/40'
+        }`}>
+          <svg className={`w-5 h-5 shrink-0 mt-0.5 ${event.status === 'RASCUNHO' ? 'text-amber-400' : 'text-purple-300'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="flex-1 min-w-0">
+            <div className={`font-semibold text-sm ${event.status === 'RASCUNHO' ? 'text-amber-300' : 'text-purple-200'}`}>
+              {event.status === 'RASCUNHO' ? 'Feira em rascunho — captura de contatos bloqueada' : 'Feira encerrada — captura de contatos bloqueada'}
+            </div>
+            <div className={`text-xs mt-0.5 ${event.status === 'RASCUNHO' ? 'text-amber-200/80' : 'text-purple-200/80'}`}>
+              Cadastro de stands e edicao continuam liberados. Pra registrar visitas ou contatos avulsos, um administrador precisa {event.status === 'RASCUNHO' ? 'ativar' : 'reabrir'} a feira em <Link href="/eventos" className="underline font-medium">Feiras & Eventos</Link>.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Busca global de stand — sempre visível no topo, vai pra aba Stands ao digitar */}
-      {tab !== 'checkin' && (
+      {!showWalkIn && (
         <div className="relative">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400/50 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -214,7 +399,7 @@ export default function EventDetailPage() {
       )}
 
       {/* Tabs */}
-      {tab !== 'checkin' && (
+      {!showWalkIn && (
         <div className="flex gap-1 bg-purple-900/20 rounded-lg p-1 overflow-x-auto">
           {tabs.map((t) => (
             <button
@@ -232,31 +417,39 @@ export default function EventDetailPage() {
         </div>
       )}
 
-      {/* Back button for check-in mode */}
-      {tab === 'checkin' && (
-        <button
-          onClick={() => setTab('dashboard')}
-          className="inline-flex items-center gap-2 text-purple-300/70 hover:text-white text-sm transition-colors"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          Voltar ao Dashboard
-        </button>
+      {/* Walk-in form (substitui o conteudo principal quando ativo).
+          `key` por contact_id garante remount limpo ao trocar de rascunho. */}
+      {showWalkIn && activeDraftContactId && (
+        <WalkInForm
+          key={activeDraftContactId}
+          eventId={id}
+          contactId={activeDraftContactId}
+          onBack={() => {
+            setShowWalkIn(false);
+            refreshDrafts();
+          }}
+          onDone={() => {
+            setShowWalkIn(false);
+            refreshDrafts();
+            fetchEvent();
+          }}
+        />
       )}
 
       {/* Tab content */}
-      {tab === 'dashboard' && <DashboardTab eventId={id} event={event} />}
-      {tab === 'stands' && (
+      {!showWalkIn && tab === 'dashboard' && <DashboardTab eventId={id} event={event} />}
+      {!showWalkIn && tab === 'stands' && (
         <StandsTab
           eventId={id}
           preselectedBoothId={preselectedBoothId}
           onClearPreselect={() => setPreselectedBoothId(null)}
           initialSearch={globalSearch}
           isAdmin={isAdmin}
+          openFormNonce={openStandFormNonce}
+          eventStatus={event.status}
         />
       )}
-      {tab === 'map' && (
+      {!showWalkIn && tab === 'map' && (
         <MapTab
           eventId={id}
           event={event}
@@ -268,10 +461,9 @@ export default function EventDetailPage() {
           }}
         />
       )}
-      {tab === 'checkin' && <CheckInTab eventId={id} onDone={fetchEvent} />}
-      {tab === 'timeline' && <TimelineTab eventId={id} />}
-      {tab === 'followup' && <FollowUpTab eventId={id} event={event} />}
-      {tab === 'contatos' && <ContatosTab eventId={id} />}
+      {!showWalkIn && tab === 'timeline' && <TimelineTab eventId={id} />}
+      {!showWalkIn && tab === 'followup' && <FollowUpTab eventId={id} event={event} />}
+      {!showWalkIn && tab === 'contatos' && <ContatosTab eventId={id} />}
 
       {/* Edit Modal */}
       {showEdit && event && (
@@ -319,46 +511,6 @@ export default function EventDetailPage() {
 
 // --- Edit Event Modal ---
 // --- Status Toggle ---
-function StatusToggle({ event, onUpdate }: { event: FairEvent; onUpdate: () => void }) {
-  const [loading, setLoading] = useState(false);
-
-  const toggle = async (status: string) => {
-    setLoading(true);
-    try {
-      await fetch(`/api/events/${event.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      onUpdate();
-    } catch {
-      // silent
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (event.status === 'RASCUNHO') {
-    return (
-      <button onClick={() => toggle('ATIVO')} disabled={loading} className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg text-xs font-medium hover:bg-emerald-600 disabled:opacity-50">
-        Ativar Evento
-      </button>
-    );
-  }
-  if (event.status === 'ATIVO') {
-    return (
-      <button onClick={() => toggle('ENCERRADO')} disabled={loading} className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-medium hover:bg-purple-700 disabled:opacity-50">
-        Encerrar Evento
-      </button>
-    );
-  }
-  return (
-    <button onClick={() => toggle('ATIVO')} disabled={loading} className="px-3 py-1.5 bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-500/30 disabled:opacity-50">
-      Reabrir
-    </button>
-  );
-}
-
 // --- Dashboard Tab ---
 // --- Meta + Urgência Card ---
 // Mostra "quanto falta pra bater a meta de visitar todos os stands" com
@@ -1050,12 +1202,14 @@ function BoothDrawer({
   booth,
   eventId,
   isAdmin,
+  eventStatus,
   onClose,
   onUpdate,
 }: {
   booth: EventBooth;
   eventId: string;
   isAdmin?: boolean;
+  eventStatus?: string;
   onClose: () => void;
   onUpdate: () => void;
 }) {
@@ -1567,6 +1721,13 @@ function BoothDrawer({
             <textarea placeholder="O que conversou, interesses, próximos passos..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
           </div>
 
+          {/* Aviso se feira nao ativa — bloqueia o botao de registrar visita */}
+          {eventStatus && eventStatus !== 'ATIVO' && (
+            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300 leading-relaxed">
+              Esta feira nao esta ativa. Voce pode editar os dados do stand, mas <strong>registrar visita</strong> so funciona com a feira ATIVA. Peca ao admin para ativar em Feiras &amp; Eventos.
+            </div>
+          )}
+
           {/* ===== Two Buttons — mobile friendly (touch area ≥ 48px) ===== */}
           <div className="flex gap-3 pb-2 pt-1 sticky bottom-0 bg-[#120826]/95 backdrop-blur-sm -mx-0 px-0 py-2">
             <button
@@ -1581,9 +1742,9 @@ function BoothDrawer({
             <button
               type="button"
               onClick={() => handleSubmit(true)}
-              disabled={submitting !== null}
-              className="flex-1 py-4 min-h-[56px] bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 active:bg-emerald-600 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-emerald-900/30"
-              title="Salva os dados e marca o stand como visitado"
+              disabled={submitting !== null || (eventStatus !== undefined && eventStatus !== 'ATIVO')}
+              className="flex-1 py-4 min-h-[56px] bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 active:bg-emerald-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/30"
+              title={eventStatus && eventStatus !== 'ATIVO' ? 'Ative a feira pra registrar visitas' : 'Salva os dados e marca o stand como visitado'}
             >
               {submitting === 'visit' ? 'Registrando...' : '✓ Registrar Visita'}
             </button>
@@ -1620,12 +1781,16 @@ function StandsTab({
   onClearPreselect,
   initialSearch,
   isAdmin,
+  openFormNonce,
+  eventStatus,
 }: {
   eventId: string;
   preselectedBoothId?: string | null;
   onClearPreselect?: () => void;
   initialSearch?: string;
   isAdmin?: boolean;
+  openFormNonce?: number;
+  eventStatus?: string;
 }) {
   const [booths, setBooths] = useState<EventBooth[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1636,7 +1801,12 @@ function StandsTab({
     if (initialSearch !== undefined) setSearch(initialSearch);
   }, [initialSearch]);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [showAdd, setShowAdd] = useState(false);
+  const [showAdd, setShowAdd] = useState(openFormNonce !== undefined && openFormNonce > 0);
+  useEffect(() => {
+    if (openFormNonce !== undefined && openFormNonce > 0) {
+      setShowAdd(true);
+    }
+  }, [openFormNonce]);
   const [newBooth, setNewBooth] = useState({ company_name: '', booth_number: '', sector: '' });
   const [adding, setAdding] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -2157,6 +2327,7 @@ function StandsTab({
           booth={selectedBooth}
           eventId={eventId}
           isAdmin={isAdmin}
+          eventStatus={eventStatus}
           onClose={() => setSelectedBooth(null)}
           onUpdate={() => { setSelectedBooth(null); fetchBooths(); }}
         />
@@ -2171,8 +2342,19 @@ function StandsTab({
 //        'walkin' = formulario de contato avulso
 type CheckInMode = 'choose' | 'stand' | 'walkin';
 
-function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }) {
-  const [mode, setMode] = useState<CheckInMode>('choose');
+function CheckInTab({
+  eventId,
+  onDone,
+  initialMode,
+  onExit,
+}: {
+  eventId: string;
+  onDone: () => void;
+  initialMode?: CheckInMode;
+  onExit?: () => void;
+}) {
+  const [mode, setMode] = useState<CheckInMode>(initialMode || 'choose');
+  const skipChoose = initialMode === 'walkin' || initialMode === 'stand';
   const [booths, setBooths] = useState<EventBooth[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -2224,14 +2406,21 @@ function CheckInTab({ eventId, onDone }: { eventId: string; onDone: () => void }
   }
 
   // Modo "avulso": formulario sem stand
+  // NOTA: este path e codigo legado (CheckInTab nao e mais chamado desde o
+  // novo fluxo de drafts backend). Mantemos so pra nao derrubar o arquivo todo.
   if (mode === 'walkin') {
     return (
       <WalkInForm
         eventId={eventId}
-        onBack={() => setMode('choose')}
+        contactId="legacy-unused"
+        onBack={() => {
+          if (skipChoose && onExit) onExit();
+          else setMode('choose');
+        }}
         onDone={() => {
-          setMode('choose');
           onDone();
+          if (skipChoose && onExit) onExit();
+          else setMode('choose');
         }}
       />
     );
@@ -3180,15 +3369,20 @@ function CheckInForm({
 }
 
 // --- Walk-In Form (contato avulso, sem stand) ---
-// Reusa a mesma infra do CheckInForm: OCR via /api/scan-card, fila offline
-// via enqueueOrSend, rascunho persistente via draftSave/Load/Clear.
-// Diferencas: sem seletor de stand, sem foto da fachada, empresa e campo livre.
+// Arquitetura atual: recebe `contactId` ja existente (rascunho criado via
+// POST /api/contacts/draft) e opera em cima dele. Texto vai por PATCH debounced.
+// Na finalizacao, manda multipart pro walk-in endpoint com `contact_id`, que
+// entao marca is_draft=false e faz upload das fotos.
+// Rascunho offline-local (IndexedDB) ainda existe como fallback enquanto o
+// usuario digita sem internet — mas o registro do contato em si ja esta no banco.
 function WalkInForm({
   eventId,
+  contactId,
   onBack,
   onDone,
 }: {
   eventId: string;
+  contactId: string;
   onBack: () => void;
   onDone: () => void;
 }) {
@@ -3214,8 +3408,62 @@ function WalkInForm({
   const cardInputRef = useRef<HTMLInputElement>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
 
-  // Rascunho persistente — sobrevive a reload, fechamento de aba, celular dormir.
-  const draftKey = `walkin-${eventId}`;
+  // QR code pra captura publica: cliente escaneia e preenche no celular dele.
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncedAt, setSyncedAt] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Gera o QR code apontando pra pagina publica deste rascunho.
+    (async () => {
+      try {
+        const QRCode = (await import('qrcode')).default;
+        const url = `${window.location.origin}/walkin-fill/${contactId}`;
+        const data = await QRCode.toDataURL(url, {
+          width: 280,
+          margin: 2,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+        setQrDataUrl(data);
+      } catch {
+        // silent — feature opcional
+      }
+    })();
+  }, [contactId]);
+
+  // Busca o estado atual do contato no servidor e sincroniza no form local.
+  // Usado pelo botao "Atualizar" depois que o cliente escaneou o QR e preencheu.
+  const pullFromServer = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const c = data.contact;
+      if (!c) return;
+      setForm((prev) => ({
+        ...prev,
+        contact_name: c.name && c.name !== '(rascunho)' ? c.name : prev.contact_name,
+        company: c.company || prev.company,
+        contact_role: c.cargo || prev.contact_role,
+        contact_phone: c.phone || prev.contact_phone,
+        contact_email: c.email || prev.contact_email,
+      }));
+      setSyncedAt(Date.now());
+      setTimeout(() => setSyncedAt(null), 3000);
+    } catch {
+      // silent
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // Rascunho local (IndexedDB) — complementa o rascunho no banco. Usado pra
+  // sobreviver a reloads/celular dormir enquanto o usuario ainda nao clicou
+  // "Finalizar". Chave e composta pelo contactId (unico no banco).
+  const draftKey = `walkin-contact-${contactId}`;
   const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
   const draftReadyRef = useRef(false);
 
@@ -3259,14 +3507,31 @@ function WalkInForm({
     return () => { cancelled = true; };
   }, [draftKey]);
 
-  // Auto-save debounced
+  // Auto-save debounced — local (IndexedDB) e servidor (PATCH). O local
+  // preserva fotos e campos offline; o servidor reflete nome/empresa na
+  // lista de Rascunhos pra aparecer de outros dispositivos.
   useEffect(() => {
     if (!draftReadyRef.current) return;
     const t = setTimeout(() => {
       draftSave(draftKey, { form, cardPhoto: cardB64, personPhoto: personB64 }).catch(() => {});
-    }, 500);
+      // Sincroniza os campos textuais pro servidor. Best-effort: se falhar
+      // (offline), o draft local ainda garante recuperacao.
+      const patchPayload: Record<string, any> = {};
+      if (form.contact_name.trim()) patchPayload.name = form.contact_name.trim();
+      if (form.company.trim()) patchPayload.company = form.company.trim();
+      if (form.contact_role.trim()) patchPayload.cargo = form.contact_role.trim();
+      if (form.contact_phone.trim()) patchPayload.phone = form.contact_phone.trim();
+      if (form.contact_email.trim()) patchPayload.email = form.contact_email.trim();
+      if (Object.keys(patchPayload).length > 0) {
+        fetch(`/api/contacts/${contactId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patchPayload),
+        }).catch(() => { /* silencioso — fallback e o draft local */ });
+      }
+    }, 800);
     return () => clearTimeout(t);
-  }, [draftKey, form, cardB64, personB64]);
+  }, [draftKey, form, cardB64, personB64, contactId]);
 
   const handleDismissDraft = async () => {
     await draftClear(draftKey).catch(() => {});
@@ -3356,6 +3621,9 @@ function WalkInForm({
         contact_email: form.contact_email.trim(),
         prospect_type: form.prospect_type,
         notes: form.notes.trim(),
+        // contact_id diz pro walk-in endpoint "este rascunho ja existe no
+        // banco, em vez de criar um novo contato, finaliza este (is_draft=false)".
+        contact_id: contactId,
       };
 
       const files: Array<{ field: string; name: string; type: string; base64: string }> = [];
@@ -3430,10 +3698,62 @@ function WalkInForm({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <div>
+        <div className="flex-1 min-w-0">
           <h3 className="text-white font-bold text-lg">Contato Avulso</h3>
-          <p className="text-xs text-cyan-300/60">Sem vinculo com stand (corredor, cafe, palestra)</p>
+          <p className="text-xs text-cyan-300/60">
+            Sem vinculo com stand (corredor, cafe, palestra)
+          </p>
+          <p className="text-[10px] text-purple-300/40 mt-0.5 font-mono">
+            ID: {contactId.slice(0, 8)}...{contactId.slice(-4)}
+          </p>
         </div>
+      </div>
+
+      {/* QR code + botao Atualizar: o cliente pode escanear e preencher os
+          dados no proprio celular dele; o vendedor clica "Atualizar" pra
+          puxar os dados que o cliente preencheu. */}
+      <div className="bg-[#1e0f35] rounded-xl border border-cyan-500/20 p-4 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-white">Preenchimento pelo cliente</div>
+            <div className="text-[11px] text-purple-300/60 mt-0.5 leading-relaxed">
+              Mostre o QR code pro cliente escanear e preencher os dados dele no celular.
+              Depois clique <span className="text-cyan-300 font-medium">Atualizar</span> aqui pra puxar.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowQr((v) => !v)}
+            className="shrink-0 px-3 py-1.5 bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 rounded-lg text-[11px] font-semibold hover:bg-cyan-500/25 transition-colors"
+          >
+            {showQr ? 'Esconder QR' : 'Mostrar QR'}
+          </button>
+        </div>
+
+        {showQr && qrDataUrl && (
+          <div className="flex flex-col items-center gap-2 pt-2 border-t border-purple-800/30">
+            <img
+              src={qrDataUrl}
+              alt="QR code pro cliente preencher"
+              className="w-48 h-48 rounded-lg bg-white p-2"
+            />
+            <p className="text-[10px] text-purple-300/50 text-center break-all px-2">
+              {typeof window !== 'undefined' ? `${window.location.origin}/walkin-fill/${contactId}` : ''}
+            </p>
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={pullFromServer}
+          disabled={syncing}
+          className="w-full py-2.5 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          <svg className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          {syncing ? 'Atualizando...' : syncedAt ? '✓ Atualizado!' : 'Atualizar dados do cliente'}
+        </button>
       </div>
 
       {/* Draft restaurado */}
@@ -3685,7 +4005,7 @@ function WalkInForm({
           disabled={loading}
           className="w-full py-4 min-h-[56px] bg-cyan-500 text-white rounded-xl font-bold text-base hover:bg-cyan-600 active:bg-cyan-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-cyan-900/30"
         >
-          {loading ? 'Registrando...' : '✓ Registrar Contato Avulso'}
+          {loading ? 'Finalizando...' : '✓ Finalizar cadastro'}
         </button>
       </form>
     </div>

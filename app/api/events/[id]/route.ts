@@ -102,7 +102,15 @@ export async function PUT(
     if (body.map_url !== undefined) updates.map_url = body.map_url;
     if (body.pipeline_id !== undefined) updates.pipeline_id = body.pipeline_id || null;
     if (body.stage_id !== undefined) updates.stage_id = body.stage_id || null;
-    if (body.status !== undefined) updates.status = body.status;
+    if (body.status !== undefined) {
+      if (profile.role !== 'admin') {
+        return NextResponse.json(
+          { error: 'Apenas administradores podem ativar ou encerrar eventos' },
+          { status: 403 }
+        );
+      }
+      updates.status = body.status;
+    }
     if (body.cover_image_url !== undefined) updates.cover_image_url = body.cover_image_url;
 
     // Upload cover image if provided

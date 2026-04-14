@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Contact, PipelineWithStages } from '@/lib/types';
 import { ESTADOS_BRASIL, TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS } from '@/lib/utils/labels';
@@ -34,6 +34,7 @@ interface ContactFormData {
   whatsapp: string;
   valor_estimado: string;
   pipeline_id: string;
+  event_id: string | null;
 }
 
 interface ContactFormProps {
@@ -78,8 +79,11 @@ function toFormData(contact?: Partial<Contact>, defaultPipelineId?: string): Con
     whatsapp: contact?.whatsapp || '',
     valor_estimado: contact?.valor_estimado != null ? String(contact.valor_estimado) : '',
     pipeline_id: contact?.pipeline_id || defaultPipelineId || '',
+    event_id: contact?.event_id || null,
   };
 }
+
+type ActiveEvent = { id: string; name: string; location?: string | null };
 
 // Auto-format helpers
 function formatPhone(value: string): string {
@@ -125,6 +129,33 @@ export default function ContactForm({
 }: ContactFormProps) {
   const [formData, setFormData] = useState<ContactFormData>(toFormData(initialData, defaultPipelineId));
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [activeEvents, setActiveEvents] = useState<ActiveEvent[]>([]);
+
+  useEffect(() => {
+    if (mode !== 'create') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/events?status=ATIVO');
+        if (!res.ok) return;
+        const data = await res.json();
+        const list: ActiveEvent[] = Array.isArray(data) ? data : (data.events || []);
+        if (!cancelled) setActiveEvents(list);
+      } catch {
+        /* silencioso — feature opcional */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode]);
+
+  const linkedEvent = activeEvents.find((e) => e.id === formData.event_id) || null;
+  const toggleEventLink = (eventId: string, checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      event_id: checked ? eventId : null,
+      origem: checked ? 'FEIRA' : prev.origem,
+    }));
+  };
 
   const handleTipoSelect = (value: string) => {
     setFormData((prev) => ({
@@ -227,6 +258,49 @@ export default function ContactForm({
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Feira ativa (só no modo create, se houver evento ATIVO) */}
+      {mode === 'create' && activeEvents.length > 0 && (
+        <div className={`rounded-xl border p-5 transition-colors ${
+          formData.event_id
+            ? 'bg-emerald-500/10 border-emerald-500/40'
+            : 'bg-[#1e0f35] border-purple-800/30'
+        }`}>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!formData.event_id}
+              onChange={(e) => {
+                const targetId = formData.event_id || activeEvents[0]?.id;
+                if (targetId) toggleEventLink(targetId, e.target.checked);
+              }}
+              className="mt-1 rounded border-purple-700/30 bg-[#2a1245] text-emerald-500 focus:ring-emerald-500"
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-medium text-white">
+                📍 Estou na feira{linkedEvent ? ` ${linkedEvent.name}` : activeEvents.length === 1 ? ` ${activeEvents[0].name}` : ''} — vincular este contato ao evento
+              </div>
+              <div className="text-xs text-purple-200/60 mt-1">
+                Marca origem como <span className="text-emerald-400 font-medium">Feira</span> e aparece na aba Contatos do evento.
+              </div>
+              {activeEvents.length > 1 && formData.event_id && (
+                <select
+                  value={formData.event_id || ''}
+                  onChange={(e) => toggleEventLink(e.target.value, true)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-3 w-full px-3 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {activeEvents.map((ev) => (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.name}{ev.location ? ` — ${ev.location}` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </label>
         </div>
       )}
 

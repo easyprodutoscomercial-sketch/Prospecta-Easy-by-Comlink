@@ -41,6 +41,7 @@ function applyContactFilters(
     proxima_acao_tipo?: string | null;
     produtos_fornecidos?: string | null;
     event_id?: string | null;
+    draft_mode?: 'exclude' | 'only' | 'all';
   }
 ) {
   // Filtrar por pipelines permitidas (non-admin)
@@ -87,6 +88,16 @@ function applyContactFilters(
   if (filters.proxima_acao_tipo && filters.proxima_acao_tipo !== 'all') query = query.eq('proxima_acao_tipo', filters.proxima_acao_tipo);
   if (filters.produtos_fornecidos) query = query.ilike('produtos_fornecidos', `%${filters.produtos_fornecidos}%`);
   if (filters.event_id && filters.event_id !== 'all') query = query.eq('event_id', filters.event_id);
+
+  // Filtro de rascunho: exclude (default) = so contatos finalizados;
+  // only = so rascunhos; all = tudo (usado internamente).
+  if (filters.draft_mode === 'only') {
+    query = query.eq('is_draft', true);
+  } else if (filters.draft_mode === 'all') {
+    // sem filtro
+  } else {
+    query = query.eq('is_draft', false);
+  }
 
   return query;
 }
@@ -188,6 +199,11 @@ export async function GET(request: NextRequest) {
       proxima_acao_tipo: searchParams.get('proxima_acao_tipo'),
       produtos_fornecidos: searchParams.get('produtos_fornecidos'),
       event_id: searchParams.get('event_id'),
+      draft_mode: (searchParams.get('drafts') === 'true'
+        ? 'only'
+        : searchParams.get('drafts') === 'all'
+          ? 'all'
+          : 'exclude') as 'exclude' | 'only' | 'all',
     };
 
     // Helper para criar query filtrada
@@ -423,6 +439,8 @@ export async function POST(request: NextRequest) {
         organization_id: profile.organization_id,
         ...normalized,
         created_by_user_id: user.id,
+        ...(validated.origem ? { origem: validated.origem } : {}),
+        ...(validated.event_id ? { event_id: validated.event_id } : {}),
         ...(contactPipelineId ? { pipeline_id: contactPipelineId } : {}),
         ...(contactStageId ? { stage_id: contactStageId } : {}),
       })

@@ -61,6 +61,9 @@ export async function POST(
     let notes: string | null = null;
     let photoContactUrl: string | null = null;
     let photoPersonUrl: string | null = null;
+    // Se vier contact_id, significa que e a FINALIZACAO de um rascunho existente
+    // (contato com is_draft=true criado la atras via POST /api/contacts/draft).
+    let finalizeContactId: string | null = null;
 
     if (contentType.includes('multipart/form-data')) {
       step = 'parseFormData';
@@ -72,6 +75,7 @@ export async function POST(
       company = (formData.get('company') as string) || null;
       prospectType = (formData.get('prospect_type') as string) || 'COMPRADOR';
       notes = (formData.get('notes') as string) || null;
+      finalizeContactId = (formData.get('contact_id') as string) || null;
 
       // Foto do cartao (photo_contact) + foto da pessoa (photo_person)
       step = 'uploadPhotoContact';
@@ -96,6 +100,7 @@ export async function POST(
       notes = body.notes || null;
       photoContactUrl = body.photo_contact_url || null;
       photoPersonUrl = body.photo_person_url || null;
+      finalizeContactId = body.contact_id || null;
     }
 
     if (!contactName || contactName.trim().length < 2) {
@@ -106,7 +111,7 @@ export async function POST(
     step = 'fetchEvent';
     const { data: event } = await admin
       .from('events')
-      .select('id, pipeline_id, stage_id')
+      .select('id, pipeline_id, stage_id, status')
       .eq('id', eventId)
       .eq('organization_id', profile.organization_id)
       .single();
@@ -115,10 +120,44 @@ export async function POST(
       return NextResponse.json({ error: 'Evento nao encontrado' }, { status: 404 });
     }
 
+    // Bloqueio: so aceita contato avulso se a feira estiver ATIVA. Mesma regra
+    // do check-in de stand — admin controla a janela de captura.
+    if (event.status !== 'ATIVO') {
+      return NextResponse.json(
+        {
+          error: 'Esta feira nao esta ativa. Peca ao admin para ativa-la antes de registrar contatos.',
+          event_status: event.status,
+        },
+        { status: 403 }
+      );
+    }
+
     if (!event.pipeline_id) {
       return NextResponse.json({
         error: 'Evento precisa ter um pipeline configurado',
       }, { status: 400 });
+    }
+
+    // Se veio contact_id, valida que e um draft desta org / deste evento.
+    // Usado na finalizacao: o form criou um rascunho la atras via POST
+    // /api/contacts/draft e agora o usuario clicou "Finalizar cadastro".
+    if (finalizeContactId) {
+      const { data: draftContact } = await admin
+        .from('contacts')
+        .select('id, is_draft, organization_id, event_id')
+        .eq('id', finalizeContactId)
+        .eq('organization_id', profile.organization_id)
+        .maybeSingle();
+
+      if (!draftContact) {
+        return NextResponse.json({ error: 'Rascunho nao encontrado' }, { status: 404 });
+      }
+      if (!draftContact.is_draft) {
+        return NextResponse.json(
+          { error: 'Contato ja foi finalizado, nao pode re-finalizar' },
+          { status: 409 }
+        );
+      }
     }
 
     // Normaliza para dedup
@@ -127,11 +166,9 @@ export async function POST(
     const emailNorm = normalizeEmail(contactEmail);
 
     // Tenta encontrar duplicata na mesma org por phone OU email normalizado.
-    // Busca os 2 em paralelo e pega o primeiro match. Antes, o codigo usava
-    // if/else if (phone else email) — se o usuario preenchesse os 2 e existisse
-    // outro contato com o mesmo email (mas telefone diferente), a busca por
-    // phone falhava e o codigo tentava INSERT, explodindo na UNIQUE constraint
-    // idx_contacts_unique_email (23505).
+    // Importante: ignora rascunhos (is_draft=true) no dedup — dois rascunhos
+    // preenchendo o mesmo telefone nao sao "duplicata", sao 2 in-progress.
+    // Tambem ignora o proprio finalizeContactId (self-match).
     let createdContact: any = null;
     if (phoneNorm || emailNorm) {
       step = 'dedupQuery';
@@ -142,10 +179,11 @@ export async function POST(
           .select('id, phone, email, event_id, name')
           .eq('organization_id', profile.organization_id)
           .eq('phone_normalized', phoneNorm)
+          .eq('is_draft', false)
           .limit(1)
           .maybeSingle();
         if (dupErr) console.error('[walk-in] dedup by phone error:', dupErr);
-        if (data) dup = data;
+        if (data && data.id !== finalizeContactId) dup = data;
       }
       if (!dup && emailNorm) {
         const { data, error: dupErr } = await admin
@@ -153,10 +191,11 @@ export async function POST(
           .select('id, phone, email, event_id, name')
           .eq('organization_id', profile.organization_id)
           .eq('email_normalized', emailNorm)
+          .eq('is_draft', false)
           .limit(1)
           .maybeSingle();
         if (dupErr) console.error('[walk-in] dedup by email error:', dupErr);
-        if (data) dup = data;
+        if (data && data.id !== finalizeContactId) dup = data;
       }
       if (dup?.id) {
         // Update: preserva nome/company originais, so completa o que tiver faltando
@@ -175,6 +214,12 @@ export async function POST(
           await admin.from('contacts').update(patch).eq('id', dup.id);
         }
         createdContact = { id: dup.id, name: dup.name, duplicate: true };
+
+        // Dedupe achou um contato ja existente. Se estavamos finalizando um
+        // rascunho, o rascunho agora e obsoleto — deleta pra nao ficar lixo.
+        if (finalizeContactId) {
+          await admin.from('contacts').delete().eq('id', finalizeContactId);
+        }
       }
     }
 
@@ -197,11 +242,10 @@ export async function POST(
     // como texto pra retrocompatibilidade com code paths antigos).
     const avatarUrl = photoPersonUrl || photoContactUrl || null;
 
-    // Se nao achou duplicata, cria contato novo.
+    // Se nao achou duplicata, cria contato novo OU finaliza o rascunho existente.
     if (!createdContact) {
-      step = 'insertContact';
-      const insertPayload: any = {
-        organization_id: profile.organization_id,
+      step = 'insertOrFinalizeContact';
+      const payload: any = {
         name: contactName.trim(),
         company: company?.trim() || null,
         cargo: contactRole?.trim() || null,
@@ -212,30 +256,44 @@ export async function POST(
         tipo: prospectType === 'AMBOS' ? ['COMPRADOR', 'FORNECEDOR'] : [prospectType],
         notes: packedNotes,
         status: 'NOVO',
-        created_by_user_id: user.id,
-        assigned_to_user_id: user.id,
         name_normalized: contactName.trim().toLowerCase(),
         temperatura: 'QUENTE',
         avatar_url: avatarUrl,
       };
       if (contactPhone) {
-        insertPayload.phone = contactPhone;
-        insertPayload.whatsapp = contactPhone;
-        if (phoneNorm) insertPayload.phone_normalized = phoneNorm;
+        payload.phone = contactPhone;
+        payload.whatsapp = contactPhone;
+        if (phoneNorm) payload.phone_normalized = phoneNorm;
       }
       if (contactEmail) {
-        insertPayload.email = contactEmail;
-        if (emailNorm) insertPayload.email_normalized = emailNorm;
+        payload.email = contactEmail;
+        if (emailNorm) payload.email_normalized = emailNorm;
       }
 
-      const { data: newContact, error: insertErr } = await admin
-        .from('contacts')
-        .insert(insertPayload)
-        .select('id, name')
-        .single();
-
-      if (insertErr) throw insertErr;
-      createdContact = newContact;
+      if (finalizeContactId) {
+        // Finalizacao: atualiza o rascunho, marca is_draft=false.
+        payload.is_draft = false;
+        const { data: updated, error: updateErr } = await admin
+          .from('contacts')
+          .update(payload)
+          .eq('id', finalizeContactId)
+          .select('id, name')
+          .single();
+        if (updateErr) throw updateErr;
+        createdContact = updated;
+      } else {
+        // Fluxo classico: cria contato novo.
+        payload.organization_id = profile.organization_id;
+        payload.created_by_user_id = user.id;
+        payload.assigned_to_user_id = user.id;
+        const { data: newContact, error: insertErr } = await admin
+          .from('contacts')
+          .insert(payload)
+          .select('id, name')
+          .single();
+        if (insertErr) throw insertErr;
+        createdContact = newContact;
+      }
     } else if (photoContactUrl || photoPersonUrl) {
       // Duplicata: append fotos novas nas notes existentes se ainda nao tem.
       // E, se o contato nao tinha avatar_url, grava agora.
