@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import type { FairEvent, EventBooth, BoothVisit } from '@/lib/types';
@@ -3425,7 +3425,7 @@ function WalkInForm({
   const [showQr, setShowQr] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncedAt, setSyncedAt] = useState<number | null>(null);
-  const [associacoes, setAssociacoes] = useState<Array<{ sigla: string; nome_completo: string }>>([]);
+  const [associacoes, setAssociacoes] = useState<Array<{ sigla: string; nome_completo: string; contacts_count?: number; last_interaction_at?: string | null }>>([]);
 
   useEffect(() => {
     if (!usesAssociation) return;
@@ -3963,25 +3963,12 @@ function WalkInForm({
           </div>
 
           {usesAssociation && (
-            <div>
-              <label className="block text-xs font-semibold text-purple-200/80 mb-1">
-                Associação / Cooperativa
-              </label>
-              <input
-                type="text"
-                list="walkin-associacoes"
-                value={form.associacao}
-                onChange={(e) => setForm((f) => ({ ...f, associacao: e.target.value }))}
-                className={inputClass}
-                placeholder={associacoes.length > 0 ? `Escolha da lista ou digite (${associacoes.length} cadastradas)` : 'Ex: COPERCANA, ORPLANA, ...'}
-                autoComplete="off"
-              />
-              <datalist id="walkin-associacoes">
-                {associacoes.map((a) => (
-                  <option key={a.sigla} value={a.sigla}>{a.nome_completo}</option>
-                ))}
-              </datalist>
-            </div>
+            <AssociacaoComboboxCheckin
+              value={form.associacao}
+              onChange={(v) => setForm((f) => ({ ...f, associacao: v }))}
+              associations={associacoes}
+              inputClass={inputClass}
+            />
           )}
 
           <div>
@@ -6138,6 +6125,163 @@ function BoothPopover({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Busca de associacao com filtro por sigla OU nome completo, ignorando acento.
+// Substitui o <datalist> nativo que no celular de feira ficava travado e so
+// filtrava pela sigla — agora o vendedor pode digitar "copercana" ou "acucar"
+// e acha na hora.
+function formatRelativeDays(isoDate: string | null | undefined): string {
+  if (!isoDate) return 'sem histórico';
+  const then = new Date(isoDate).getTime();
+  if (Number.isNaN(then)) return 'sem histórico';
+  const diffMs = Date.now() - then;
+  const day = 24 * 60 * 60 * 1000;
+  const days = Math.floor(diffMs / day);
+  if (days <= 0) return 'hoje';
+  if (days === 1) return 'ontem';
+  if (days < 30) return `há ${days} dias`;
+  const months = Math.floor(days / 30);
+  if (months === 1) return 'há 1 mês';
+  if (months < 12) return `há ${months} meses`;
+  const years = Math.floor(days / 365);
+  return years === 1 ? 'há 1 ano' : `há ${years} anos`;
+}
+
+function normalizeAssocSearch(s: string) {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function AssociacaoComboboxCheckin({
+  value,
+  onChange,
+  associations,
+  inputClass,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  associations: Array<{ sigla: string; nome_completo: string; contacts_count?: number; last_interaction_at?: string | null }>;
+  inputClass: string;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const selectedMatch = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return null;
+    return associations.find((a) => a.sigla.trim().toLowerCase() === q) || null;
+  }, [query, associations]);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = normalizeAssocSearch(query);
+    if (!q) return associations;
+    return associations.filter((a) => {
+      const sigla = normalizeAssocSearch(a.sigla);
+      const nome = normalizeAssocSearch(a.nome_completo);
+      return sigla.includes(q) || nome.includes(q);
+    });
+  }, [query, associations]);
+
+  const handlePick = (sigla: string) => {
+    onChange(sigla);
+    setQuery(sigla);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <label className="block text-xs font-semibold text-purple-200/80 mb-1">
+        Associação / Cooperativa
+      </label>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder={
+          associations.length > 0
+            ? `Busque por sigla ou nome (${associations.length} cadastradas)`
+            : 'Ex: COPERCANA, ORPLANA, ...'
+        }
+        className={inputClass}
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-30 left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-xl border border-purple-700/40 bg-[#1e0f35] shadow-2xl shadow-black/50">
+          {filtered.map((a) => {
+            const count = a.contacts_count ?? 0;
+            const hasContacts = count > 0;
+            return (
+              <button
+                key={a.sigla}
+                type="button"
+                onClick={() => handlePick(a.sigla)}
+                className="w-full text-left px-4 py-3 min-h-[56px] hover:bg-[#2a1245] active:bg-[#2a1245] border-b border-purple-800/20 last:border-b-0 flex items-center gap-3"
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="text-white font-bold text-base">{a.sigla}</div>
+                  <div className="text-purple-300/70 text-xs truncate">{a.nome_completo}</div>
+                </div>
+                <span
+                  className={
+                    'shrink-0 text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full border ' +
+                    (hasContacts
+                      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                      : 'bg-purple-900/40 text-purple-300/60 border-purple-700/30')
+                  }
+                >
+                  {hasContacts ? `${count} contato${count === 1 ? '' : 's'}` : 'sem contato'}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {open && filtered.length === 0 && query.trim() && (
+        <div className="absolute z-30 left-0 right-0 mt-1 rounded-xl border border-purple-700/40 bg-[#1e0f35] px-4 py-3 text-purple-300/60 text-sm">
+          Nenhuma associação encontrada — o valor digitado será usado mesmo assim.
+        </div>
+      )}
+      {selectedMatch && (selectedMatch.contacts_count ?? 0) > 0 && (
+        <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 px-3 py-2 text-xs">
+          <div className="font-semibold">
+            ⚠️ Já existem {selectedMatch.contacts_count} contato{selectedMatch.contacts_count === 1 ? '' : 's'} dessa associação
+          </div>
+          <div className="text-amber-300/80 mt-0.5">
+            Última interação {selectedMatch.last_interaction_at ? formatRelativeDays(selectedMatch.last_interaction_at) : 'nenhuma interação ainda'}
+          </div>
+        </div>
+      )}
+      {selectedMatch && (selectedMatch.contacts_count ?? 0) === 0 && (
+        <div className="mt-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 px-3 py-2 text-xs font-semibold">
+          Primeiro contato dessa associação ✨
+        </div>
+      )}
     </div>
   );
 }

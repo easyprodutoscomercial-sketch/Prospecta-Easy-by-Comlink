@@ -19,7 +19,51 @@ export async function GET(_request: NextRequest) {
     .order('sigla', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ associations: data || [] });
+
+  const associations = data || [];
+
+  const { data: contactsRaw } = await admin
+    .from('contacts')
+    .select('id, association_id, associacao')
+    .eq('organization_id', profile.organization_id);
+
+  const contacts = contactsRaw || [];
+
+  const { data: interactionsRaw } = await admin
+    .from('interactions')
+    .select('contact_id, happened_at, created_at')
+    .eq('organization_id', profile.organization_id)
+    .order('happened_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(10000);
+
+  const interactions = interactionsRaw || [];
+
+  const lastByContact = new Map<string, string>();
+  for (const it of interactions) {
+    const ts = (it.happened_at as string | null) || (it.created_at as string | null);
+    if (!ts || !it.contact_id) continue;
+    const prev = lastByContact.get(it.contact_id as string);
+    if (!prev || ts > prev) lastByContact.set(it.contact_id as string, ts);
+  }
+
+  const enriched = associations.map((assoc: any) => {
+    const siglaNorm = (assoc.sigla || '').toString().trim().toUpperCase();
+    let count = 0;
+    let last: string | null = null;
+    for (const c of contacts) {
+      const matchId = c.association_id && c.association_id === assoc.id;
+      const legacy = (c.associacao || '').toString().trim().toUpperCase();
+      const matchLegacy = siglaNorm && legacy === siglaNorm;
+      if (!matchId && !matchLegacy) continue;
+      count++;
+      const li = lastByContact.get(c.id as string);
+      if (li && (!last || li > last)) last = li;
+    }
+    return { ...assoc, contacts_count: count, last_interaction_at: last };
+  });
+
+  return NextResponse.json({ associations: enriched });
 }
 
 export async function POST(request: NextRequest) {

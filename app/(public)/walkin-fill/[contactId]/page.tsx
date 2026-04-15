@@ -1,7 +1,107 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+
+// Remove acentos e passa pra minuscula — serve pra busca por "copercana" achar "COPÉRCANA".
+function normalizeSearch(s: string) {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function AssociacaoCombobox({
+  value,
+  onChange,
+  associations,
+  inputClass,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  associations: Array<{ sigla: string; nome_completo: string }>;
+  inputClass: string;
+}) {
+  const [query, setQuery] = useState(value);
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = normalizeSearch(query);
+    if (!q) return associations;
+    return associations.filter((a) => {
+      const sigla = normalizeSearch(a.sigla);
+      const nome = normalizeSearch(a.nome_completo);
+      return sigla.includes(q) || nome.includes(q);
+    });
+  }, [query, associations]);
+
+  const handlePick = (sigla: string) => {
+    onChange(sigla);
+    setQuery(sigla);
+    setOpen(false);
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <label className="block text-sm font-medium text-purple-200/80 mb-1">
+        Associação / Cooperativa
+      </label>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        placeholder={
+          associations.length > 0
+            ? `Busque por sigla ou nome (${associations.length} cadastradas)`
+            : 'Ex: COPERCANA, ORPLANA...'
+        }
+        className={inputClass}
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-20 left-0 right-0 mt-1 max-h-72 overflow-y-auto rounded-xl border border-purple-700/40 bg-[#1e0f35] shadow-2xl shadow-black/50">
+          {filtered.map((a) => (
+            <button
+              key={a.sigla}
+              type="button"
+              onClick={() => handlePick(a.sigla)}
+              className="w-full text-left px-4 py-3 min-h-[56px] hover:bg-[#2a1245] active:bg-[#2a1245] border-b border-purple-800/20 last:border-b-0"
+            >
+              <div className="text-white font-bold text-base">{a.sigla}</div>
+              <div className="text-purple-300/70 text-xs truncate">{a.nome_completo}</div>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && filtered.length === 0 && query.trim() && (
+        <div className="absolute z-20 left-0 right-0 mt-1 rounded-xl border border-purple-700/40 bg-[#1e0f35] px-4 py-3 text-purple-300/60 text-sm">
+          Nenhuma associação encontrada — o valor digitado será usado mesmo assim.
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Pagina publica usada pelo cliente na feira — abre via QR code mostrado na
 // tela do vendedor. O cliente preenche os proprios dados que caem direto no
@@ -194,25 +294,12 @@ export default function WalkInFillPage() {
             />
           </div>
           {usesAssociation && (
-            <div>
-              <label className="block text-sm font-medium text-purple-200/80 mb-1">
-                Associação / Cooperativa
-              </label>
-              <input
-                type="text"
-                list="walkin-fill-associacoes"
-                placeholder={associations.length > 0 ? `Escolha da lista ou digite (${associations.length} cadastradas)` : 'Ex: COPERCANA, ORPLANA...'}
-                value={form.associacao}
-                onChange={(e) => setForm((f) => ({ ...f, associacao: e.target.value }))}
-                className={inputClass}
-                autoComplete="off"
-              />
-              <datalist id="walkin-fill-associacoes">
-                {associations.map((a) => (
-                  <option key={a.sigla} value={a.sigla}>{a.nome_completo}</option>
-                ))}
-              </datalist>
-            </div>
+            <AssociacaoCombobox
+              value={form.associacao}
+              onChange={(v) => setForm((f) => ({ ...f, associacao: v }))}
+              associations={associations}
+              inputClass={inputClass}
+            />
           )}
           <div>
             <label className="block text-sm font-medium text-purple-200/80 mb-1">Cargo</label>
