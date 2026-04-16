@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     const dateFrom = searchParams.get('date_from') || '';
     const dateTo = searchParams.get('date_to') || '';
     const diaParam = searchParams.get('dia') || '';
+    const quizId = searchParams.get('quiz_id') || '';
 
     let query = admin
       .from('quiz_participantes')
@@ -35,6 +36,9 @@ export async function GET(request: NextRequest) {
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false });
 
+    if (quizId) {
+      query = query.eq('quiz_config_id', quizId);
+    }
     if (diaParam) {
       query = query.eq('dia_feira', parseInt(diaParam));
     }
@@ -91,20 +95,23 @@ export async function DELETE(request: NextRequest) {
     const admin = getAdminClient();
     const orgId = profile.organization_id;
     const diaParam = request.nextUrl.searchParams.get('dia');
+    const quizId = request.nextUrl.searchParams.get('quiz_id');
 
     // Count before deleting
     let countQuery = admin
       .from('quiz_participantes')
       .select('*', { count: 'exact', head: true })
       .eq('organization_id', orgId);
+    if (quizId) countQuery = countQuery.eq('quiz_config_id', quizId);
     if (diaParam) countQuery = countQuery.eq('dia_feira', parseInt(diaParam));
     const { count } = await countQuery;
 
-    // Delete participants (filtered by day if specified)
+    // Delete participants (filtered by quiz and day if specified)
     let deleteQuery = admin
       .from('quiz_participantes')
       .delete()
       .eq('organization_id', orgId);
+    if (quizId) deleteQuery = deleteQuery.eq('quiz_config_id', quizId);
     if (diaParam) deleteQuery = deleteQuery.eq('dia_feira', parseInt(diaParam));
     const { error } = await deleteQuery;
 

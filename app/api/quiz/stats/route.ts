@@ -21,11 +21,11 @@ export async function GET(request: NextRequest) {
     const admin = getAdminClient();
     const orgId = profile.organization_id;
     const diaParam = request.nextUrl.searchParams.get('dia');
+    const quizId = request.nextUrl.searchParams.get('quiz_id');
 
-    const addDiaFilter = (query: any) => {
-      if (diaParam) {
-        return query.eq('dia_feira', parseInt(diaParam));
-      }
+    const addFilters = (query: any) => {
+      if (quizId) query = query.eq('quiz_config_id', quizId);
+      if (diaParam) query = query.eq('dia_feira', parseInt(diaParam));
       return query;
     };
 
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       .from('quiz_participantes')
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', orgId);
-    totalQuery = addDiaFilter(totalQuery);
+    totalQuery = addFilters(totalQuery);
     const { count: total } = await totalQuery;
 
     // Today's participants
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       .select('id', { count: 'exact', head: true })
       .eq('organization_id', orgId)
       .gte('created_at', todayStart.toISOString());
-    hojeQuery = addDiaFilter(hojeQuery);
+    hojeQuery = addFilters(hojeQuery);
     const { count: hoje } = await hojeQuery;
 
     // Participants by hour (last 24h) for chart
@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
       .eq('organization_id', orgId)
       .gte('created_at', last24h.toISOString())
       .order('created_at', { ascending: true });
-    chartQuery = addDiaFilter(chartQuery);
+    chartQuery = addFilters(chartQuery);
     const { data: recentParticipants } = await chartQuery;
 
     // Group by hour
@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
       .limit(10);
-    ultimosQuery = addDiaFilter(ultimosQuery);
+    ultimosQuery = addFilters(ultimosQuery);
     const { data: ultimos } = await ultimosQuery;
 
     // Average guess
@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
       .from('quiz_participantes')
       .select('palpite')
       .eq('organization_id', orgId);
-    guessQuery = addDiaFilter(guessQuery);
+    guessQuery = addFilters(guessQuery);
     const { data: allGuesses } = await guessQuery;
 
     let mediaPalpite = 0;

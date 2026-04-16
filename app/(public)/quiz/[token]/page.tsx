@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 
 type Screen = 'loading' | 'welcome' | 'form' | 'palpite' | 'thanks' | 'paused' | 'error';
-type ScanMode = null | 'card';
 
 interface QuizConfig {
   id: string;
@@ -28,6 +27,45 @@ function Logo({ size = 'md' }: { size?: 'sm' | 'md' }) {
   return <img src="/logo_comlink_200px.png" alt="Easy by Comlink" style={{ height: h }} className="qz-logo-img" />;
 }
 
+/* Step indicator */
+function StepBar({ step }: { step: 1 | 2 }) {
+  return (
+    <div className="qz-steps">
+      <div className="qz-step qz-step-active">
+        <div className="qz-step-dot">1</div>
+        <span className="qz-step-label">Dados</span>
+      </div>
+      <div className={`qz-step-line ${step === 2 ? 'qz-step-line-done' : ''}`} />
+      <div className={`qz-step ${step === 2 ? 'qz-step-active' : ''}`}>
+        <div className="qz-step-dot">2</div>
+        <span className="qz-step-label">Palpite</span>
+      </div>
+    </div>
+  );
+}
+
+/* SVG icon helpers */
+const icons = {
+  user: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>,
+  building: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" /></svg>,
+  phone: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 002.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 01-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 00-1.091-.852H4.5A2.25 2.25 0 002.25 4.5v2.25z" /></svg>,
+  email: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" /></svg>,
+  map: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>,
+  briefcase: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 00.75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 00-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0112 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 01-.673-.38m0 0A2.18 2.18 0 013 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 013.413-.387m7.5 0V5.25A2.25 2.25 0 0013.5 3h-3a2.25 2.25 0 00-2.25 2.25v.894m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>,
+};
+
+function InputField({ icon, label, optional, ...props }: { icon: keyof typeof icons; label: string; optional?: boolean } & React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <div className="qz-field">
+      <label className="qz-label">{label}{optional && <span className="qz-label-opt"> (opcional)</span>}</label>
+      <div className="qz-input-wrap">
+        <span className="qz-input-icon">{icons[icon]}</span>
+        <input {...props} className="qz-input qz-input-icon-pad" />
+      </div>
+    </div>
+  );
+}
+
 export default function QuizPublicPage() {
   const params = useParams();
   const token = params.token as string;
@@ -37,21 +75,35 @@ export default function QuizPublicPage() {
   const [nome, setNome] = useState('');
   const [empresa, setEmpresa] = useState('');
   const [telefone, setTelefone] = useState('');
+  const [email, setEmail] = useState('');
+  const [cidade, setCidade] = useState('');
+  const [cargo, setCargo] = useState('');
   const [palpite, setPalpite] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [duplicateMsg, setDuplicateMsg] = useState('');
-  const [scanMode, setScanMode] = useState<ScanMode>(null);
-  const [scanning, setScanning] = useState(false);
-  const [scanStatus, setScanStatus] = useState('');
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const focusLoopRef = useRef<number | null>(null);
-  const scanModeRef = useRef<ScanMode>(null);
-  const sendingRef = useRef(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [hasContactPicker, setHasContactPicker] = useState(false);
+
+  useEffect(() => {
+    setHasContactPicker('contacts' in navigator && 'ContactsManager' in window);
+  }, []);
+
+  const pickContact = async () => {
+    try {
+      const nav = navigator as any;
+      const props = await nav.contacts.getProperties();
+      const supported = props as string[];
+      const requested = ['name', 'tel', 'email'].filter(p => supported.includes(p));
+      const [contact] = await nav.contacts.select(requested, { multiple: false });
+      if (!contact) return;
+      if (contact.name?.[0]) setNome(contact.name[0]);
+      if (contact.tel?.[0]) setTelefone(formatPhone(contact.tel[0]));
+      if (contact.email?.[0]) setEmail(contact.email[0]);
+    } catch {
+      // User cancelled or API not available
+    }
+  };
 
   const resetIdle = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -74,6 +126,7 @@ export default function QuizPublicPage() {
   }, [resetIdle]);
 
   useEffect(() => { resetIdle(); }, [screen, resetIdle]);
+
   // Auto-cleanup stale service workers on quiz page
   useEffect(() => {
     if ('serviceWorker' in navigator) {
@@ -99,219 +152,11 @@ export default function QuizPublicPage() {
   };
 
   const resetForm = () => {
-    setNome(''); setEmpresa(''); setTelefone(''); setPalpite('');
+    setNome(''); setEmpresa(''); setTelefone('');
+    setEmail(''); setCidade(''); setCargo('');
+    setPalpite('');
     setError(''); setDuplicateMsg('');
   };
-
-  /* ── Stop camera ── */
-  const stopCamera = useCallback(() => {
-    if (focusLoopRef.current) { cancelAnimationFrame(focusLoopRef.current); focusLoopRef.current = null; }
-    scanModeRef.current = null;
-    sendingRef.current = false;
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    setScanMode(null);
-    setScanning(false);
-    setScanStatus('');
-    setCapturedImage(null);
-  }, []);
-
-  /* ── Sharpness detection (Laplacian variance) ── */
-  const measureSharpness = (ctx: CanvasRenderingContext2D, w: number, h: number): number => {
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const d = imgData.data;
-    const sw = w;
-    const sh = h;
-    // Convert to grayscale and compute Laplacian variance
-    const gray: number[] = [];
-    for (let i = 0; i < d.length; i += 4) {
-      gray.push(d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114);
-    }
-    let sum = 0;
-    let sum2 = 0;
-    let count = 0;
-    for (let y = 1; y < sh - 1; y++) {
-      for (let x = 1; x < sw - 1; x++) {
-        const idx = y * sw + x;
-        // Laplacian: 4*center - top - bottom - left - right
-        const lap = 4 * gray[idx] - gray[idx - sw] - gray[idx + sw] - gray[idx - 1] - gray[idx + 1];
-        sum += lap;
-        sum2 += lap * lap;
-        count++;
-      }
-    }
-    const mean = sum / count;
-    return (sum2 / count) - (mean * mean); // variance
-  };
-
-  /* ── Capture frame, show print, then send to AI ── */
-  const sendToAI = async (canvas: HTMLCanvasElement) => {
-    if (sendingRef.current || scanModeRef.current !== 'card') return;
-    sendingRef.current = true;
-
-    // 1) Take the print — freeze the captured image on screen
-    const imageUrl = canvas.toDataURL('image/jpeg', 0.92);
-    setCapturedImage(imageUrl);
-    setScanning(true);
-    setScanStatus('Cartão capturado! Extraindo dados...');
-    setError('');
-
-    // Stop camera stream (we already have the photo)
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (focusLoopRef.current) { cancelAnimationFrame(focusLoopRef.current); focusLoopRef.current = null; }
-
-    // 2) Convert and send to AI
-    canvas.toBlob(async (blob) => {
-      if (!blob || scanModeRef.current !== 'card') { sendingRef.current = false; return; }
-      try {
-        const formData = new FormData();
-        formData.append('image', blob, 'card.jpg');
-        const res = await fetch('/api/scan-card', { method: 'POST', body: formData });
-        if (scanModeRef.current !== 'card') { sendingRef.current = false; return; }
-        const data = await res.json();
-        console.log('scan-card response:', JSON.stringify(data));
-        let empresa_val = data.company || data.org || data.organization || data.empresa || '';
-        // Se não achou empresa, tenta extrair do domínio do email
-        if (!empresa_val) {
-          const email = data.email || data.e_mail || '';
-          if (email && email.includes('@')) {
-            const domain = email.split('@')[1]?.split('.')[0] || '';
-            if (domain && !['gmail', 'hotmail', 'outlook', 'yahoo', 'icloud', 'live', 'uol', 'bol', 'terra', 'ig', 'aol', 'protonmail', 'zoho'].includes(domain.toLowerCase())) {
-              // Capitaliza o nome do domínio como nome da empresa
-              empresa_val = domain.charAt(0).toUpperCase() + domain.slice(1);
-            }
-          }
-        }
-        const nome_val = data.name || data.nome || '';
-        const phone_val = data.phone || data.telefone || data.tel || '';
-        if (res.ok && (nome_val || phone_val || empresa_val)) {
-          if (nome_val) setNome(nome_val);
-          if (empresa_val) setEmpresa(empresa_val);
-          if (phone_val) {
-            const digits = phone_val.replace(/\D/g, '');
-            const local = digits.length > 11 && digits.startsWith('55') ? digits.slice(2) : digits;
-            setTelefone(formatPhone(local));
-          }
-          stopCamera();
-        } else {
-          // Failed — reopen camera to try again
-          setScanStatus('Não consegui ler. Tentando de novo...');
-          setTimeout(() => { retryCapture(); }, 2000);
-        }
-      } catch {
-        setScanStatus('Erro de conexão. Tentando de novo...');
-        setTimeout(() => { retryCapture(); }, 2000);
-      }
-    }, 'image/jpeg', 0.92);
-  };
-
-  /* ── Retry: reopen camera after failed read ── */
-  const retryCapture = async () => {
-    sendingRef.current = false;
-    setCapturedImage(null);
-    setScanning(false);
-    setScanStatus('');
-    if (scanModeRef.current !== 'card') return;
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
-        videoRef.current.onloadeddata = () => { startFocusLoop(); };
-      }
-    } catch {
-      stopCamera();
-      setError('Câmera não disponível.');
-    }
-  };
-
-  /* ── Focus detection loop ── */
-  const startFocusLoop = useCallback(() => {
-    let sharpCount = 0;
-    const SHARP_THRESHOLD = 120; // minimum sharpness to consider "in focus"
-    const STABLE_FRAMES = 8;     // consecutive sharp frames before capture
-    let lastCheck = 0;
-
-    const loop = () => {
-      if (scanModeRef.current !== 'card') return;
-      focusLoopRef.current = requestAnimationFrame(loop);
-
-      const now = performance.now();
-      if (now - lastCheck < 200) return; // check ~5fps
-      lastCheck = now;
-
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!video || !canvas || video.readyState < 2 || sendingRef.current) return;
-
-      // Draw small version for analysis
-      const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
-      const w = Math.round(video.videoWidth * scale);
-      const h = Math.round(video.videoHeight * scale);
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(video, 0, 0, w, h);
-
-      const sharpness = measureSharpness(ctx, w, h);
-
-      if (sharpness >= SHARP_THRESHOLD) {
-        sharpCount++;
-        setScanStatus(`Focando... ${Math.min(100, Math.round((sharpCount / STABLE_FRAMES) * 100))}%`);
-        if (sharpCount >= STABLE_FRAMES) {
-          // Capture full resolution
-          const fullScale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
-          canvas.width = Math.round(video.videoWidth * fullScale);
-          canvas.height = Math.round(video.videoHeight * fullScale);
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          sharpCount = 0;
-          sendToAI(canvas);
-        }
-      } else {
-        sharpCount = Math.max(0, sharpCount - 2); // decay fast when blurry
-        setScanStatus('Segure o cartão parado...');
-      }
-    };
-
-    focusLoopRef.current = requestAnimationFrame(loop);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopCamera]);
-
-  /* ── Open camera for card scan ── */
-  const openCardCamera = async () => {
-    setError('');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
-      streamRef.current = stream;
-      scanModeRef.current = 'card';
-      setScanMode('card');
-      requestAnimationFrame(() => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.play().catch(() => {});
-          // Start focus detection after video is playing
-          videoRef.current.onloadeddata = () => { startFocusLoop(); };
-        }
-      });
-    } catch {
-      setError('Câmera não disponível. Verifique as permissões.');
-    }
-  };
-
-  // Cleanup camera on unmount or screen change
-  useEffect(() => {
-    return () => { stopCamera(); };
-  }, [stopCamera]);
 
   const formatPhone = (value: string) => {
     const d = value.replace(/\D/g, '').slice(0, 11);
@@ -323,7 +168,7 @@ export default function QuizPublicPage() {
   const handleFormSubmit = () => {
     if (!nome.trim() || nome.trim().length < 2) { setError('Digite seu nome completo'); return; }
     if (!empresa.trim() || empresa.trim().length < 2) { setError('Digite o nome da sua empresa'); return; }
-    if (telefone.replace(/\D/g, '').length < 10) { setError('Digite um telefone válido'); return; }
+    if (telefone.replace(/\D/g, '').length < 10) { setError('Digite um telefone valido'); return; }
     setError(''); setScreen('palpite');
   };
 
@@ -334,7 +179,7 @@ export default function QuizPublicPage() {
   };
 
   const handleSubmitPalpite = async () => {
-    if (!palpite || Number(palpite) < 1) { setError('Digite um palpite válido'); return; }
+    if (!palpite || Number(palpite) < 1) { setError('Digite um palpite valido'); return; }
     setError(''); setSubmitting(true);
     try {
       const res = await fetch('/api/quiz', {
@@ -343,27 +188,37 @@ export default function QuizPublicPage() {
         body: JSON.stringify({
           token, nome: nome.trim(), empresa: empresa.trim(),
           telefone: telefone.replace(/\D/g, ''), palpite: Number(palpite),
+          email: email.trim() || undefined,
+          cidade: cidade.trim() || undefined,
+          cargo: cargo.trim() || undefined,
         }),
       });
       const data = await res.json();
       if (data.duplicate) { setDuplicateMsg(data.message); setScreen('thanks'); }
       else if (data.success) { setScreen('thanks'); }
       else { setError(data.error || 'Erro ao enviar. Tente novamente.'); }
-    } catch { setError('Erro de conexão. Tente novamente.'); }
+    } catch { setError('Erro de conexao. Tente novamente.'); }
     setSubmitting(false);
   };
 
   useEffect(() => {
     if (screen === 'thanks') {
-      const t = setTimeout(() => { resetForm(); setScreen('welcome'); fetchConfig(); }, 5000);
+      const t = setTimeout(() => { resetForm(); setScreen('welcome'); fetchConfig(); }, 6000);
       return () => clearTimeout(t);
     }
   }, [screen]);
 
+  // Day badge helper — only show valid days (1..total)
+  const showDayBadge = config?.dia_feira != null && config?.dias_feira != null
+    && config.dia_feira >= 1 && config.dia_feira <= config.dias_feira;
+
   /* ── LOADING ── */
   if (screen === 'loading') return (
     <div className="qz-page">
-      <div className="qz-spinner" />
+      <div className="qz-loader">
+        <div className="qz-loader-ring" />
+        <div className="qz-loader-ring qz-loader-ring-2" />
+      </div>
       <style>{styles}</style>
     </div>
   );
@@ -374,8 +229,10 @@ export default function QuizPublicPage() {
       <Card className="text-center">
         <Logo />
         <div className="qz-spacer" />
-        <div className="qz-icon-circle qz-icon-red">!</div>
-        <h1 className="qz-title">Quiz não encontrado</h1>
+        <div className="qz-status-icon qz-status-error">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>
+        </div>
+        <h1 className="qz-title">Quiz nao encontrado</h1>
         <p className="qz-sub">Verifique o link e tente novamente.</p>
       </Card>
       <style>{styles}</style>
@@ -388,9 +245,13 @@ export default function QuizPublicPage() {
       <Card className="text-center">
         <Logo />
         <div className="qz-spacer" />
-        <div className="qz-icon-circle qz-icon-yellow">II</div>
+        <div className="qz-status-icon qz-status-pause">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" /></svg>
+        </div>
         <h1 className="qz-title">{config?.nome_evento || 'Quiz'}</h1>
-        <p className="qz-sub">{config?.mensagem_pausa || 'O quiz está pausado no momento.'}</p>
+        <p className="qz-sub">{config?.mensagem_pausa || 'O quiz esta pausado no momento.'}</p>
+        <div className="qz-spacer" />
+        <button onClick={fetchConfig} className="qz-btn qz-btn-ghost">Tentar novamente</button>
       </Card>
       <style>{styles}</style>
     </div>
@@ -399,73 +260,73 @@ export default function QuizPublicPage() {
   /* ── WELCOME (fullscreen hero) ── */
   if (screen === 'welcome') return (
     <div className="qz-welcome" onClick={() => setScreen('form')}>
-      {/* Animated background particles */}
+      {/* Mesh gradient orbs */}
+      <div className="qz-orb qz-orb-1" />
+      <div className="qz-orb qz-orb-2" />
+      <div className="qz-orb qz-orb-3" />
+
+      {/* Floating particles */}
       <div className="qz-particles">
-        {Array.from({ length: 20 }).map((_, i) => (
+        {Array.from({ length: 25 }).map((_, i) => (
           <div key={i} className="qz-particle" style={{
             left: `${Math.random() * 100}%`,
-            animationDelay: `${Math.random() * 6}s`,
-            animationDuration: `${6 + Math.random() * 8}s`,
-            width: `${2 + Math.random() * 4}px`,
-            height: `${2 + Math.random() * 4}px`,
-            opacity: 0.15 + Math.random() * 0.25,
+            animationDelay: `${Math.random() * 8}s`,
+            animationDuration: `${8 + Math.random() * 10}s`,
+            width: `${2 + Math.random() * 3}px`,
+            height: `${2 + Math.random() * 3}px`,
+            opacity: 0.2 + Math.random() * 0.3,
           }} />
         ))}
       </div>
 
-      {/* Glow ring behind trophy */}
-      <div className="qz-glow-ring" />
+      {/* Content with glass panel */}
+      <div className="qz-welcome-glass qz-fade">
+        <div className="qz-welcome-inner">
+          {/* Logo */}
+          <img
+            src="/logo_easy_comlink_200px.png"
+            alt="Easy by Comlink"
+            className="qz-welcome-hero-logo"
+          />
 
-      {/* Content */}
-      <div className="qz-welcome-content qz-fade">
-        {/* Logo top */}
-        <img src="/logo_comlink_200px.png" alt="Easy by Comlink" className="qz-welcome-logo" />
+          {/* Day indicator — only valid days */}
+          {showDayBadge && (
+            <div className="qz-day-badge">
+              <span className="qz-day-badge-icon">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" /></svg>
+              </span>
+              Dia {config!.dia_feira} de {config!.dias_feira}
+            </div>
+          )}
 
-        {/* Trophy */}
-        <div className="qz-welcome-trophy">
-          <svg width="100" height="100" viewBox="0 0 24 24" fill="none">
-            <path d="M8 21h8m-4-4v4" stroke="url(#tg)" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M7.5 5h9v4a4.5 4.5 0 01-9 0V5z" stroke="url(#tg)" strokeWidth="1.5" fill="rgba(124,58,237,0.08)" />
-            <path d="M6 5H4a2 2 0 00-2 2v1a4 4 0 004 4" stroke="url(#tg)" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M18 5h2a2 2 0 012 2v1a4 4 0 01-4 4" stroke="url(#tg)" strokeWidth="1.5" strokeLinecap="round" />
-            <path d="M7.5 13a4.5 4.5 0 009 0v1H7.5v-1z" stroke="url(#tg)" strokeWidth="1.5" />
-            <defs>
-              <linearGradient id="tg" x1="2" y1="5" x2="22" y2="21">
-                <stop stopColor="#a78bfa" />
-                <stop offset="1" stopColor="#7c3aed" />
-              </linearGradient>
-            </defs>
-          </svg>
+          {/* Event name */}
+          <h1 className="qz-welcome-title">{config?.nome_evento || 'Quiz'}</h1>
+
+          {/* Divider */}
+          <div className="qz-welcome-divider" />
+
+          {/* Challenge description */}
+          <p className="qz-welcome-desc">{config?.descricao_desafio || 'Participe do nosso desafio!'}</p>
+
+          {/* Counter */}
+          {(config?.total_participantes || 0) > 0 && (
+            <div className="qz-welcome-counter">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
+              <span className="qz-welcome-counter-num">{config?.total_participantes}</span>
+              <span className="qz-welcome-counter-label">participacoes</span>
+            </div>
+          )}
+
+          {/* CTA Button */}
+          <button className="qz-welcome-cta" onClick={(e) => { e.stopPropagation(); setScreen('form'); }}>
+            <span>PARTICIPAR AGORA</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </button>
+
+          <p className="qz-welcome-hint">Toque em qualquer lugar para comecar</p>
         </div>
-
-        {/* Day indicator */}
-        {config?.dia_feira && config?.dias_feira && (
-          <div className="qz-day-badge">Dia {config.dia_feira} de {config.dias_feira}</div>
-        )}
-
-        {/* Event name */}
-        <h1 className="qz-welcome-title">{config?.nome_evento || 'Quiz'}</h1>
-
-        {/* Challenge description */}
-        <p className="qz-welcome-desc">{config?.descricao_desafio || 'Participe do nosso desafio!'}</p>
-
-        {/* Counter */}
-        {(config?.total_participantes || 0) > 0 && (
-          <div className="qz-welcome-counter">
-            <span className="qz-welcome-counter-num">{config?.total_participantes}</span>
-            <span className="qz-welcome-counter-label"> participações</span>
-          </div>
-        )}
-
-        {/* CTA Button */}
-        <button className="qz-welcome-cta" onClick={(e) => { e.stopPropagation(); setScreen('form'); }}>
-          <span>PARTICIPAR AGORA</span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-          </svg>
-        </button>
-
-        <p className="qz-welcome-hint">Toque em qualquer lugar para começar</p>
       </div>
 
       <style>{styles}</style>
@@ -477,127 +338,93 @@ export default function QuizPublicPage() {
       {/* ── FORM ── */}
       {screen === 'form' && (
         <Card>
-          <div className="text-center"><Logo size="sm" /></div>
-          <div className="qz-spacer-sm" />
-
-          <h2 className="qz-section-title">Preencha seus dados</h2>
-          <p className="qz-section-sub">Precisamos dessas informações para validar sua participação.</p>
-          <div className="qz-spacer-sm" />
-
-          {/* ── Scan button ── */}
-          <button onClick={openCardCamera} className="qz-scan-btn qz-scan-btn-full">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z" />
-            </svg>
-            <span>Escanear Cartão de Visita</span>
-          </button>
-          <div className="qz-spacer-sm" />
-
-          <div className="qz-field">
-            <label className="qz-label">Nome completo</label>
-            <input type="text" value={nome} onChange={(e) => setNome(e.target.value)}
-              placeholder="Digite seu nome" autoComplete="name" className="qz-input" />
+          {/* Event context header */}
+          <div className="qz-form-header">
+            <Logo size="sm" />
+            {config?.nome_evento && (
+              <span className="qz-form-event-name">{config.nome_evento}</span>
+            )}
+            {showDayBadge && (
+              <span className="qz-form-day-pill">Dia {config!.dia_feira}/{config!.dias_feira}</span>
+            )}
           </div>
-          <div className="qz-field">
-            <label className="qz-label">Empresa</label>
-            <input type="text" value={empresa} onChange={(e) => setEmpresa(e.target.value)}
-              placeholder="Nome da empresa" autoComplete="organization" className="qz-input" />
+
+          <StepBar step={1} />
+          <div className="qz-spacer-sm" />
+
+          <h2 className="qz-section-title">Seus dados</h2>
+          <p className="qz-section-sub">Preencha para validar sua participacao</p>
+          <div className="qz-spacer-sm" />
+
+          {hasContactPicker && (
+            <button type="button" onClick={pickContact} className="qz-btn-contact-picker">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+              Buscar do celular
+            </button>
+          )}
+
+          {/* Required fields */}
+          <InputField icon="user" label="Nome completo" type="text" value={nome}
+            onChange={(e) => setNome(e.target.value)} placeholder="Digite seu nome" autoComplete="name" />
+          <InputField icon="building" label="Empresa" type="text" value={empresa}
+            onChange={(e) => setEmpresa(e.target.value)} placeholder="Nome da empresa" autoComplete="organization" />
+          <InputField icon="phone" label="Telefone / WhatsApp" type="tel" inputMode="numeric" value={telefone}
+            onChange={(e) => setTelefone(formatPhone(e.target.value))} placeholder="(00) 00000-0000" autoComplete="tel" />
+
+          {/* Optional fields - collapsible area */}
+          <div className="qz-optional-divider">
+            <span className="qz-optional-divider-line" />
+            <span className="qz-optional-divider-text">Opcional</span>
+            <span className="qz-optional-divider-line" />
           </div>
-          <div className="qz-field">
-            <label className="qz-label">Telefone / WhatsApp</label>
-            <input type="tel" value={telefone} onChange={(e) => setTelefone(formatPhone(e.target.value))}
-              placeholder="(00) 00000-0000" autoComplete="tel" className="qz-input" />
+
+          <div className="qz-optional-grid">
+            <InputField icon="email" label="Email" optional type="email" value={email}
+              onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" autoComplete="email" />
+            <InputField icon="map" label="Cidade" optional type="text" value={cidade}
+              onChange={(e) => setCidade(e.target.value)} placeholder="Sua cidade" autoComplete="address-level2" />
+            <InputField icon="briefcase" label="Funcao" optional type="text" value={cargo}
+              onChange={(e) => setCargo(e.target.value)} placeholder="Seu cargo" autoComplete="organization-title" />
           </div>
 
           {error && <p className="qz-error">{error}</p>}
           <div className="qz-spacer-sm" />
 
-          <button onClick={handleFormSubmit} className="qz-btn qz-btn-primary qz-btn-lg">CONTINUAR</button>
+          <button onClick={handleFormSubmit} className="qz-btn qz-btn-primary qz-btn-lg">
+            CONTINUAR
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>
+          </button>
           <button onClick={() => { resetForm(); setScreen('welcome'); }} className="qz-btn qz-btn-ghost">Voltar</button>
         </Card>
-      )}
-
-      {/* ── Card Camera Overlay ── */}
-      {scanMode === 'card' && (
-        <div className="qz-camera-overlay qz-fade">
-          <button onClick={stopCamera} className="qz-camera-close-float">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-
-          {/* Live camera OR captured photo */}
-          {capturedImage ? (
-            <img src={capturedImage} alt="Cartão capturado" className="qz-captured-img qz-flash" />
-          ) : (
-            <>
-              <video ref={videoRef} autoPlay playsInline muted className="qz-camera-video-full" />
-
-              {/* Animated scan elements */}
-              <div className="qz-scan-corners">
-                <div className="qz-corner qz-corner-tl" />
-                <div className="qz-corner qz-corner-tr" />
-                <div className="qz-corner qz-corner-bl" />
-                <div className="qz-corner qz-corner-br" />
-              </div>
-              <div className="qz-scan-line" />
-
-              {/* Floating particles */}
-              <div className="qz-scan-particles">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="qz-scan-dot" style={{
-                    left: `${10 + Math.random() * 80}%`,
-                    top: `${10 + Math.random() * 80}%`,
-                    animationDelay: `${Math.random() * 4}s`,
-                    animationDuration: `${2 + Math.random() * 3}s`,
-                  }} />
-                ))}
-              </div>
-            </>
-          )}
-
-          <canvas ref={canvasRef} style={{ display: 'none' }} />
-          {error && <p className="qz-camera-error">{error}</p>}
-
-          {/* Bottom status */}
-          <div className="qz-camera-bottom">
-            <div className="qz-scan-emoji">
-              {capturedImage ? '🤖' : scanning ? '🔍' : '📸'}
-            </div>
-            <div className="qz-scan-status-text">
-              {capturedImage ? (
-                <><span className="qz-spinner-sm" /><span>{scanStatus}</span></>
-              ) : (
-                <span className="qz-scan-hint">{scanStatus || 'Mostre o cartão pra câmera!'}</span>
-              )}
-            </div>
-            {!capturedImage && (
-              <div className="qz-scan-fun-msgs">
-                <div className="qz-fun-scroll">
-                  <span>Pode ser de cabeça pra baixo, eu leio assim mesmo 😎</span>
-                  <span>Cartão amassado? Sem problema! 💪</span>
-                  <span>Segura firme que eu tô lendo... 🔍</span>
-                  <span>IA trabalhando pra você! 🚀</span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       )}
 
       {/* ── PALPITE ── */}
       {screen === 'palpite' && (
         <Card>
-          <div className="text-center"><Logo size="sm" /></div>
+          {/* Event context header */}
+          <div className="qz-form-header">
+            <Logo size="sm" />
+            {config?.nome_evento && (
+              <span className="qz-form-event-name">{config.nome_evento}</span>
+            )}
+          </div>
+
+          <StepBar step={2} />
           <div className="qz-spacer-sm" />
 
-          <h2 className="qz-section-title">Qual é o seu palpite?</h2>
+          <h2 className="qz-section-title">Qual e o seu palpite?</h2>
           <p className="qz-section-sub">{config?.descricao_desafio || 'Digite seu palpite'}</p>
           <div className="qz-spacer-sm" />
 
+          {/* User context pill */}
+          <div className="qz-user-pill">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+            {nome}
+          </div>
+
           <div className="qz-display">
-            <span className="qz-display-value">{palpite || '0'}</span>
+            <span className="qz-display-label">SEU PALPITE</span>
+            <span className={`qz-display-value ${palpite ? 'qz-display-has-value' : ''}`}>{palpite || '0'}</span>
           </div>
 
           <div className="qz-numpad">
@@ -617,7 +444,11 @@ export default function QuizPublicPage() {
 
           <button onClick={handleSubmitPalpite} disabled={submitting || !palpite}
             className="qz-btn qz-btn-primary qz-btn-lg" style={{ marginTop: 12 }}>
-            {submitting ? 'ENVIANDO...' : 'ENVIAR PALPITE'}
+            {submitting ? (
+              <><span className="qz-btn-spinner" /> ENVIANDO...</>
+            ) : (
+              <>ENVIAR PALPITE <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg></>
+            )}
           </button>
           <button onClick={() => { setPalpite(''); setError(''); setScreen('form'); }} className="qz-btn qz-btn-ghost">Voltar</button>
         </Card>
@@ -629,28 +460,49 @@ export default function QuizPublicPage() {
           <Logo />
           <div className="qz-spacer" />
 
-          <div className="qz-success-ring qz-fade">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          {/* Confetti burst */}
+          <div className="qz-confetti-wrap">
+            {Array.from({ length: 30 }).map((_, i) => (
+              <div key={i} className="qz-confetti-piece" style={{
+                left: `${10 + Math.random() * 80}%`,
+                animationDelay: `${Math.random() * 0.6}s`,
+                animationDuration: `${1.5 + Math.random() * 1.5}s`,
+                background: ['#34d399', '#a78bfa', '#fbbf24', '#f472b6', '#60a5fa', '#7c3aed'][i % 6],
+                width: `${4 + Math.random() * 6}px`,
+                height: `${4 + Math.random() * 6}px`,
+                borderRadius: Math.random() > 0.5 ? '50%' : '2px',
+                transform: `rotate(${Math.random() * 360}deg)`,
+              }} />
+            ))}
+          </div>
+
+          <div className="qz-success-check qz-fade">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="#34d399" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="qz-check-path" />
             </svg>
           </div>
 
-          <h1 className="qz-title" style={{ color: '#34d399' }}>
+          <h1 className="qz-title" style={{ color: '#34d399', fontSize: 28 }}>
             {duplicateMsg ? 'Opa!' : 'Obrigado!'}
           </h1>
-          <p className="qz-sub" style={{ fontSize: 16 }}>
-            {duplicateMsg || 'Sua participação foi registrada com sucesso!'}
+          <p className="qz-sub" style={{ fontSize: 16, color: 'rgba(196,181,253,0.7)' }}>
+            {duplicateMsg || 'Sua participacao foi registrada com sucesso!'}
           </p>
 
           {!duplicateMsg && palpite && (
-            <div className="qz-palpite-badge">
-              Seu palpite: <strong>{palpite}</strong>
+            <div className="qz-palpite-result">
+              <span className="qz-palpite-result-label">Seu palpite</span>
+              <span className="qz-palpite-result-value">{palpite}</span>
             </div>
+          )}
+
+          {!duplicateMsg && (
+            <p className="qz-thanks-name">Boa sorte, {nome.split(' ')[0]}!</p>
           )}
 
           <div className="qz-spacer" />
           <div className="qz-return-bar"><div className="qz-return-bar-fill" /></div>
-          <p className="qz-sub" style={{ fontSize: 12, marginTop: 8 }}>Voltando ao início...</p>
+          <p className="qz-sub" style={{ fontSize: 12, marginTop: 8 }}>Voltando ao inicio...</p>
         </Card>
       )}
 
@@ -660,10 +512,12 @@ export default function QuizPublicPage() {
 }
 
 /* ═══════════════════════════════════════════════════
-   STYLES
+   STYLES — v2 Modern
    ═══════════════════════════════════════════════════ */
 const styles = `
-  /* ── WELCOME SCREEN (fullscreen hero) ── */
+  * { box-sizing: border-box; }
+
+  /* ── WELCOME SCREEN ── */
   .qz-welcome {
     min-height: 100dvh;
     display: flex;
@@ -672,14 +526,44 @@ const styles = `
     position: relative;
     overflow: hidden;
     cursor: pointer;
-    background:
-      radial-gradient(ellipse 80% 60% at 50% 40%, rgba(124,58,237,0.18) 0%, transparent 70%),
-      radial-gradient(ellipse 60% 50% at 30% 80%, rgba(88,28,135,0.12) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 50% at 80% 20%, rgba(139,92,246,0.08) 0%, transparent 60%),
-      linear-gradient(180deg, #0a0118 0%, #0d0520 40%, #120826 100%);
+    background: #060114;
   }
 
-  /* Floating particles */
+  /* Mesh gradient orbs */
+  .qz-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    animation: qzOrbFloat 12s ease-in-out infinite;
+  }
+  .qz-orb-1 {
+    width: 500px; height: 500px;
+    top: -15%; left: -10%;
+    background: rgba(124,58,237,0.25);
+    animation-delay: 0s;
+  }
+  .qz-orb-2 {
+    width: 400px; height: 400px;
+    bottom: -10%; right: -10%;
+    background: rgba(88,28,135,0.2);
+    animation-delay: -4s;
+    animation-duration: 15s;
+  }
+  .qz-orb-3 {
+    width: 300px; height: 300px;
+    top: 40%; left: 50%;
+    background: rgba(167,139,250,0.1);
+    animation-delay: -8s;
+    animation-duration: 18s;
+  }
+  @keyframes qzOrbFloat {
+    0%, 100% { transform: translate(0,0) scale(1); }
+    33% { transform: translate(30px,-20px) scale(1.05); }
+    66% { transform: translate(-20px,15px) scale(0.95); }
+  }
+
+  /* Particles */
   .qz-particles {
     position: absolute; inset: 0; pointer-events: none; overflow: hidden;
   }
@@ -697,71 +581,85 @@ const styles = `
     100% { transform: translateY(-100vh) scale(0.3); opacity: 0; }
   }
 
-  /* Glow ring */
-  .qz-glow-ring {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 320px; height: 320px;
-    transform: translate(-50%, -55%);
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(124,58,237,0.15) 0%, rgba(124,58,237,0.04) 50%, transparent 70%);
-    animation: qzGlowPulse 4s ease-in-out infinite;
-    pointer-events: none;
+  /* Glass panel on welcome */
+  .qz-welcome-glass {
+    position: relative; z-index: 1;
+    background: rgba(18, 8, 38, 0.45);
+    backdrop-filter: blur(40px) saturate(1.4);
+    -webkit-backdrop-filter: blur(40px) saturate(1.4);
+    border: 1px solid rgba(139, 92, 246, 0.12);
+    border-radius: 32px;
+    padding: 8px;
+    box-shadow:
+      0 0 0 1px rgba(139,92,246,0.05),
+      0 32px 64px rgba(0,0,0,0.5);
+    max-width: 480px;
+    width: calc(100% - 32px);
   }
-  @keyframes qzGlowPulse {
-    0%, 100% { transform: translate(-50%, -55%) scale(1); opacity: 0.6; }
-    50%      { transform: translate(-50%, -55%) scale(1.15); opacity: 1; }
+  .qz-welcome-inner {
+    text-align: center;
+    padding: 40px 28px;
+    background: rgba(18, 8, 38, 0.3);
+    border-radius: 26px;
+    border: 1px solid rgba(139,92,246,0.06);
   }
 
-  /* Welcome content */
-  .qz-welcome-content {
-    position: relative; z-index: 1;
-    text-align: center;
-    padding: 40px 32px;
-    max-width: 500px;
-  }
-  .qz-welcome-logo {
-    height: 44px; object-fit: contain;
-    margin-bottom: 48px;
-    opacity: 0.9;
-  }
-  .qz-welcome-trophy {
+  .qz-welcome-hero-logo {
+    display: block;
     margin: 0 auto 24px;
-    width: 100px; height: 100px;
-    animation: qzFloat 3s ease-in-out infinite;
+    width: min(70vw, 320px);
+    max-height: 160px;
+    object-fit: contain;
+    animation: qzFloat 4s ease-in-out infinite;
     filter: drop-shadow(0 0 30px rgba(124,58,237,0.4));
   }
+  @keyframes qzFloat {
+    0%,100% { transform: translateY(0); }
+    50%     { transform: translateY(-8px); }
+  }
+
   .qz-welcome-title {
-    font-size: 40px;
+    font-size: 36px;
     font-weight: 900;
     color: #fff;
-    margin: 0 0 12px;
+    margin: 0 0 0;
     letter-spacing: -0.5px;
     line-height: 1.1;
-    text-shadow: 0 0 40px rgba(124,58,237,0.3);
   }
+
+  .qz-welcome-divider {
+    width: 48px; height: 3px;
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    border-radius: 4px;
+    margin: 16px auto;
+    opacity: 0.6;
+  }
+
   .qz-welcome-desc {
-    font-size: 17px;
-    color: rgba(196, 181, 253, 0.75);
-    margin: 0 0 8px;
+    font-size: 16px;
+    color: rgba(196, 181, 253, 0.7);
+    margin: 0 0 24px;
     line-height: 1.5;
   }
+
   .qz-welcome-counter {
     display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
-    margin-top: 8px; margin-bottom: 40px;
-    padding: 8px 20px;
-    background: rgba(124, 58, 237, 0.12);
-    border: 1px solid rgba(124, 58, 237, 0.18);
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 28px;
+    padding: 8px 18px;
+    background: rgba(124, 58, 237, 0.1);
+    border: 1px solid rgba(124, 58, 237, 0.15);
     border-radius: 100px;
+    color: rgba(167,139,250,0.7);
   }
+  .qz-welcome-counter svg { opacity: 0.5; }
   .qz-welcome-counter-num {
-    font-size: 22px; font-weight: 900; color: #a78bfa;
+    font-size: 18px; font-weight: 800; color: #a78bfa;
     font-variant-numeric: tabular-nums;
   }
   .qz-welcome-counter-label {
-    font-size: 13px; color: rgba(167, 139, 250, 0.55);
+    font-size: 13px; color: rgba(167, 139, 250, 0.5);
   }
 
   /* CTA button */
@@ -769,37 +667,45 @@ const styles = `
     display: inline-flex;
     align-items: center;
     gap: 10px;
-    padding: 18px 40px;
-    font-size: 18px;
+    padding: 18px 44px;
+    font-size: 17px;
     font-weight: 800;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
     color: #fff;
-    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    background: linear-gradient(135deg, #7c3aed 0%, #5b21b6 100%);
     border: none;
     border-radius: 60px;
     cursor: pointer;
     box-shadow:
       0 0 0 0 rgba(124,58,237,0.4),
-      0 8px 32px rgba(124,58,237,0.4),
-      inset 0 1px 0 rgba(255,255,255,0.15);
-    animation: qzCtaPulse 2.5s ease-in-out infinite;
-    transition: transform .15s;
+      0 8px 32px rgba(124,58,237,0.35);
+    animation: qzCtaPulse 3s ease-in-out infinite;
+    transition: transform .15s, box-shadow .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .qz-welcome-cta::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 50%);
+    border-radius: inherit;
   }
   .qz-welcome-cta:active { transform: scale(0.95); }
   @keyframes qzCtaPulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.4), 0 8px 32px rgba(124,58,237,0.4), inset 0 1px 0 rgba(255,255,255,0.15); }
-    50%      { box-shadow: 0 0 0 12px rgba(124,58,237,0), 0 8px 40px rgba(124,58,237,0.5), inset 0 1px 0 rgba(255,255,255,0.15); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(124,58,237,0.4), 0 8px 32px rgba(124,58,237,0.35); }
+    50%      { box-shadow: 0 0 0 14px rgba(124,58,237,0), 0 8px 40px rgba(124,58,237,0.45); }
   }
 
   .qz-welcome-hint {
-    margin-top: 24px;
+    margin-top: 20px;
     font-size: 12px;
-    color: rgba(167, 139, 250, 0.3);
-    animation: qzBlink 2s ease-in-out infinite;
+    color: rgba(167, 139, 250, 0.25);
+    animation: qzBlink 2.5s ease-in-out infinite;
   }
   @keyframes qzBlink {
     0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
+    50% { opacity: 0.2; }
   }
 
   /* ── PAGE (form/palpite/thanks) ── */
@@ -808,44 +714,51 @@ const styles = `
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
-    background: radial-gradient(ellipse at 50% 0%, #1e0f3a 0%, #0d0520 60%, #080312 100%);
+    padding: 16px;
+    background: #060114;
+    background-image:
+      radial-gradient(ellipse 70% 50% at 50% 0%, rgba(124,58,237,0.12) 0%, transparent 70%);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
 
   /* Card */
   .qz-card {
     width: 100%;
-    max-width: 420px;
-    background: rgba(30, 15, 53, 0.85);
-    backdrop-filter: blur(24px);
-    border: 1px solid rgba(139, 92, 246, 0.15);
-    border-radius: 24px;
+    max-width: 440px;
+    position: relative;
+    background: rgba(18, 8, 38, 0.65);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border: 1px solid rgba(139, 92, 246, 0.1);
+    border-radius: 28px;
     padding: 36px 28px;
     box-shadow:
-      0 0 0 1px rgba(139, 92, 246, 0.06),
-      0 24px 48px rgba(0, 0, 0, 0.45),
-      0 0 120px rgba(139, 92, 246, 0.06);
+      0 0 0 1px rgba(139, 92, 246, 0.04),
+      0 32px 64px rgba(0, 0, 0, 0.5);
   }
 
   /* Animations */
-  .qz-fade { animation: qzFadeUp .45s cubic-bezier(.16,1,.3,1); }
+  .qz-fade { animation: qzFadeUp .5s cubic-bezier(.16,1,.3,1); }
   @keyframes qzFadeUp {
-    from { opacity: 0; transform: translateY(24px) scale(.97); }
+    from { opacity: 0; transform: translateY(20px) scale(.98); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
   }
-  @keyframes qzFloat {
-    0%,100% { transform: translateY(0); }
-    50%     { transform: translateY(-10px); }
-  }
 
-  /* Spinner */
-  .qz-spinner {
-    width: 40px; height: 40px;
-    border: 3px solid rgba(139, 92, 246, 0.2);
+  /* Loader */
+  .qz-loader { position: relative; width: 48px; height: 48px; }
+  .qz-loader-ring {
+    position: absolute; inset: 0;
+    border: 2.5px solid transparent;
     border-top-color: #a78bfa;
     border-radius: 50%;
-    animation: spin .7s linear infinite;
+    animation: spin .9s cubic-bezier(.5,.15,.5,.85) infinite;
+  }
+  .qz-loader-ring-2 {
+    inset: 6px;
+    border-top-color: transparent;
+    border-right-color: rgba(124,58,237,0.4);
+    animation-direction: reverse;
+    animation-duration: 1.4s;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -853,368 +766,521 @@ const styles = `
   .qz-logo-img { object-fit: contain; display: inline-block; }
 
   /* Typography */
-  .qz-title { font-size: 24px; font-weight: 700; color: #fff; margin: 12px 0 6px; }
-  .qz-sub { font-size: 14px; color: rgba(196, 181, 253, 0.55); margin: 0; line-height: 1.5; }
-  .qz-section-title { font-size: 20px; font-weight: 700; color: #fff; margin: 0 0 4px; text-align: center; }
-  .qz-section-sub { font-size: 13px; color: rgba(196, 181, 253, 0.5); margin: 0; text-align: center; line-height: 1.4; }
+  .qz-title { font-size: 24px; font-weight: 800; color: #fff; margin: 12px 0 6px; letter-spacing: -0.3px; }
+  .qz-sub { font-size: 14px; color: rgba(196, 181, 253, 0.5); margin: 0; line-height: 1.5; }
+  .qz-section-title { font-size: 22px; font-weight: 800; color: #fff; margin: 0 0 4px; text-align: center; letter-spacing: -0.3px; }
+  .qz-section-sub { font-size: 13px; color: rgba(196, 181, 253, 0.45); margin: 0; text-align: center; line-height: 1.4; }
 
   /* Spacers */
   .qz-spacer    { height: 24px; }
-  .qz-spacer-sm { height: 16px; }
+  .qz-spacer-sm { height: 14px; }
 
-  /* Icon circles */
-  .qz-icon-circle {
-    width: 64px; height: 64px; margin: 0 auto 8px;
+  /* Status icons (error/pause) */
+  .qz-status-icon {
+    width: 72px; height: 72px; margin: 0 auto 12px;
     border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-size: 28px; font-weight: 800;
   }
-  .qz-icon-red    { background: rgba(239,68,68,.12); color: #f87171; border: 2px solid rgba(239,68,68,.2); }
-  .qz-icon-yellow { background: rgba(234,179,8,.12); color: #facc15; border: 2px solid rgba(234,179,8,.2); }
+  .qz-status-error {
+    background: rgba(239,68,68,.08);
+    color: #f87171;
+    border: 2px solid rgba(239,68,68,.15);
+    animation: qzStatusPulse 2s ease-in-out infinite;
+  }
+  .qz-status-pause {
+    background: rgba(234,179,8,.08);
+    color: #facc15;
+    border: 2px solid rgba(234,179,8,.15);
+    animation: qzStatusPulse 2s ease-in-out infinite;
+  }
+  @keyframes qzStatusPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(139,92,246,0.1); }
+    50% { box-shadow: 0 0 0 10px rgba(139,92,246,0); }
+  }
+
+  /* Step bar */
+  .qz-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 4px;
+  }
+  .qz-step {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    opacity: 0.3; transition: opacity .3s;
+  }
+  .qz-step-active { opacity: 1; }
+  .qz-step-dot {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: rgba(124,58,237,0.15);
+    border: 2px solid rgba(124,58,237,0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 800; color: #a78bfa;
+    transition: all .3s;
+  }
+  .qz-step-active .qz-step-dot {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    border-color: #7c3aed;
+    color: #fff;
+    box-shadow: 0 0 16px rgba(124,58,237,0.3);
+  }
+  .qz-step-label { font-size: 10px; font-weight: 600; color: rgba(167,139,250,0.6); text-transform: uppercase; letter-spacing: 0.5px; }
+  .qz-step-line {
+    width: 48px; height: 2px;
+    background: rgba(124,58,237,0.15);
+    border-radius: 2px;
+    margin: 0 8px;
+    margin-bottom: 18px;
+    transition: background .3s;
+  }
+  .qz-step-line-done { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
 
   /* Form */
-  .qz-field { margin-bottom: 14px; }
+  .qz-field { margin-bottom: 12px; }
   .qz-label {
-    display: block; font-size: 12px; font-weight: 600;
-    color: rgba(196, 181, 253, 0.6); margin-bottom: 6px;
-    text-transform: uppercase; letter-spacing: 0.5px;
+    display: block; font-size: 11px; font-weight: 700;
+    color: rgba(196, 181, 253, 0.55); margin-bottom: 5px;
+    text-transform: uppercase; letter-spacing: 0.8px;
+  }
+  .qz-label-opt {
+    font-weight: 500; text-transform: none; letter-spacing: 0;
+    color: rgba(196, 181, 253, 0.3); font-size: 10px;
+  }
+  .qz-input-wrap {
+    position: relative;
+  }
+  .qz-input-icon {
+    position: absolute;
+    left: 14px; top: 50%; transform: translateY(-50%);
+    color: rgba(167,139,250,0.35);
+    display: flex; align-items: center;
+    pointer-events: none;
+    transition: color .2s;
+  }
+  .qz-input-wrap:focus-within .qz-input-icon {
+    color: rgba(167,139,250,0.7);
   }
   .qz-input {
     width: 100%; box-sizing: border-box;
-    background: rgba(13, 5, 32, 0.7);
-    border: 1.5px solid rgba(139, 92, 246, 0.2);
+    background: rgba(13, 5, 32, 0.6);
+    border: 1.5px solid rgba(139, 92, 246, 0.12);
     border-radius: 14px;
-    padding: 14px 16px;
+    padding: 13px 16px;
     font-size: 16px; color: #fff;
     caret-color: #a78bfa;
-    outline: none; transition: border-color .2s, box-shadow .2s;
+    outline: none; transition: all .25s;
     -webkit-appearance: none;
   }
+  .qz-input-icon-pad { padding-left: 42px; }
   .qz-input:focus {
-    border-color: rgba(167, 139, 250, 0.5);
-    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.1);
+    border-color: rgba(124, 58, 237, 0.5);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.08);
+    background: rgba(13, 5, 32, 0.8);
   }
-  .qz-input::placeholder { color: rgba(139, 92, 246, 0.25); }
+  .qz-input::placeholder { color: rgba(139, 92, 246, 0.2); }
 
-  .qz-error { text-align: center; color: #f87171; font-size: 13px; margin: 8px 0 0; font-weight: 500; }
+  .qz-error {
+    text-align: center; color: #f87171; font-size: 13px;
+    margin: 8px 0 0; font-weight: 600;
+    padding: 8px 12px;
+    background: rgba(239,68,68,0.06);
+    border-radius: 10px;
+  }
 
   /* Display */
   .qz-display {
-    background: rgba(13, 5, 32, 0.8);
-    border: 2px solid rgba(139, 92, 246, 0.2);
-    border-radius: 20px; padding: 20px;
-    text-align: center; margin-bottom: 16px;
+    background: rgba(13, 5, 32, 0.7);
+    border: 2px solid rgba(139, 92, 246, 0.15);
+    border-radius: 20px; padding: 16px 20px;
+    text-align: center; margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .qz-display::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 100%, rgba(124,58,237,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .qz-display-label {
+    display: block;
+    font-size: 10px; font-weight: 700;
+    color: rgba(167,139,250,0.4);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
   }
   .qz-display-value {
-    font-size: 42px; font-weight: 800; color: #a78bfa;
-    font-family: "SF Mono", "Fira Code", monospace;
-    letter-spacing: 4px;
-    text-shadow: 0 0 30px rgba(167, 139, 250, 0.3);
+    font-size: 48px; font-weight: 800; color: #a78bfa;
+    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+    letter-spacing: 6px;
+    text-shadow: 0 0 40px rgba(167, 139, 250, 0.25);
+    position: relative;
   }
 
   /* Numpad */
   .qz-numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 4px; }
   .qz-numpad-key {
-    height: 56px;
+    height: 58px;
     display: flex; align-items: center; justify-content: center;
     font-size: 22px; font-weight: 700; color: #e2e0ff;
-    background: rgba(30, 15, 53, 0.6);
-    border: 1px solid rgba(139, 92, 246, 0.15);
-    border-radius: 14px; cursor: pointer;
-    transition: background .15s, transform .1s;
+    background: rgba(18, 8, 38, 0.5);
+    border: 1px solid rgba(139, 92, 246, 0.1);
+    border-radius: 16px; cursor: pointer;
+    transition: all .15s;
     user-select: none; -webkit-user-select: none;
+    position: relative;
+    overflow: hidden;
   }
-  .qz-numpad-key:active { transform: scale(.93); background: rgba(139, 92, 246, 0.15); }
-  .qz-key-clear { color: #f87171 !important; font-size: 16px !important; font-weight: 800 !important; background: rgba(239,68,68,.08) !important; border-color: rgba(239,68,68,.15) !important; }
-  .qz-key-del { color: #fbbf24 !important; background: rgba(251,191,36,.06) !important; border-color: rgba(251,191,36,.12) !important; }
+  .qz-numpad-key::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(139,92,246,0.15) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .qz-numpad-key:active { transform: scale(.92); }
+  .qz-numpad-key:active::after { opacity: 1; }
+  .qz-key-clear { color: #f87171 !important; font-size: 15px !important; font-weight: 800 !important; background: rgba(239,68,68,.05) !important; border-color: rgba(239,68,68,.12) !important; }
+  .qz-key-del { color: #fbbf24 !important; background: rgba(251,191,36,.04) !important; border-color: rgba(251,191,36,.1) !important; }
 
   /* Buttons */
   .qz-btn {
-    display: block; width: 100%; border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; border: none; cursor: pointer;
     font-family: inherit; font-weight: 700;
     transition: all .2s; user-select: none; -webkit-user-select: none;
   }
   .qz-btn:active { transform: scale(.97); }
   .qz-btn-primary {
-    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
     color: #fff; border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.1);
+    box-shadow: 0 4px 24px rgba(124,58,237,0.3);
+    position: relative;
+    overflow: hidden;
   }
-  .qz-btn-primary:hover { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-  .qz-btn-primary:disabled { opacity: .45; cursor: not-allowed; transform: none; }
-  .qz-btn-lg { padding: 16px; font-size: 16px; letter-spacing: 0.5px; }
-  .qz-btn-ghost { background: none; color: rgba(196,181,253,.4); font-size: 13px; padding: 10px; border-radius: 12px; }
-  .qz-btn-ghost:hover { color: rgba(196,181,253,.7); }
+  .qz-btn-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%);
+    border-radius: inherit;
+  }
+  .qz-btn-primary:hover { box-shadow: 0 4px 32px rgba(124,58,237,0.45); }
+  .qz-btn-primary:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+  .qz-btn-lg { padding: 16px; font-size: 15px; letter-spacing: 1px; }
+  .qz-btn-ghost { background: none; color: rgba(196,181,253,.35); font-size: 13px; padding: 10px; border-radius: 12px; }
+  .qz-btn-ghost:hover { color: rgba(196,181,253,.6); }
+  .qz-btn-spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+  }
 
-  /* Success */
-  .qz-success-ring { margin: 0 auto 8px; width: 64px; height: 64px; }
-  .qz-palpite-badge {
-    display: inline-block; margin-top: 12px; padding: 8px 20px;
-    background: rgba(139,92,246,.1); border: 1px solid rgba(139,92,246,.2);
-    border-radius: 100px; font-size: 15px; color: #c4b5fd;
+  /* Success / Thanks */
+  .qz-sparkles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .qz-sparkle {
+    position: absolute;
+    width: 4px; height: 4px;
+    background: #a78bfa;
+    border-radius: 50%;
+    animation: qzSparkle ease-out infinite;
   }
-  .qz-palpite-badge strong { font-size: 20px; color: #a78bfa; font-family: "SF Mono","Fira Code",monospace; margin-left: 4px; }
+  @keyframes qzSparkle {
+    0% { transform: scale(0) translateY(0); opacity: 0; }
+    20% { transform: scale(1) translateY(-10px); opacity: 1; }
+    100% { transform: scale(0) translateY(-40px); opacity: 0; }
+  }
+
+  .qz-success-check {
+    margin: 0 auto 8px;
+    width: 80px; height: 80px;
+    background: rgba(52,211,153,0.08);
+    border: 2px solid rgba(52,211,153,0.15);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    animation: qzCheckPop .5s cubic-bezier(.16,1,.3,1);
+  }
+  @keyframes qzCheckPop {
+    0% { transform: scale(0); }
+    60% { transform: scale(1.15); }
+    100% { transform: scale(1); }
+  }
+  .qz-check-path {
+    stroke-dasharray: 100;
+    stroke-dashoffset: 100;
+    animation: qzCheckDraw .6s .3s ease forwards;
+  }
+  @keyframes qzCheckDraw {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .qz-palpite-result {
+    display: flex; flex-direction: column; align-items: center;
+    margin-top: 16px; padding: 16px 24px;
+    background: rgba(124,58,237,0.08);
+    border: 1px solid rgba(124,58,237,0.15);
+    border-radius: 16px;
+  }
+  .qz-palpite-result-label {
+    font-size: 11px; font-weight: 700;
+    color: rgba(167,139,250,0.5);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .qz-palpite-result-value {
+    font-size: 32px; font-weight: 800; color: #a78bfa;
+    font-family: "SF Mono", "Fira Code", ui-monospace, monospace;
+    letter-spacing: 3px;
+  }
 
   /* Return bar */
-  .qz-return-bar { height: 4px; width: 100%; max-width: 200px; margin: 0 auto; background: rgba(139,92,246,.1); border-radius: 4px; overflow: hidden; }
-  .qz-return-bar-fill { height: 100%; width: 100%; background: linear-gradient(90deg,#7c3aed,#a78bfa); border-radius: 4px; animation: qzReturn 5s linear forwards; }
+  .qz-return-bar {
+    height: 3px; width: 100%; max-width: 180px; margin: 0 auto;
+    background: rgba(139,92,246,.08);
+    border-radius: 4px; overflow: hidden;
+  }
+  .qz-return-bar-fill {
+    height: 100%; width: 100%;
+    background: linear-gradient(90deg,#7c3aed,#a78bfa);
+    border-radius: 4px;
+    animation: qzReturn 6s linear forwards;
+  }
   @keyframes qzReturn { from { width: 100%; } to { width: 0%; } }
 
   .text-center { text-align: center; }
 
-  /* ── Scan button ── */
-  .qz-scan-btn {
+  /* Form header with event context */
+  .qz-form-header {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 14px 16px;
-    font-size: 14px;
-    font-weight: 600;
-    color: #c4b5fd;
-    background: rgba(124, 58, 237, 0.08);
-    border: 1.5px solid rgba(124, 58, 237, 0.2);
-    border-radius: 14px;
-    cursor: pointer;
-    transition: all .2s;
-    font-family: inherit;
-  }
-  .qz-scan-btn-full { width: 100%; }
-  .qz-scan-btn:active {
-    transform: scale(0.95);
-    background: rgba(124, 58, 237, 0.15);
-  }
-
-  /* ── Camera Overlay ── */
-  .qz-camera-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    background: #000;
-  }
-  .qz-camera-close-float {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    z-index: 10;
-    background: rgba(0,0,0,0.5);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 50%;
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    cursor: pointer;
-  }
-  .qz-camera-video-full {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  .qz-captured-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-  /* Camera flash effect */
-  .qz-flash {
-    animation: qzFlash 0.6s ease-out;
-  }
-  @keyframes qzFlash {
-    0%  { filter: brightness(3); }
-    40% { filter: brightness(1); }
-    100% { filter: brightness(1); }
-  }
-
-  /* ── Animated corners ── */
-  .qz-scan-corners {
-    position: absolute;
-    top: 3%;
-    left: 3%;
-    right: 3%;
-    bottom: 18%;
-    pointer-events: none;
-    z-index: 2;
-    animation: qzCornersBreath 3s ease-in-out infinite;
-  }
-  @keyframes qzCornersBreath {
-    0%, 100% { top: 3%; left: 3%; right: 3%; bottom: 18%; }
-    50% { top: 2%; left: 2%; right: 2%; bottom: 16%; }
-  }
-  .qz-corner {
-    position: absolute;
-    width: 60px;
-    height: 60px;
-    border-color: rgba(167, 139, 250, 0.85);
-    border-style: solid;
-    border-width: 0;
-  }
-  .qz-corner-tl { top: 0; left: 0; border-top-width: 5px; border-left-width: 5px; border-radius: 18px 0 0 0; }
-  .qz-corner-tr { top: 0; right: 0; border-top-width: 5px; border-right-width: 5px; border-radius: 0 18px 0 0; }
-  .qz-corner-bl { bottom: 0; left: 0; border-bottom-width: 5px; border-left-width: 5px; border-radius: 0 0 0 18px; }
-  .qz-corner-br { bottom: 0; right: 0; border-bottom-width: 5px; border-right-width: 5px; border-radius: 0 0 18px 0; }
-
-  /* ── Scan line ── */
-  .qz-scan-line {
-    position: absolute;
-    left: 4%;
-    right: 4%;
-    height: 3px;
-    background: linear-gradient(90deg, transparent, rgba(167,139,250,0.8), rgba(139,92,246,1), rgba(167,139,250,0.8), transparent);
-    z-index: 2;
-    pointer-events: none;
-    box-shadow: 0 0 20px rgba(139,92,246,0.6), 0 0 50px rgba(139,92,246,0.3);
-    animation: qzScanMove 2.5s ease-in-out infinite;
-  }
-  @keyframes qzScanMove {
-    0%   { top: 5%; opacity: 0; }
-    10%  { opacity: 1; }
-    90%  { opacity: 1; }
-    100% { top: 80%; opacity: 0; }
-  }
-
-  /* ── Floating dots ── */
-  .qz-scan-particles { position: absolute; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
-  .qz-scan-dot {
-    position: absolute;
-    width: 4px;
-    height: 4px;
-    background: #a78bfa;
-    border-radius: 50%;
-    animation: qzDotFloat ease-in-out infinite;
-    opacity: 0;
-  }
-  @keyframes qzDotFloat {
-    0%, 100% { opacity: 0; transform: scale(0) translateY(0); }
-    30% { opacity: 0.6; transform: scale(1) translateY(-10px); }
-    70% { opacity: 0.4; transform: scale(0.8) translateY(10px); }
-  }
-
-  /* ── Bottom status bar ── */
-  .qz-camera-bottom {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    padding: 24px 20px 28px;
-    background: linear-gradient(transparent, rgba(0,0,0,0.85));
-    color: #fff;
-    z-index: 3;
-  }
-  .qz-scan-emoji {
-    font-size: 36px;
-    animation: qzEmojiBounce 1.5s ease-in-out infinite;
-  }
-  @keyframes qzEmojiBounce {
-    0%, 100% { transform: translateY(0) scale(1); }
-    50% { transform: translateY(-8px) scale(1.1); }
-  }
-  .qz-scan-status-text {
-    display: flex;
-    align-items: center;
     gap: 10px;
-    font-size: 16px;
-    font-weight: 700;
-    min-height: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(139,92,246,0.08);
   }
-  .qz-scan-hint {
-    animation: qzPulseText 2s ease-in-out infinite;
-  }
-  @keyframes qzPulseText {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-  }
-
-  /* ── Fun messages carousel ── */
-  .qz-scan-fun-msgs {
-    height: 20px;
-    overflow: hidden;
-    margin-top: 4px;
-  }
-  .qz-fun-scroll {
-    display: flex;
-    flex-direction: column;
-    animation: qzFunScroll 12s ease-in-out infinite;
-  }
-  .qz-fun-scroll span {
-    height: 20px;
-    line-height: 20px;
+  .qz-form-event-name {
     font-size: 12px;
-    color: rgba(196, 181, 253, 0.5);
-    text-align: center;
-    white-space: nowrap;
+    font-weight: 700;
+    color: rgba(167,139,250,0.5);
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
-  @keyframes qzFunScroll {
-    0%, 20%   { transform: translateY(0); }
-    25%, 45%  { transform: translateY(-20px); }
-    50%, 70%  { transform: translateY(-40px); }
-    75%, 95%  { transform: translateY(-60px); }
-    100%      { transform: translateY(0); }
-  }
-  .qz-spinner-sm {
-    width: 18px; height: 18px;
-    border: 2px solid rgba(255,255,255,0.2);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin .7s linear infinite;
-    flex-shrink: 0;
-  }
-  .qz-camera-error {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 20px;
-    background: rgba(239,68,68,0.85);
-    border-radius: 12px;
-    color: #fff;
-    font-size: 13px;
-    font-weight: 600;
-    z-index: 4;
-    text-align: center;
-    max-width: 90%;
-  }
-  .qz-camera-status-hint {
-    padding: 14px;
-    text-align: center;
-    color: rgba(196, 181, 253, 0.5);
-    font-size: 13px;
-    background: rgba(0,0,0,0.8);
-  }
-
-  /* Day badge */
-  .qz-day-badge {
-    display: inline-block;
-    padding: 6px 16px;
-    margin-bottom: 12px;
-    font-size: 13px;
+  .qz-form-day-pill {
+    font-size: 10px;
     font-weight: 700;
     color: #a78bfa;
-    background: rgba(124, 58, 237, 0.12);
-    border: 1px solid rgba(124, 58, 237, 0.25);
+    background: rgba(124,58,237,0.12);
+    padding: 3px 10px;
     border-radius: 100px;
     letter-spacing: 0.5px;
   }
 
+  /* Optional fields divider */
+  .qz-optional-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 6px 0 10px;
+  }
+  .qz-optional-divider-line {
+    flex: 1;
+    height: 1px;
+    background: rgba(139,92,246,0.1);
+  }
+  .qz-optional-divider-text {
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(167,139,250,0.25);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+  .qz-optional-grid .qz-field {
+    margin-bottom: 8px;
+  }
+  .qz-optional-grid .qz-input {
+    padding: 11px 16px;
+    font-size: 15px;
+  }
+  .qz-optional-grid .qz-input-icon-pad {
+    padding-left: 40px;
+  }
+
+  /* User pill on palpite screen */
+  .qz-user-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    margin: 0 auto 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(167,139,250,0.6);
+    background: rgba(124,58,237,0.08);
+    border: 1px solid rgba(124,58,237,0.1);
+    border-radius: 100px;
+    width: fit-content;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Display value animation */
+  .qz-display-has-value {
+    color: #c4b5fd;
+    text-shadow: 0 0 50px rgba(167,139,250,0.4);
+  }
+
+  /* Confetti */
+  .qz-confetti-wrap {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+  .qz-confetti-piece {
+    position: absolute;
+    top: 30%;
+    animation: qzConfetti ease-out forwards;
+    opacity: 0;
+  }
+  @keyframes qzConfetti {
+    0% { transform: translateY(0) rotate(0deg) scale(0); opacity: 0; }
+    15% { opacity: 1; transform: scale(1); }
+    100% { transform: translateY(200px) rotate(720deg) scale(0.3); opacity: 0; }
+  }
+
+  /* Thanks name */
+  .qz-thanks-name {
+    margin-top: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(196,181,253,0.5);
+  }
+
+  /* Day badge */
+  .qz-day-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #a78bfa;
+    background: rgba(124, 58, 237, 0.1);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 100px;
+    letter-spacing: 0.5px;
+  }
+  .qz-day-badge-icon { display: flex; color: rgba(167,139,250,0.5); }
+
+  /* Quick-fill buttons row */
+  .qz-quickfill {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .qz-btn-quickfill {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #a78bfa;
+    background: rgba(124, 58, 237, 0.06);
+    border: 1.5px dashed rgba(124, 58, 237, 0.2);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: inherit;
+  }
+  .qz-btn-quickfill:active {
+    transform: scale(0.96);
+    background: rgba(124, 58, 237, 0.15);
+  }
+  .qz-btn-quickfill-active {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+  }
+
+  /* QR Scanner */
+  .qz-scanner-wrap {
+    margin-bottom: 14px;
+    border-radius: 16px;
+    overflow: hidden;
+    border: 1.5px solid rgba(124, 58, 237, 0.15);
+    background: #000;
+  }
+  .qz-scanner-wrap #qz-qr-reader {
+    width: 100%;
+  }
+  .qz-scanner-wrap #qz-qr-reader video {
+    border-radius: 0 !important;
+  }
+  .qz-scanner-hint {
+    text-align: center;
+    font-size: 11px;
+    color: rgba(167, 139, 250, 0.5);
+    padding: 8px;
+    margin: 0;
+    background: rgba(18, 8, 38, 0.8);
+  }
+
+  /* Geo button inside city input */
+  .qz-geo-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(124, 58, 237, 0.12);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    border-radius: 8px;
+    color: #a78bfa;
+    cursor: pointer;
+    transition: all .2s;
+    padding: 0;
+  }
+  .qz-geo-btn:active {
+    transform: translateY(-50%) scale(0.9);
+    background: rgba(124, 58, 237, 0.25);
+  }
+  .qz-geo-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .qz-input-geo-pad { padding-right: 48px; }
+  .qz-spinner-sm {
+    width: 14px; height: 14px;
+    border-width: 1.5px;
+  }
+
   /* Responsive */
   @media (max-width: 480px) {
-    .qz-card { padding: 28px 20px; border-radius: 20px; }
-    .qz-welcome-title { font-size: 30px; }
-    .qz-welcome-cta { padding: 16px 32px; font-size: 16px; }
-    .qz-numpad-key { height: 50px; font-size: 20px; }
-    .qz-display-value { font-size: 36px; }
+    .qz-card { padding: 28px 20px; border-radius: 24px; }
+    .qz-welcome-glass { border-radius: 24px; }
+    .qz-welcome-inner { padding: 32px 20px; border-radius: 18px; }
+    .qz-welcome-title { font-size: 28px; }
+    .qz-welcome-cta { padding: 16px 32px; font-size: 15px; }
+    .qz-numpad-key { height: 52px; font-size: 20px; }
+    .qz-display-value { font-size: 40px; }
   }
   @media (min-width: 768px) {
-    .qz-welcome-title { font-size: 48px; }
-    .qz-welcome-desc { font-size: 19px; }
-    .qz-welcome-trophy { width: 120px; height: 120px; }
-    .qz-welcome-trophy svg { width: 120px; height: 120px; }
+    .qz-welcome-title { font-size: 44px; }
+    .qz-welcome-desc { font-size: 18px; }
   }
   @media (min-height: 900px) {
     .qz-card { padding: 44px 32px; }

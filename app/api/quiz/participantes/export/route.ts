@@ -20,12 +20,16 @@ export async function GET(request: NextRequest) {
 
     const admin = getAdminClient();
     const orgId = profile.organization_id;
+    const quizId = request.nextUrl.searchParams.get('quiz_id');
 
-    const { data: participantes, error } = await admin
+    let query = admin
       .from('quiz_participantes')
       .select('*')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: false });
+    if (quizId) query = query.eq('quiz_config_id', quizId);
+
+    const { data: participantes, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: 'Erro ao exportar' }, { status: 500 });

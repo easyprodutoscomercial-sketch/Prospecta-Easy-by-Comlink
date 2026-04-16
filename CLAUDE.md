@@ -274,8 +274,8 @@ mini-crm/
 - `booth_visits` — check-ins com `photo_facade_url`, `photo_contact_url`, `prospect_type`
 
 #### Quiz Feira
-- `quiz_configuracoes` — config por org, `valor_exato`, `dias_config JSONB`, `token_publico`, `telefone_vip`
-- `quiz_participantes` — participações com `palpite`, `dia_feira`, link a `contact_id`
+- `quiz_configuracoes` — **múltiplos quizzes por org** (N:1), cada um com `valor_exato`, `dias_config JSONB`, `token_publico`, `telefone_vip`. FK opcional `event_id` → `events` (vincula quiz a uma feira — nome, datas e pipeline herdados do evento). Migration: `20260416_quiz_event_id.sql`.
+- `quiz_participantes` — participações com `palpite`, `dia_feira`, `quiz_config_id`, link a `contact_id`
 
 #### Associações (ORPLANA e outras)
 - `associations` — grupos/conglomerados de empresas (ex: SOCICANA, UNICANA, ACAER). **Um nível acima de "empresa"** — uma associação agrega N empresas/fornecedores. Colunas: `sigla`, `nome_completo`, `presidente`, `telefone`, `email`, `website`, `cidade`, `estado`, `endereco`, `cep`, `logo_url`, `grupo` (ex: "ORPLANA"), `notas`. Unique em `(organization_id, sigla)`.
@@ -528,10 +528,15 @@ Em `lib/ai/rules-engine.ts`:
 
 ### Quiz Feira
 
-- Admin define `valor_exato` (ex: 500 grãos), pipeline destino e dias da feira
+- **Múltiplos quizzes por org** — cada quiz pode ser vinculado a um evento/feira (`event_id` FK). Nome, datas e pipeline herdados do evento.
+- Admin cria quiz, vincula à feira, define `valor_exato`, pipeline destino e config por dia
 - Participante entra no link público `/quiz/[token]`, preenche `nome + empresa + telefone + palpite`
-- Se `crm_ativo = true` no config: cria contato automaticamente na pipeline escolhida
-- Vencedor = menor diferença do valor exato
+- Contato criado automaticamente na pipeline escolhida (ou herdada da feira)
+- **Telefone VIP**: palpite é trocado pelo valor exato nos bastidores — garante vitória
+- **Multi-dia**: cada dia pode ter valor exato, descrição e telefone VIP diferentes. Dia calculado com timezone `America/Sao_Paulo`.
+- Vencedor = menor diferença do valor exato (desempate: quem participou primeiro)
+- Admin pode excluir quiz (deleta participantes, mantém contatos no CRM)
+- Admin pode duplicar quiz existente
 
 ### Check-in de Feira
 
@@ -776,16 +781,19 @@ export function useX() { return useContext(Ctx) }
 | GET/POST | `/api/associations` | Listar / criar associação (POST admin/gerente) | ✅ |
 | GET/PATCH/DELETE | `/api/associations/[id]` | CRUD individual (PATCH admin/gerente, DELETE admin) | ✅ |
 
-### Quiz Feira (6)
+### Quiz Feira (8)
 
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET/PUT | `/api/quiz/config` | Config do quiz | ✅ |
+| GET | `/api/quiz/config` | Listar quizzes da org (ou `?id=xxx` para um específico) | ✅ |
+| POST | `/api/quiz/config` | Criar novo quiz | ✅ |
+| PUT | `/api/quiz/config` | Atualizar quiz (requer `id` no body) | ✅ |
+| DELETE | `/api/quiz/config/[id]` | Excluir quiz + participantes | ✅ admin |
 | GET/POST | `/api/quiz/route` | Submeter resposta (público) | 🔓 token |
-| GET | `/api/quiz/participantes` | Listar | ✅ |
-| GET | `/api/quiz/participantes/export` | Exportar | ✅ |
-| GET | `/api/quiz/participantes/vencedor` | Vencedor | ✅ |
-| GET | `/api/quiz/stats` | Estatísticas | ✅ |
+| GET/DELETE | `/api/quiz/participantes` | Listar/limpar (aceita `?quiz_id=`) | ✅ |
+| GET | `/api/quiz/participantes/export` | Exportar (aceita `?quiz_id=`) | ✅ |
+| GET | `/api/quiz/participantes/vencedor` | Vencedor (aceita `?quiz_id=`) | ✅ |
+| GET | `/api/quiz/stats` | Estatísticas (aceita `?quiz_id=`) | ✅ |
 
 ### Lead Capture (3)
 

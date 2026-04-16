@@ -1,8 +1,15 @@
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { normalizePhone } from '@/lib/utils/normalize';
+import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
 
 export const dynamic = 'force-dynamic';
+
+// Get today's date at midnight in São Paulo timezone (avoids UTC midnight bug on Vercel)
+function getTodaySP(): Date {
+  const sp = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  sp.setHours(0, 0, 0, 0);
+  return sp;
+}
 
 // GET /api/quiz?token=xxx — Public quiz config (no auth)
 export async function GET(request: NextRequest) {
@@ -15,12 +22,36 @@ export async function GET(request: NextRequest) {
     const admin = getAdminClient();
     const { data: config, error } = await admin
       .from('quiz_configuracoes')
-      .select('id, quiz_ativo, nome_evento, descricao_desafio, mensagem_pausa, token_publico, data_inicio, dias_feira, dias_config')
+      .select('id, quiz_ativo, nome_evento, descricao_desafio, mensagem_pausa, token_publico, data_inicio, dias_feira, dias_config, event_id')
       .eq('token_publico', token)
       .single();
 
     if (error || !config) {
       return NextResponse.json({ error: 'Quiz não encontrado' }, { status: 404 });
+    }
+
+    // If linked to an event, use the event's name and dates as source of truth
+    let nomeEvento = config.nome_evento;
+    let dataInicio = config.data_inicio;
+    let diasFeiraCfg = config.dias_feira;
+
+    if (config.event_id) {
+      const { data: event } = await admin
+        .from('events')
+        .select('name, start_date, end_date')
+        .eq('id', config.event_id)
+        .single();
+
+      if (event) {
+        nomeEvento = event.name || nomeEvento;
+        if (event.start_date) dataInicio = event.start_date;
+        if (event.start_date && event.end_date) {
+          const start = new Date(event.start_date + 'T12:00:00');
+          const end = new Date(event.end_date + 'T12:00:00');
+          const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+          if (diffDays > 0) diasFeiraCfg = diffDays;
+        }
+      }
     }
 
     // Calculate current fair day
@@ -29,16 +60,15 @@ export async function GET(request: NextRequest) {
     let descricaoDia: string | null = null;
     const diasConfig: any[] = config.dias_config || [];
 
-    if (config.data_inicio && config.dias_feira > 1) {
-      diasFeira = config.dias_feira;
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-      const inicio = new Date(config.data_inicio + 'T00:00:00');
+    if (dataInicio && diasFeiraCfg > 1) {
+      diasFeira = diasFeiraCfg;
+      const hoje = getTodaySP();
+      const inicio = new Date(dataInicio + 'T00:00:00');
       const diffMs = hoje.getTime() - inicio.getTime();
       const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       diaFeira = diffDias + 1;
 
-      if (diaFeira >= 1 && diaFeira <= config.dias_feira) {
+      if (diaFeira >= 1 && diaFeira <= diasFeiraCfg) {
         const dayConfig = diasConfig[diaFeira - 1];
         if (dayConfig && dayConfig.descricao) {
           descricaoDia = dayConfig.descricao;
@@ -55,7 +85,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       id: config.id,
       quiz_ativo: config.quiz_ativo,
-      nome_evento: config.nome_evento,
+      nome_evento: nomeEvento,
       descricao_desafio: descricaoDia || config.descricao_desafio,
       mensagem_pausa: config.mensagem_pausa,
       total_participantes: count || 0,
@@ -74,7 +104,7 @@ export async function POST(request: NextRequest) {
   try {
     const admin = getAdminClient();
     const body = await request.json();
-    const { token, nome, empresa, telefone, palpite } = body;
+    const { token, nome, empresa, telefone, palpite, email, cidade, cargo } = body;
 
     if (!token) {
       return NextResponse.json({ error: 'Token obrigatório' }, { status: 400 });
@@ -107,26 +137,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Quiz está pausado no momento' }, { status: 410 });
     }
 
+    // Resolve dates from linked event if applicable
+    let dataInicio = config.data_inicio;
+    let diasFeiraCfg = config.dias_feira;
+    let pipelineId = config.pipeline_id;
+
+    if (config.event_id) {
+      const { data: event } = await admin
+        .from('events')
+        .select('start_date, end_date, pipeline_id')
+        .eq('id', config.event_id)
+        .single();
+
+      if (event) {
+        if (event.start_date) dataInicio = event.start_date;
+        if (event.pipeline_id && !pipelineId) pipelineId = event.pipeline_id;
+        if (event.start_date && event.end_date) {
+          const start = new Date(event.start_date + 'T12:00:00');
+          const end = new Date(event.end_date + 'T12:00:00');
+          const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+          if (diffDays > 0) diasFeiraCfg = diffDays;
+        }
+      }
+    }
+
     // Calculate current fair day
     let diaFeira: number | null = null;
     let valorExatoDia = config.valor_exato;
     const diasConfig: any[] = config.dias_config || [];
 
-    if (config.data_inicio && config.dias_feira > 1) {
-      const hoje = new Date();
-      hoje.setHours(0, 0, 0, 0);
-      const inicio = new Date(config.data_inicio + 'T00:00:00');
+    if (dataInicio && diasFeiraCfg > 1) {
+      const hoje = getTodaySP();
+      const inicio = new Date(dataInicio + 'T00:00:00');
       const diffMs = hoje.getTime() - inicio.getTime();
       const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
       diaFeira = diffDias + 1;
 
-      if (diaFeira < 1 || diaFeira > config.dias_feira) {
+      if (diaFeira < 1 || diaFeira > diasFeiraCfg) {
         return NextResponse.json({ error: 'O quiz não está aberto hoje.' }, { status: 410 });
       }
 
       // Get valor_exato for this day
       const dayConfig = diasConfig[diaFeira - 1];
-      if (dayConfig && dayConfig.valor_exato) {
+      if (dayConfig && dayConfig.valor_exato != null) {
         valorExatoDia = dayConfig.valor_exato;
       }
     }
@@ -175,12 +228,12 @@ export async function POST(request: NextRequest) {
 
     // Create contact in CRM (always, when pipeline is configured)
     // Wrapped in try/catch so participant is saved even if contact creation fails
-    if (config.pipeline_id) {
+    if (pipelineId) {
       try {
         const { data: firstStage } = await admin
           .from('pipeline_stages')
           .select('id')
-          .eq('pipeline_id', config.pipeline_id)
+          .eq('pipeline_id', pipelineId)
           .order('position', { ascending: true })
           .limit(1)
           .maybeSingle();
@@ -198,8 +251,20 @@ export async function POST(request: NextRequest) {
             existingContact = data;
           }
 
+          const emailTrim = typeof email === 'string' ? email.trim() : '';
+          const emailNormalized = emailTrim ? normalizeEmail(emailTrim) : null;
+          const cidadeTrim = typeof cidade === 'string' ? cidade.trim() : '';
+          const cargoTrim = typeof cargo === 'string' ? cargo.trim() : '';
+
           if (existingContact) {
             contactId = existingContact.id;
+            const patch: Record<string, any> = {};
+            if (emailTrim) { patch.email = emailTrim; patch.email_normalized = emailNormalized; }
+            if (cidadeTrim) patch.cidade = cidadeTrim;
+            if (cargoTrim) patch.cargo = cargoTrim;
+            if (Object.keys(patch).length > 0) {
+              await admin.from('contacts').update(patch).eq('id', existingContact.id);
+            }
           } else {
             const contactData: Record<string, any> = {
               organization_id: config.organization_id,
@@ -209,10 +274,16 @@ export async function POST(request: NextRequest) {
               name_normalized: nome.trim().toLowerCase(),
               company: empresa.trim(),
               whatsapp: telefone.trim(),
-              pipeline_id: config.pipeline_id,
+              pipeline_id: pipelineId,
               stage_id: firstStage.id,
               tipo: [],
             };
+            if (emailTrim) {
+              contactData.email = emailTrim;
+              contactData.email_normalized = emailNormalized;
+            }
+            if (cidadeTrim) contactData.cidade = cidadeTrim;
+            if (cargoTrim) contactData.cargo = cargoTrim;
 
             const optionalFields: Record<string, any> = {
               origem: 'FEIRA',

@@ -21,13 +21,15 @@ export async function GET(request: NextRequest) {
     const admin = getAdminClient();
     const orgId = profile.organization_id;
     const diaParam = request.nextUrl.searchParams.get('dia');
+    const quizId = request.nextUrl.searchParams.get('quiz_id');
 
     // Get quiz config to know the exact value
-    const { data: config } = await admin
+    let configQuery = admin
       .from('quiz_configuracoes')
-      .select('valor_exato, dias_config')
-      .eq('organization_id', orgId)
-      .single();
+      .select('id, valor_exato, dias_config')
+      .eq('organization_id', orgId);
+    if (quizId) configQuery = configQuery.eq('id', quizId);
+    const { data: config } = await configQuery.single();
 
     if (!config) {
       return NextResponse.json({ error: 'Quiz não configurado' }, { status: 404 });
@@ -39,18 +41,21 @@ export async function GET(request: NextRequest) {
     if (diaParam) {
       const dia = parseInt(diaParam);
       const dayConfig = diasConfig[dia - 1];
-      if (dayConfig && dayConfig.valor_exato) {
+      if (dayConfig && dayConfig.valor_exato != null) {
         valorExato = dayConfig.valor_exato;
       }
     }
 
-    // Get participants (filtered by day if specified)
+    // Get participants (filtered by quiz and day if specified)
     let query = admin
       .from('quiz_participantes')
       .select('*')
       .eq('organization_id', orgId)
       .order('created_at', { ascending: true });
 
+    if (config.id) {
+      query = query.eq('quiz_config_id', config.id);
+    }
     if (diaParam) {
       query = query.eq('dia_feira', parseInt(diaParam));
     }
