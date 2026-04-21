@@ -141,6 +141,7 @@ export async function POST(request: NextRequest) {
     let dataInicio = config.data_inicio;
     let diasFeiraCfg = config.dias_feira;
     let pipelineId = config.pipeline_id;
+    const eventId: string | null = config.event_id || null;
 
     if (config.event_id) {
       const { data: event } = await admin
@@ -161,26 +162,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fallback: se nem o quiz nem o evento definiram pipeline, usa o primeiro da org.
+    // Sem esse fallback o contato era silenciosamente descartado e sumia do CRM.
+    if (!pipelineId) {
+      const { data: firstPipeline } = await admin
+        .from('pipelines')
+        .select('id')
+        .eq('organization_id', config.organization_id)
+        .order('position', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (firstPipeline) pipelineId = firstPipeline.id;
+    }
+
     // Calculate current fair day
     let diaFeira: number | null = null;
     let valorExatoDia = config.valor_exato;
     const diasConfig: any[] = config.dias_config || [];
 
+    // Quem controla abrir/fechar é o botão `quiz_ativo` acima. A data só serve
+    // para escolher o gabarito do dia quando hoje cai dentro do range da feira;
+    // fora do range, cai no valor_exato default e dia_feira fica null.
     if (dataInicio && diasFeiraCfg > 1) {
       const hoje = getTodaySP();
       const inicio = new Date(dataInicio + 'T00:00:00');
       const diffMs = hoje.getTime() - inicio.getTime();
       const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      diaFeira = diffDias + 1;
+      const diaCalc = diffDias + 1;
 
-      if (diaFeira < 1 || diaFeira > diasFeiraCfg) {
-        return NextResponse.json({ error: 'O quiz não está aberto hoje.' }, { status: 410 });
-      }
-
-      // Get valor_exato for this day
-      const dayConfig = diasConfig[diaFeira - 1];
-      if (dayConfig && dayConfig.valor_exato != null) {
-        valorExatoDia = dayConfig.valor_exato;
+      if (diaCalc >= 1 && diaCalc <= diasFeiraCfg) {
+        diaFeira = diaCalc;
+        const dayConfig = diasConfig[diaCalc - 1];
+        if (dayConfig && dayConfig.valor_exato != null) {
+          valorExatoDia = dayConfig.valor_exato;
+        }
       }
     }
 
@@ -228,6 +243,9 @@ export async function POST(request: NextRequest) {
 
     // Create contact in CRM (always, when pipeline is configured)
     // Wrapped in try/catch so participant is saved even if contact creation fails
+    if (!pipelineId) {
+      console.warn(`[quiz] No pipeline available for org ${config.organization_id} — contact will not be created.`);
+    }
     if (pipelineId) {
       try {
         const { data: firstStage } = await admin
@@ -238,13 +256,17 @@ export async function POST(request: NextRequest) {
           .limit(1)
           .maybeSingle();
 
+        if (!firstStage) {
+          console.warn(`[quiz] Pipeline ${pipelineId} has no stages — contact will not be created.`);
+        }
+
         if (firstStage) {
           // Check for duplicate contact by phone
-          let existingContact = null;
+          let existingContact: { id: string; event_id: string | null } | null = null;
           if (phoneNormalized) {
             const { data } = await admin
               .from('contacts')
-              .select('id')
+              .select('id, event_id')
               .eq('organization_id', config.organization_id)
               .eq('phone_normalized', phoneNormalized)
               .maybeSingle();
@@ -262,10 +284,32 @@ export async function POST(request: NextRequest) {
             if (emailTrim) { patch.email = emailTrim; patch.email_normalized = emailNormalized; }
             if (cidadeTrim) patch.cidade = cidadeTrim;
             if (cargoTrim) patch.cargo = cargoTrim;
+            if (eventId && !existingContact.event_id) patch.event_id = eventId;
             if (Object.keys(patch).length > 0) {
               await admin.from('contacts').update(patch).eq('id', existingContact.id);
             }
           } else {
+            // Quiz é público (sem sessão), mas contacts.created_by_user_id é NOT NULL.
+            // Creditamos o contato ao primeiro admin da org para a inserção passar.
+            let createdByUserId: string | null = null;
+            const { data: adminProfile } = await admin
+              .from('profiles')
+              .select('user_id')
+              .eq('organization_id', config.organization_id)
+              .eq('role', 'admin')
+              .limit(1)
+              .maybeSingle();
+            createdByUserId = adminProfile?.user_id || null;
+            if (!createdByUserId) {
+              const { data: anyProfile } = await admin
+                .from('profiles')
+                .select('user_id')
+                .eq('organization_id', config.organization_id)
+                .limit(1)
+                .maybeSingle();
+              createdByUserId = anyProfile?.user_id || null;
+            }
+
             const contactData: Record<string, any> = {
               organization_id: config.organization_id,
               name: nome.trim(),
@@ -278,6 +322,8 @@ export async function POST(request: NextRequest) {
               stage_id: firstStage.id,
               tipo: [],
             };
+            if (createdByUserId) contactData.created_by_user_id = createdByUserId;
+            if (eventId) contactData.event_id = eventId;
             if (emailTrim) {
               contactData.email = emailTrim;
               contactData.email_normalized = emailNormalized;
@@ -288,7 +334,6 @@ export async function POST(request: NextRequest) {
             const optionalFields: Record<string, any> = {
               origem: 'FEIRA',
               temperatura: 'MORNO',
-              sem_documento: true,
             };
 
             let { data: newContact, error: insertError } = await admin
@@ -308,7 +353,7 @@ export async function POST(request: NextRequest) {
               if (!retryError && retryContact) {
                 contactId = retryContact.id;
               } else if (retryError) {
-                console.warn('Contact insert retry also failed:', retryError.message);
+                console.error('Contact insert retry also failed:', retryError.message);
               }
             } else if (newContact) {
               contactId = newContact.id;

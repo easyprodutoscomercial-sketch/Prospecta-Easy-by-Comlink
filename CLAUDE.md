@@ -534,6 +534,7 @@ Em `lib/ai/rules-engine.ts`:
 - Contato criado automaticamente na pipeline escolhida (ou herdada da feira)
 - **Telefone VIP**: palpite é trocado pelo valor exato nos bastidores — garante vitória
 - **Multi-dia**: cada dia pode ter valor exato, descrição e telefone VIP diferentes. Dia calculado com timezone `America/Sao_Paulo`.
+- **Gate de abertura = botão `quiz_ativo` e só ele.** Data da feira NÃO fecha o quiz. Se hoje está fora do range da feira multi-dia, a participação é aceita usando `valor_exato` default e `dia_feira=null` (mesmo comportamento de quiz de dia único). Para fechar o quiz, admin clica no botão de ativar/desativar.
 - Vencedor = menor diferença do valor exato (desempate: quem participou primeiro)
 - Admin pode excluir quiz (deleta participantes, mantém contatos no CRM)
 - Admin pode duplicar quiz existente
