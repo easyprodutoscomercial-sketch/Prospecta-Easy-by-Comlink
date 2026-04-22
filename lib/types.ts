@@ -647,6 +647,9 @@ export interface EventBooth {
   status: BoothStatus;
   position_x: number | null;
   position_y: number | null;
+  logo_url: string | null;
+  website: string | null;
+  external_id: string | null;
   created_at: string;
   updated_at: string;
   // joined

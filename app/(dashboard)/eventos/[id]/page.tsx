@@ -1511,6 +1511,17 @@ function BoothDrawer({
       <div className="fixed top-0 right-0 h-full z-50 w-full sm:w-[480px] bg-[#120826] border-l border-purple-800/20 flex flex-col" style={{ animation: 'slideInRight 0.3s ease-out' }}>
         {/* Header */}
         <div className="p-4 border-b border-purple-800/20 flex items-center gap-3 shrink-0">
+          {booth.logo_url && (
+            <div className="w-14 h-14 rounded-lg bg-white/95 flex items-center justify-center shrink-0 overflow-hidden">
+              <img
+                src={booth.logo_url}
+                alt={booth.company_name}
+                className="w-full h-full object-contain"
+                loading="lazy"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = 'none'; }}
+              />
+            </div>
+          )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-white truncate">{booth.company_name}</h2>
@@ -2274,19 +2285,33 @@ function StandsTab({
                 booth.status === 'VISITADO' ? 'border-emerald-500/20' : 'border-purple-800/30'
               }`}
             >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                booth.status === 'VISITADO' ? 'bg-emerald-500/20' : 'bg-purple-800/30'
-              }`}>
-                {booth.status === 'VISITADO' ? (
-                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <svg className="w-4 h-4 text-purple-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                )}
-              </div>
+              {booth.logo_url ? (
+                <div className={`w-10 h-10 rounded bg-white/90 flex items-center justify-center shrink-0 overflow-hidden ring-2 ${
+                  booth.status === 'VISITADO' ? 'ring-emerald-500/60' : 'ring-transparent'
+                }`}>
+                  <img
+                    src={booth.logo_url}
+                    alt={booth.company_name}
+                    className="w-full h-full object-contain"
+                    loading="lazy"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              ) : (
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                  booth.status === 'VISITADO' ? 'bg-emerald-500/20' : 'bg-purple-800/30'
+                }`}>
+                  {booth.status === 'VISITADO' ? (
+                    <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4 text-purple-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  )}
+                </div>
+              )}
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white font-medium truncate">{booth.company_name}</p>
                 <div className="flex items-center gap-3 text-[10px] text-purple-300/40">
