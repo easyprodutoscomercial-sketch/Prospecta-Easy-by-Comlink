@@ -624,6 +624,7 @@ export interface FairEvent {
   start_date: string;
   end_date: string;
   map_url: string | null;
+  external_map_url: string | null;
   cover_image_url: string | null;
   pipeline_id: string | null;
   stage_id: string | null;
