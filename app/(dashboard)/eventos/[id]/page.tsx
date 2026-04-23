@@ -5645,12 +5645,13 @@ function CorridorView({
               </button>
 
               {/* Fileira horizontal de stands (wrap quando passa da linha) */}
-              <div className="flex flex-wrap gap-1.5 p-2.5">
+              <div className="flex flex-wrap gap-2 p-3">
                 {list.map((b) => {
                   const isVisited = b.status === 'VISITADO';
                   const isHighlighted = highlightBoothId === b.id;
                   const isLive = recentBoothIds?.has(b.id) ?? false;
-                  const label = b.booth_number || b.company_name.slice(0, 4);
+                  const label = b.booth_number || '—';
+                  const logo = b.logo_url;
 
                   return (
                     <button
@@ -5659,28 +5660,59 @@ function CorridorView({
                       type="button"
                       onClick={() => onBoothClick(b)}
                       title={`${b.company_name}${b.booth_number ? ` — ${b.booth_number}` : ''}${isLive ? ' · VISITADO AGORA' : ''}${isVisited ? ' · visitado' : ' · pendente'}`}
-                      className={`relative min-w-[56px] h-10 px-2 rounded-md text-[11px] font-bold transition-all hover:scale-110 hover:z-10 flex items-center justify-center ${
+                      className={`group relative w-[84px] h-[84px] rounded-lg transition-all hover:scale-110 hover:z-10 overflow-hidden flex flex-col shadow-sm ${
                         isHighlighted
-                          ? 'bg-yellow-400 text-black ring-2 ring-yellow-200 scale-110 z-20 animate-pulse'
+                          ? 'ring-4 ring-yellow-300 scale-110 z-20 animate-pulse'
                           : isLive
-                          ? 'bg-cyan-500 text-white ring-2 ring-cyan-300'
+                          ? 'ring-2 ring-cyan-400'
                           : isVisited
-                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
-                          : 'bg-[#2a1245] text-purple-200 border border-purple-700/40 hover:border-emerald-500/60 hover:bg-[#34165a]'
+                          ? 'ring-2 ring-emerald-400 shadow-md shadow-emerald-500/25'
+                          : 'ring-1 ring-purple-700/40 hover:ring-emerald-500/60'
                       }`}
                     >
-                      <span className="truncate max-w-full">{label}</span>
+                      {/* Area do logo (topo, ~64px) */}
+                      <div className="flex-1 bg-white flex items-center justify-center p-1.5 overflow-hidden">
+                        {logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={logo}
+                            alt={b.company_name}
+                            loading="lazy"
+                            className="max-w-full max-h-full object-contain"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                          />
+                        ) : (
+                          <span className="text-[10px] font-bold text-neutral-500 text-center line-clamp-3 leading-tight px-1">
+                            {b.company_name.slice(0, 18)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Rodape: codigo do stand */}
+                      <div className={`text-[10px] font-bold py-0.5 px-1 text-center truncate ${
+                        isHighlighted
+                          ? 'bg-yellow-400 text-black'
+                          : isLive
+                          ? 'bg-cyan-500 text-white'
+                          : isVisited
+                          ? 'bg-emerald-500 text-white'
+                          : 'bg-[#2a1245] text-purple-200'
+                      }`}>
+                        {label}
+                      </div>
+
+                      {/* Overlay verde quando visitado (sobre o logo) */}
                       {isVisited && (
-                        <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border border-[#1e0f35] flex items-center justify-center">
-                          <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center shadow-md">
+                          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                           </svg>
                         </span>
                       )}
                       {isLive && !isVisited && (
-                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="absolute top-1 right-1 flex h-3 w-3">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400 border border-[#1e0f35]" />
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400 border border-white" />
                         </span>
                       )}
                     </button>
