@@ -5888,6 +5888,16 @@ function CorridorView({
 }
 
 // --- Polygon Map View (desenha o layout oficial via polygons da Zapt) ---
+type BoothGeom = {
+  booth: EventBooth;
+  points: string;
+  cx: number;
+  cy: number;
+  w: number;
+  h: number;
+  area: number;
+};
+
 function PolygonMapView({
   booths,
   highlightBoothId,
@@ -5900,64 +5910,142 @@ function PolygonMapView({
   onBoothClick: (b: EventBooth) => void;
 }) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  const withPolygon = booths.filter((b) => b.polygon && b.polygon.length);
-  const withPointOnly = booths.filter(
-    (b) => (!b.polygon || !b.polygon.length) && b.position_x != null && b.position_y != null
-  );
+  // Pre-processa geometria de cada booth (1x, memoizado pelos dados de entrada)
+  const { geoms, pinsOnly, initialVb } = useMemo(() => {
+    const geoms: BoothGeom[] = [];
+    const pinsOnly: EventBooth[] = [];
+    let minX = 100, maxX = 0, minY = 100, maxY = 0;
 
-  // Converte [[[x,y],[x,y]],...] em string "x1,y1 x2,y2 ..." (primeiro ponto de cada segmento).
-  function polygonToPoints(poly: number[][][] | null): string {
-    if (!poly || !poly.length) return '';
-    const pts: [number, number][] = [];
-    for (const seg of poly) {
-      if (!Array.isArray(seg) || !seg.length) continue;
-      const first = seg[0];
-      if (Array.isArray(first) && first.length >= 2) pts.push([first[0], first[1]]);
-    }
-    return pts.map((p) => `${p[0]},${p[1]}`).join(' ');
-  }
-
-  // Calcular viewBox real a partir dos polygons + pins pra caber tudo
-  let minX = 100, maxX = 0, minY = 100, maxY = 0;
-  for (const b of booths) {
-    if (b.polygon) {
-      for (const seg of b.polygon) {
-        for (const pt of seg) {
-          if (Array.isArray(pt) && pt.length >= 2) {
-            if (pt[0] < minX) minX = pt[0];
-            if (pt[0] > maxX) maxX = pt[0];
-            if (pt[1] < minY) minY = pt[1];
-            if (pt[1] > maxY) maxY = pt[1];
+    for (const b of booths) {
+      if (b.polygon && b.polygon.length) {
+        const pts: [number, number][] = [];
+        let bMinX = Infinity, bMaxX = -Infinity, bMinY = Infinity, bMaxY = -Infinity;
+        for (const seg of b.polygon) {
+          if (!Array.isArray(seg) || !seg.length) continue;
+          const first = seg[0];
+          if (Array.isArray(first) && first.length >= 2) {
+            const [x, y] = first;
+            pts.push([x, y]);
+            if (x < bMinX) bMinX = x; if (x > bMaxX) bMaxX = x;
+            if (y < bMinY) bMinY = y; if (y > bMaxY) bMaxY = y;
           }
         }
+        if (pts.length < 3) continue;
+        const w = bMaxX - bMinX;
+        const h = bMaxY - bMinY;
+        const cx = (bMinX + bMaxX) / 2;
+        const cy = (bMinY + bMaxY) / 2;
+        geoms.push({
+          booth: b,
+          points: pts.map((p) => `${p[0]},${p[1]}`).join(' '),
+          cx, cy, w, h,
+          area: w * h,
+        });
+        if (bMinX < minX) minX = bMinX; if (bMaxX > maxX) maxX = bMaxX;
+        if (bMinY < minY) minY = bMinY; if (bMaxY > maxY) maxY = bMaxY;
+      } else if (b.position_x != null && b.position_y != null) {
+        pinsOnly.push(b);
+        if (b.position_x < minX) minX = b.position_x;
+        if (b.position_x > maxX) maxX = b.position_x;
+        if (b.position_y < minY) minY = b.position_y;
+        if (b.position_y > maxY) maxY = b.position_y;
       }
-    } else if (b.position_x != null && b.position_y != null) {
-      if (b.position_x < minX) minX = b.position_x;
-      if (b.position_x > maxX) maxX = b.position_x;
-      if (b.position_y < minY) minY = b.position_y;
-      if (b.position_y > maxY) maxY = b.position_y;
     }
+
+    // Ordenar por area decrescente pra polygons maiores renderizarem primeiro
+    // (os menores ficam por cima, mas se sobrepoem pouco)
+    geoms.sort((a, b) => b.area - a.area);
+
+    const padX = 1;
+    const padY = 1;
+    const vb = {
+      x: Math.max(0, minX - padX),
+      y: Math.max(0, minY - padY),
+      w: Math.min(100, maxX + padX) - Math.max(0, minX - padX),
+      h: Math.min(100, maxY + padY) - Math.max(0, minY - padY),
+    };
+    return { geoms, pinsOnly, initialVb: vb };
+  }, [booths]);
+
+  // Estado do viewBox (zoom + pan)
+  const [vb, setVb] = useState(initialVb);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef<{ clientX: number; clientY: number; vbX: number; vbY: number } | null>(null);
+
+  // Reseta viewBox quando o set de booths muda (ex: filtro mudou)
+  useEffect(() => { setVb(initialVb); }, [initialVb]);
+
+  const zoomRatio = initialVb.w / vb.w; // quanto maior, mais zoom
+
+  // Converte pixel do mouse -> coord SVG
+  function screenToSvg(clientX: number, clientY: number) {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const x = vb.x + ((clientX - rect.left) / rect.width) * vb.w;
+    const y = vb.y + ((clientY - rect.top) / rect.height) * vb.h;
+    return { x, y };
   }
-  // Margem interna de 1 unidade
-  minX = Math.max(0, minX - 1);
-  minY = Math.max(0, minY - 1);
-  maxX = Math.min(100, maxX + 1);
-  maxY = Math.min(100, maxY + 1);
-  const vbW = maxX - minX;
-  const vbH = maxY - minY;
-  const viewBox = `${minX} ${minY} ${vbW} ${vbH}`;
+
+  function handleWheel(e: React.WheelEvent<SVGSVGElement>) {
+    e.preventDefault();
+    const focal = screenToSvg(e.clientX, e.clientY);
+    if (!focal) return;
+    const factor = e.deltaY < 0 ? 0.82 : 1.22;
+    // Limita zoom pra nao exagerar
+    const newW = Math.max(initialVb.w * 0.04, Math.min(initialVb.w * 1.2, vb.w * factor));
+    const newH = Math.max(initialVb.h * 0.04, Math.min(initialVb.h * 1.2, vb.h * factor));
+    const f = newW / vb.w;
+    const newX = focal.x - (focal.x - vb.x) * f;
+    const newY = focal.y - (focal.y - vb.y) * f;
+    setVb({ x: newX, y: newY, w: newW, h: newH });
+  }
+
+  function handlePointerDown(e: React.PointerEvent<SVGSVGElement>) {
+    // So inicia pan se clicou no fundo (nao num stand)
+    const target = e.target as SVGElement;
+    if (target.tagName === 'polygon' || target.tagName === 'circle' || target.tagName === 'text') return;
+    (e.currentTarget as SVGSVGElement).setPointerCapture?.(e.pointerId);
+    panStart.current = { clientX: e.clientX, clientY: e.clientY, vbX: vb.x, vbY: vb.y };
+    setIsPanning(true);
+  }
+  function handlePointerMove(e: React.PointerEvent<SVGSVGElement>) {
+    if (!panStart.current) return;
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const dx = ((e.clientX - panStart.current.clientX) / rect.width) * vb.w;
+    const dy = ((e.clientY - panStart.current.clientY) / rect.height) * vb.h;
+    setVb((v) => ({ ...v, x: panStart.current!.vbX - dx, y: panStart.current!.vbY - dy }));
+  }
+  function handlePointerUp(e: React.PointerEvent<SVGSVGElement>) {
+    (e.currentTarget as SVGSVGElement).releasePointerCapture?.(e.pointerId);
+    panStart.current = null;
+    setIsPanning(false);
+  }
+
+  function resetView() { setVb(initialVb); }
+  function zoomBy(factor: number) {
+    const cx = vb.x + vb.w / 2;
+    const cy = vb.y + vb.h / 2;
+    const newW = Math.max(initialVb.w * 0.04, Math.min(initialVb.w * 1.2, vb.w * factor));
+    const newH = Math.max(initialVb.h * 0.04, Math.min(initialVb.h * 1.2, vb.h * factor));
+    setVb({ x: cx - newW / 2, y: cy - newH / 2, w: newW, h: newH });
+  }
 
   // Cores por status
   function fillFor(b: EventBooth) {
     const isHighlighted = highlightBoothId === b.id;
     const isLive = recentBoothIds?.has(b.id) ?? false;
     const isHovered = hoveredId === b.id;
-    if (isHighlighted) return { fill: '#facc15', stroke: '#fef08a', opacity: 1 }; // yellow
-    if (isLive) return { fill: '#06b6d4', stroke: '#a5f3fc', opacity: 1 }; // cyan
-    if (b.status === 'VISITADO') return { fill: '#10b981', stroke: '#6ee7b7', opacity: isHovered ? 0.95 : 0.78 };
-    return { fill: '#7c3aed', stroke: '#c4b5fd', opacity: isHovered ? 0.95 : 0.62 };
+    if (isHighlighted) return { fill: '#facc15', stroke: '#fef08a', opacity: 1 };
+    if (isLive) return { fill: '#06b6d4', stroke: '#a5f3fc', opacity: 1 };
+    if (b.status === 'VISITADO') return { fill: '#10b981', stroke: '#6ee7b7', opacity: isHovered ? 0.95 : 0.82 };
+    return { fill: '#7c3aed', stroke: '#c4b5fd', opacity: isHovered ? 0.95 : 0.68 };
   }
+
+  const hoveredBooth = hoveredId ? booths.find((b) => b.id === hoveredId) : null;
+  const strokeUnit = vb.w / 1000; // stroke proporcional ao zoom
 
   return (
     <div className="relative bg-[#120826] rounded-xl border border-purple-800/30 overflow-hidden">
@@ -5967,84 +6055,115 @@ function PolygonMapView({
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-600" />Pendente</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-cyan-500" />Agora</span>
           <span className="text-purple-400/60">·</span>
-          <span className="text-purple-300/60">{withPolygon.length} stands · clique pra abrir</span>
+          <span className="text-purple-300/60">{geoms.length} stands · scroll pra ampliar, arraste pra mover</span>
         </div>
       </div>
-      {hoveredId && (() => {
-        const b = booths.find((x) => x.id === hoveredId);
-        if (!b) return null;
-        return (
-          <div className="absolute top-3 right-3 z-20 bg-[#1e0f35]/95 backdrop-blur-sm border border-purple-700/30 rounded-lg px-3 py-2 text-xs text-white shadow-xl max-w-[240px]">
-            <div className="font-bold truncate">{b.company_name}</div>
-            {b.booth_number && <div className="text-[11px] text-purple-300/70">Stand {b.booth_number}{b.sector ? ` · ${b.sector}` : ''}</div>}
-            <div className="text-[10px] mt-1 text-purple-300/50">{b.status === 'VISITADO' ? 'Visitado' : 'Pendente'}</div>
-          </div>
-        );
-      })()}
+
+      {/* Zoom controls */}
+      <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-1 bg-[#1e0f35]/90 backdrop-blur-sm border border-purple-700/30 rounded-lg p-1 shadow-lg">
+        <button type="button" onClick={() => zoomBy(0.7)} className="w-8 h-8 flex items-center justify-center text-purple-200 hover:bg-purple-800/30 rounded" title="Mais zoom">+</button>
+        <button type="button" onClick={() => zoomBy(1.4)} className="w-8 h-8 flex items-center justify-center text-purple-200 hover:bg-purple-800/30 rounded" title="Menos zoom">−</button>
+        <button type="button" onClick={resetView} className="w-8 h-8 flex items-center justify-center text-[10px] text-purple-200 hover:bg-purple-800/30 rounded" title="Voltar ao inicio">⌂</button>
+      </div>
+      <div className="absolute bottom-3 left-3 z-20 bg-[#1e0f35]/80 border border-purple-700/20 rounded px-2 py-1 text-[10px] text-purple-300/60">
+        Zoom {zoomRatio.toFixed(1)}x
+      </div>
+
+      {hoveredBooth && (
+        <div className="absolute top-3 right-3 z-20 bg-[#1e0f35]/95 backdrop-blur-sm border border-purple-700/30 rounded-lg px-3 py-2 text-xs text-white shadow-xl max-w-[260px] pointer-events-none">
+          <div className="font-bold truncate">{hoveredBooth.company_name}</div>
+          {hoveredBooth.booth_number && <div className="text-[11px] text-purple-300/70">Stand {hoveredBooth.booth_number}{hoveredBooth.sector ? ` · ${hoveredBooth.sector}` : ''}</div>}
+          <div className="text-[10px] mt-1 text-purple-300/50">{hoveredBooth.status === 'VISITADO' ? 'Visitado' : 'Pendente'}</div>
+        </div>
+      )}
+
       <svg
-        viewBox={viewBox}
+        ref={svgRef}
+        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
         preserveAspectRatio="xMidYMid meet"
         className="w-full"
-        style={{ height: 'calc(100vh - 280px)', minHeight: 420, background: '#120826' }}
+        style={{ height: 'calc(100vh - 280px)', minHeight: 420, background: '#120826', cursor: isPanning ? 'grabbing' : 'grab', touchAction: 'none' }}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
       >
         {/* Polygons (stands com forma) */}
-        {withPolygon.map((b) => {
-          const points = polygonToPoints(b.polygon);
-          if (!points) return null;
+        {geoms.map((g) => {
+          const b = g.booth;
           const s = fillFor(b);
-          const label = b.booth_number || '';
           const isHovered = hoveredId === b.id;
+          const label = b.booth_number || '';
+
+          // Decide se mostra label:
+          // 1. Polygon precisa ser grande o suficiente no zoom atual
+          // 2. width projetada na tela >= 2 unidades do viewBox atual
+          const minShowW = vb.w * 0.015;
+          const minShowH = vb.h * 0.018;
+          const showLabel = !!label && g.w >= minShowW && g.h >= minShowH;
+
+          // Tamanho de texto: cabe no stand
+          const maxFontByWidth = (g.w * 1.5) / Math.max(label.length, 2);
+          const maxFontByHeight = g.h * 0.55;
+          const fontSize = Math.min(maxFontByWidth, maxFontByHeight, vb.w * 0.025);
+
           return (
             <g
               key={b.id}
               id={`booth-card-${b.id}`}
-              style={{ cursor: 'pointer' }}
               onMouseEnter={() => setHoveredId(b.id)}
               onMouseLeave={() => setHoveredId(null)}
-              onClick={() => onBoothClick(b)}
+              onClick={(e) => { e.stopPropagation(); if (!isPanning) onBoothClick(b); }}
+              style={{ cursor: 'pointer' }}
             >
               <polygon
-                points={points}
+                points={g.points}
                 fill={s.fill}
                 stroke={s.stroke}
-                strokeWidth={isHovered ? 0.25 : 0.1}
+                strokeWidth={(isHovered ? 4 : 1.5) * strokeUnit}
                 fillOpacity={s.opacity}
+                vectorEffect="non-scaling-stroke"
               />
-              {label && vbW < 60 && (
+              {showLabel && (
                 <text
-                  x={b.position_x ?? 0}
-                  y={b.position_y ?? 0}
+                  x={g.cx}
+                  y={g.cy}
                   textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={0.8}
+                  dominantBaseline="central"
+                  fontSize={fontSize}
                   fill="#fff"
-                  fontWeight="bold"
+                  fontWeight="600"
                   style={{ pointerEvents: 'none', userSelect: 'none' }}
                 >
-                  {label.slice(0, 5)}
+                  {label}
                 </text>
               )}
             </g>
           );
         })}
-        {/* Pins (stands sem polygon) */}
-        {withPointOnly.map((b) => {
+
+        {/* Pins (stands sem polygon) — discretos */}
+        {pinsOnly.map((b) => {
           const s = fillFor(b);
           const isHovered = hoveredId === b.id;
+          const r = (isHovered ? 0.5 : 0.3) * Math.sqrt(vb.w * vb.h) / 50;
           return (
             <circle
               key={b.id}
               id={`booth-card-${b.id}`}
               cx={b.position_x ?? 0}
               cy={b.position_y ?? 0}
-              r={isHovered ? 0.9 : 0.6}
+              r={r}
               fill={s.fill}
               stroke={s.stroke}
-              strokeWidth={0.15}
+              strokeWidth={strokeUnit}
+              fillOpacity={0.9}
               style={{ cursor: 'pointer' }}
               onMouseEnter={() => setHoveredId(b.id)}
               onMouseLeave={() => setHoveredId(null)}
-              onClick={() => onBoothClick(b)}
+              onClick={(e) => { e.stopPropagation(); if (!isPanning) onBoothClick(b); }}
+              vectorEffect="non-scaling-stroke"
             />
           );
         })}
