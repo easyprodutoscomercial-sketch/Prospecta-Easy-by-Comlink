@@ -189,7 +189,72 @@ export async function POST(request: NextRequest) {
         }, { status: 200 });
       }
 
-      // NAO encontrou contato existente → criar novo com dados do booth
+      // NAO encontrou contato existente pelo booth.
+      // Antes de criar novo, checar se ja existe contato na org com mesmo phone/email.
+      // Isso evita violar idx_contacts_unique_phone / idx_contacts_unique_email.
+      console.log('[lead-capture] Buscando duplicates por phone/email', { phoneNormalized, emailNormalized, org: link.organization_id });
+      let duplicateContact: { id: string } | null = null;
+      if (phoneNormalized) {
+        const { data } = await admin
+          .from('contacts')
+          .select('id')
+          .eq('organization_id', link.organization_id)
+          .eq('phone_normalized', phoneNormalized)
+          .limit(1)
+          .maybeSingle();
+        if (data) duplicateContact = data;
+      }
+      if (!duplicateContact && emailNormalized) {
+        const { data } = await admin
+          .from('contacts')
+          .select('id')
+          .eq('organization_id', link.organization_id)
+          .eq('email_normalized', emailNormalized)
+          .limit(1)
+          .maybeSingle();
+        if (data) duplicateContact = data;
+      }
+
+      if (duplicateContact?.id) {
+        console.log('[lead-capture] Contato ja existe na org — vinculando ao booth', duplicateContact.id);
+        // Atualiza campos chave + vincula ao evento
+        const updates: Record<string, any> = {
+          contato_nome: name.trim(),
+          whatsapp: phone.trim(),
+        };
+        if (cargo?.trim()) updates.cargo = cargo.trim();
+        if (cidade?.trim()) updates.cidade = cidade.trim();
+        if (estado?.trim()) updates.estado = estado.trim();
+        if (notes?.trim()) updates.notes = notes.trim();
+        if (event_id) updates.event_id = event_id;
+
+        await admin.from('contacts').update(updates).eq('id', duplicateContact.id);
+
+        await admin.from('booth_visits').insert({
+          booth_id,
+          event_id,
+          organization_id: link.organization_id,
+          user_id: link.user_id,
+          contact_id: duplicateContact.id,
+          contact_name: name.trim(),
+          notes: notes?.trim() || null,
+        });
+
+        await admin.from('event_booths').update({ status: 'VISITADO' }).eq('id', booth_id);
+
+        await admin.from('lead_capture_links').update({
+          leads_count: (link.leads_count || 0) + 1,
+          updated_at: new Date().toISOString(),
+        }).eq('id', link.id);
+
+        return NextResponse.json({
+          success: true,
+          duplicate: true,
+          message: 'Dados registrados com sucesso! Entraremos em contato em breve.',
+          whatsapp_vendedor: link.whatsapp_vendedor || null,
+        }, { status: 200 });
+      }
+
       const { data: firstStage } = await admin
         .from('pipeline_stages')
         .select('id')
@@ -207,6 +272,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Link sem dono configurado' }, { status: 500 });
       }
 
+      console.log('[lead-capture] Criando novo contato', { name: name.trim(), phoneNormalized, event_id, booth_id });
       const boothCompany = booth?.company_name || company?.trim() || null;
 
       const newContactData: Record<string, any> = {
