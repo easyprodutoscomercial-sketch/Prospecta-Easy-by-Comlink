@@ -1637,6 +1637,67 @@ function BoothDrawer({
                     </a>
                   )}
                 </div>
+
+                {/* Validacao: captavel ou descartar */}
+                <div className="pt-3 border-t border-purple-800/30 space-y-2">
+                  <p className="text-[10px] font-bold text-purple-300/60 uppercase tracking-wider">Esse lead vale a pena?</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const prev = contact.inexistente;
+                        setContact({ ...contact, inexistente: false });
+                        try {
+                          const res = await fetch(`/api/contacts/${contact.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ inexistente: false }),
+                          });
+                          if (!res.ok) throw new Error();
+                        } catch {
+                          setContact({ ...contact, inexistente: prev });
+                        }
+                      }}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+                        contact.inexistente === false
+                          ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/30'
+                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                      }`}
+                    >
+                      {contact.inexistente === false ? '✓ Captavel' : 'Captavel'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!confirm('Descartar este contato? Ele sai da pipeline e da listagem principal (fica acessivel no filtro "Descartados").')) return;
+                        const prev = contact.inexistente;
+                        setContact({ ...contact, inexistente: true });
+                        try {
+                          const res = await fetch(`/api/contacts/${contact.id}`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ inexistente: true }),
+                          });
+                          if (!res.ok) throw new Error();
+                        } catch {
+                          setContact({ ...contact, inexistente: prev });
+                        }
+                      }}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+                        contact.inexistente === true
+                          ? 'bg-red-500 text-white border-red-400 shadow-md shadow-red-500/30'
+                          : 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'
+                      }`}
+                    >
+                      {contact.inexistente === true ? '✗ Descartado' : 'Descartar'}
+                    </button>
+                  </div>
+                  {contact.inexistente === true && (
+                    <p className="text-[10px] text-red-300/70 leading-tight">
+                      Este contato esta descartado. Ele nao aparece na pipeline principal, so no filtro "Descartados" em /contacts.
+                    </p>
+                  )}
+                </div>
               </div>
             ) : (
               <p className="text-xs text-purple-300/40">Evento sem pipeline configurado</p>
