@@ -202,6 +202,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Pipeline sem stages configurados' }, { status: 500 });
       }
 
+      // Valida user_id do link (FK created_by_user_id exige user existente)
+      if (!link.user_id) {
+        return NextResponse.json({ error: 'Link sem dono configurado' }, { status: 500 });
+      }
+
       const boothCompany = booth?.company_name || company?.trim() || null;
 
       const newContactData: Record<string, any> = {
@@ -433,8 +438,20 @@ export async function POST(request: NextRequest) {
       whatsapp_vendedor: link.whatsapp_vendedor || null,
     }, { status: 201 });
   } catch (error: any) {
-    console.error('Error creating lead capture:', error);
-    return NextResponse.json({ error: 'Erro ao registrar dados. Tente novamente.' }, { status: 500 });
+    console.error('Error creating lead capture:', {
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      stack: error?.stack?.split('\n').slice(0, 3).join(' | '),
+    });
+    // Retorna detalhe do erro pro cliente (sistema interno, sem vazar info sensivel)
+    const dbMsg = error?.message || 'Erro desconhecido';
+    return NextResponse.json({
+      error: `Erro ao registrar: ${dbMsg}`,
+      debug_code: error?.code || null,
+      debug_hint: error?.hint || null,
+    }, { status: 500 });
   }
 }
 
