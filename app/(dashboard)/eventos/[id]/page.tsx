@@ -5969,13 +5969,12 @@ function PolygonMapView({
     return { geoms, pinsOnly, initialVb: vb };
   }, [booths]);
 
-  // Estado do viewBox (zoom + pan)
+  // Estado do viewBox (zoom + pan). Inicia com o initial calculado,
+  // mas nao reseta quando booths muda (polling a cada 15s mudaria a
+  // referencia de initialVb e zerava o zoom do usuario).
   const [vb, setVb] = useState(initialVb);
   const [isPanning, setIsPanning] = useState(false);
   const panStart = useRef<{ clientX: number; clientY: number; vbX: number; vbY: number } | null>(null);
-
-  // Reseta viewBox quando o set de booths muda (ex: filtro mudou)
-  useEffect(() => { setVb(initialVb); }, [initialVb]);
 
   const zoomRatio = initialVb.w / vb.w; // quanto maior, mais zoom
 
