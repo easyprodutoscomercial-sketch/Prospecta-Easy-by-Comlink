@@ -223,7 +223,7 @@ export default function QrCodeSection() {
   };
 
   return (
-    <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+    <div id="qr-codes" className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5 scroll-mt-16">
       <h2 className="text-sm font-medium text-neutral-100 mb-1">QR Code para Captura de Leads</h2>
       <p className="text-xs text-purple-300/60 mb-4">
         Gere QR Codes para capturar leads em feiras e eventos. O lead escaneia, preenche o formulario e entra direto no seu pipeline.

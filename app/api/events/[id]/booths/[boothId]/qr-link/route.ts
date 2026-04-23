@@ -68,8 +68,11 @@ export async function POST(
 
     if (!links || links.length === 0) {
       return NextResponse.json({
-        error: 'Nenhum QR Code encontrado para este pipeline. Crie um link de captura no menu "QR Codes" primeiro.',
-      }, { status: 404 });
+        links: [],
+        needs_setup: true,
+        setup_url: '/settings#qr-codes',
+        error: 'Voce ainda nao tem um QR Code para este pipeline. Vai em Configuracoes > QR Code Lead Capture e cria um link apontando para o pipeline deste evento.',
+      });
     }
 
     const baseUrl = request.nextUrl.origin;
