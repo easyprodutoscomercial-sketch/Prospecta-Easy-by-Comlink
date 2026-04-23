@@ -6032,19 +6032,19 @@ function PolygonMapView({
     setVb({ x: cx - newW / 2, y: cy - newH / 2, w: newW, h: newH });
   }
 
-  // Cores por status
+  // Cores por status. Stroke padrao usa a cor de fundo pra criar
+  // "gap" visual entre stands colados. Hover troca pra stroke claro.
   function fillFor(b: EventBooth) {
     const isHighlighted = highlightBoothId === b.id;
     const isLive = recentBoothIds?.has(b.id) ?? false;
-    const isHovered = hoveredId === b.id;
-    if (isHighlighted) return { fill: '#facc15', stroke: '#fef08a', opacity: 1 };
-    if (isLive) return { fill: '#06b6d4', stroke: '#a5f3fc', opacity: 1 };
-    if (b.status === 'VISITADO') return { fill: '#10b981', stroke: '#6ee7b7', opacity: isHovered ? 0.95 : 0.82 };
-    return { fill: '#7c3aed', stroke: '#c4b5fd', opacity: isHovered ? 0.95 : 0.68 };
+    if (isHighlighted) return { fill: '#facc15', hoverStroke: '#fef08a', opacity: 1 };
+    if (isLive) return { fill: '#06b6d4', hoverStroke: '#a5f3fc', opacity: 1 };
+    if (b.status === 'VISITADO') return { fill: '#10b981', hoverStroke: '#fff', opacity: 0.92 };
+    return { fill: '#7c3aed', hoverStroke: '#fff', opacity: 0.88 };
   }
 
   const hoveredBooth = hoveredId ? booths.find((b) => b.id === hoveredId) : null;
-  const strokeUnit = vb.w / 1000; // stroke proporcional ao zoom
+  const GAP_STROKE = '#000'; // separador preto entre stands pra criar gap visivel
 
   return (
     <div className="relative bg-[#120826] rounded-xl border border-purple-800/30 overflow-hidden">
@@ -6119,9 +6119,10 @@ function PolygonMapView({
               <polygon
                 points={g.points}
                 fill={s.fill}
-                stroke={s.stroke}
-                strokeWidth={(isHovered ? 4 : 1.5) * strokeUnit}
-                fillOpacity={s.opacity}
+                stroke={isHovered ? s.hoverStroke : GAP_STROKE}
+                strokeWidth={isHovered ? 2.5 : 1.5}
+                fillOpacity={isHovered ? 1 : s.opacity}
+                strokeLinejoin="round"
                 vectorEffect="non-scaling-stroke"
               />
               {showLabel && (
@@ -6155,9 +6156,9 @@ function PolygonMapView({
               cy={b.position_y ?? 0}
               r={r}
               fill={s.fill}
-              stroke={s.stroke}
-              strokeWidth={strokeUnit}
-              fillOpacity={0.9}
+              stroke={isHovered ? s.hoverStroke : GAP_STROKE}
+              strokeWidth={1}
+              fillOpacity={isHovered ? 1 : 0.9}
               style={{ cursor: 'pointer' }}
               onMouseEnter={() => setHoveredId(b.id)}
               onMouseLeave={() => setHoveredId(null)}
