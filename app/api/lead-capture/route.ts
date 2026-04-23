@@ -113,6 +113,14 @@ export async function POST(request: NextRequest) {
 
     // --- Fluxo com contexto de evento/stand ---
     if (event_id && booth_id) {
+      // Buscar nome do vendedor dono do link (obrigatorio pra booth_visits.user_name NOT NULL)
+      const { data: ownerProfile } = await admin
+        .from('profiles')
+        .select('name')
+        .eq('user_id', link.user_id)
+        .maybeSingle();
+      const visitUserName = ownerProfile?.name || 'Cliente (via QR Code)';
+
       // Buscar contato existente vinculado a este booth
       const { data: existingVisit } = await admin
         .from('booth_visits')
@@ -154,17 +162,19 @@ export async function POST(request: NextRequest) {
           .eq('id', existingVisit.contact_id);
 
         // Criar booth_visit de registro
-        await admin
+        const { error: visitErr1 } = await admin
           .from('booth_visits')
           .insert({
             booth_id,
             event_id,
             organization_id: link.organization_id,
             user_id: link.user_id,
+            user_name: visitUserName,
             contact_id: existingVisit.contact_id,
             contact_name: name.trim(),
             notes: notes?.trim() || null,
           });
+        if (visitErr1) console.error('[lead-capture] booth_visits insert (existingVisit flow) falhou:', visitErr1);
 
         // Marcar booth como VISITADO
         await admin
@@ -230,15 +240,17 @@ export async function POST(request: NextRequest) {
 
         await admin.from('contacts').update(updates).eq('id', duplicateContact.id);
 
-        await admin.from('booth_visits').insert({
+        const { error: visitErr2 } = await admin.from('booth_visits').insert({
           booth_id,
           event_id,
           organization_id: link.organization_id,
           user_id: link.user_id,
+          user_name: visitUserName,
           contact_id: duplicateContact.id,
           contact_name: name.trim(),
           notes: notes?.trim() || null,
         });
+        if (visitErr2) console.error('[lead-capture] booth_visits insert (duplicate flow) falhou:', visitErr2);
 
         await admin.from('event_booths').update({ status: 'VISITADO' }).eq('id', booth_id);
 
@@ -322,17 +334,19 @@ export async function POST(request: NextRequest) {
 
       if (newContact) {
         // Criar booth_visit vinculando
-        await admin
+        const { error: visitErr3 } = await admin
           .from('booth_visits')
           .insert({
             booth_id,
             event_id,
             organization_id: link.organization_id,
             user_id: link.user_id,
+            user_name: visitUserName,
             contact_id: newContact.id,
             contact_name: name.trim(),
             notes: notes?.trim() || null,
           });
+        if (visitErr3) console.error('[lead-capture] booth_visits insert (new contact flow) falhou:', visitErr3);
 
         // Marcar booth como VISITADO
         await admin
