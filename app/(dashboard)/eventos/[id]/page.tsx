@@ -5539,7 +5539,7 @@ function CorridorView({
   highlightBoothId,
   recentBoothIds,
   onBoothClick,
-  onOpenLightbox,
+  onOpenLightbox: _onOpenLightbox,
   onSectorClick,
 }: {
   booths: EventBooth[];
@@ -5549,19 +5549,33 @@ function CorridorView({
   onOpenLightbox?: (b: EventBooth) => void;
   onSectorClick?: (sector: string) => void;
 }) {
-  const bySector: Record<string, EventBooth[]> = {};
+  // Agrupa por corredor fisico do mapa (prefixo alfabetico do booth_number:
+  // A, B, C, D, E, F, G, H, PC, HUB, Rua5 ...) em vez de por tipo de expositor.
+  // Isso respeita a sequencia real do mapa oficial.
+  function extractCorredor(boothNumber: string | null): string {
+    if (!boothNumber) return 'Sem corredor';
+    const m = boothNumber.match(/^([A-Za-z]+)/);
+    return m ? m[1].toUpperCase() : boothNumber;
+  }
+
+  const byCorredor: Record<string, EventBooth[]> = {};
   booths.forEach((b) => {
-    const key = b.sector || 'Sem setor';
-    if (!bySector[key]) bySector[key] = [];
-    bySector[key].push(b);
+    const key = extractCorredor(b.booth_number);
+    if (!byCorredor[key]) byCorredor[key] = [];
+    byCorredor[key].push(b);
   });
-  Object.values(bySector).forEach((list) =>
+  Object.values(byCorredor).forEach((list) =>
     list.sort((a, b) => naturalCompare(a.booth_number || '', b.booth_number || ''))
   );
 
-  const sectorKeys = Object.keys(bySector).sort((a, b) => naturalCompare(a, b));
+  // Ordem dos corredores: alfabetica natural (A, B, C... HUB, PC, Rua5, Sem corredor)
+  const corredorKeys = Object.keys(byCorredor).sort((a, b) => {
+    if (a === 'Sem corredor') return 1;
+    if (b === 'Sem corredor') return -1;
+    return naturalCompare(a, b);
+  });
 
-  if (sectorKeys.length === 0) {
+  if (corredorKeys.length === 0) {
     return (
       <div className="text-center py-12 bg-[#1e0f35] rounded-xl border border-purple-800/30">
         <p className="text-purple-300/50 text-sm">Nenhum stand no filtro atual</p>
@@ -5569,312 +5583,121 @@ function CorridorView({
     );
   }
 
-  // Estatísticas globais
+  // Estatisticas globais
   const totalBooths = booths.length;
   const totalVisited = booths.filter((b) => b.status === 'VISITADO').length;
   const globalPct = totalBooths > 0 ? Math.round((totalVisited / totalBooths) * 100) : 0;
 
-  // Paleta de cores por setor (rodízio)
-  const sectorPalette = [
-    { border: 'border-emerald-500/60', label: 'text-emerald-400', bg: 'bg-emerald-500/5', bar: 'bg-emerald-500' },
-    { border: 'border-cyan-500/60', label: 'text-cyan-400', bg: 'bg-cyan-500/5', bar: 'bg-cyan-500' },
-    { border: 'border-amber-500/60', label: 'text-amber-400', bg: 'bg-amber-500/5', bar: 'bg-amber-500' },
-    { border: 'border-pink-500/60', label: 'text-pink-400', bg: 'bg-pink-500/5', bar: 'bg-pink-500' },
-    { border: 'border-violet-500/60', label: 'text-violet-400', bg: 'bg-violet-500/5', bar: 'bg-violet-500' },
-    { border: 'border-orange-500/60', label: 'text-orange-400', bg: 'bg-orange-500/5', bar: 'bg-orange-500' },
-  ];
-
-  // Rua entre setores: assumimos corredores nomeados pelo setor origem → setor destino.
-  const ruaLabels = ['Rua Central', 'Rua Principal', 'Rua Norte', 'Rua Sul', 'Rua Leste'];
-
-  // Ícones por tipo de prospect (compacto)
-  const prospectIcon = (t?: string) => {
-    if (t === 'COMPRADOR') return '🛒';
-    if (t === 'FORNECEDOR') return '📦';
-    if (t === 'AMBOS') return '↔️';
-    return '';
-  };
-
-  // Primeira letra do nome para avatar
-  const initial = (name?: string | null) => (name || '?').trim().charAt(0).toUpperCase();
-
   return (
-    <div
-      className="relative rounded-xl border border-purple-800/30 p-4 sm:p-6 overflow-x-auto"
-      style={{
-        backgroundColor: '#1e0f35',
-        backgroundImage: `
-          linear-gradient(rgba(139, 92, 246, 0.06) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(139, 92, 246, 0.06) 1px, transparent 1px)
-        `,
-        backgroundSize: '24px 24px',
-      }}
-    >
-      {/* Header tipo "planta baixa" com stats */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5 relative z-10">
+    <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 sm:p-5 space-y-4">
+      {/* Header com stats globais */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-purple-800/30">
         <div className="flex items-center gap-2">
           <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
-          <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
-            Planta Baixa · Visão Geral
-          </h3>
+          <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Stands por Corredor</h3>
         </div>
         <div className="flex items-center gap-3 text-[10px]">
-          <div className="flex items-center gap-1.5">
-            <span className="text-purple-300/60">Stands:</span>
-            <span className="font-bold text-white">{totalBooths}</span>
-          </div>
-          <div className="h-3 w-px bg-purple-700/40" />
-          <div className="flex items-center gap-1.5">
-            <span className="text-purple-300/60">Visitados:</span>
-            <span className="font-bold text-emerald-400">{totalVisited}</span>
-          </div>
-          <div className="h-3 w-px bg-purple-700/40" />
-          <div className="flex items-center gap-1.5">
-            <span className="text-purple-300/60">Cobertura:</span>
-            <span className={`font-bold ${globalPct >= 80 ? 'text-emerald-400' : globalPct >= 50 ? 'text-amber-400' : 'text-purple-300'}`}>
-              {globalPct}%
-            </span>
-          </div>
+          <span><span className="text-purple-300/60">Total:</span> <span className="font-bold text-white">{totalBooths}</span></span>
+          <span className="text-purple-700/40">·</span>
+          <span><span className="text-purple-300/60">Visitados:</span> <span className="font-bold text-emerald-400">{totalVisited}</span></span>
+          <span className="text-purple-700/40">·</span>
+          <span><span className="text-purple-300/60">Cobertura:</span> <span className={`font-bold ${globalPct >= 80 ? 'text-emerald-400' : globalPct >= 50 ? 'text-amber-400' : 'text-purple-300'}`}>{globalPct}%</span></span>
         </div>
       </div>
 
-      {/* Barra de progresso global */}
-      <div className="mb-4 relative z-10">
-        <div className="w-full h-1.5 bg-purple-900/40 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all"
-            style={{ width: `${globalPct}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Entrada indicator */}
-      <div className="flex justify-center mb-4 relative z-10">
-        <div className="flex items-center gap-2 px-4 py-1.5 bg-emerald-500/10 border border-dashed border-emerald-500/40 rounded-full">
-          <svg className="w-3 h-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-          </svg>
-          <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Entrada Principal</span>
-        </div>
-      </div>
-
-      {/* Container das quadras (setores) */}
-      <div className="flex flex-wrap gap-x-8 gap-y-10 justify-center items-start min-w-min relative z-10">
-        {sectorKeys.map((sectorKey, sectorIdx) => {
-          const list = bySector[sectorKey];
-          const sectorVisited = list.filter((b) => b.status === 'VISITADO').length;
-          const palette = sectorPalette[sectorIdx % sectorPalette.length];
-          const isLast = sectorIdx === sectorKeys.length - 1;
+      {/* Lista de corredores (um por linha, horizontal) */}
+      <div className="space-y-4">
+        {corredorKeys.map((corredor) => {
+          const list = byCorredor[corredor];
+          const visited = list.filter((b) => b.status === 'VISITADO').length;
+          const pct = list.length > 0 ? Math.round((visited / list.length) * 100) : 0;
 
           return (
-            <div key={sectorKey} className="flex items-start gap-6">
-              {/* Bloco do setor (quadra) */}
-              <div
-                className={`relative flex-shrink-0 border-2 ${palette.border} ${palette.bg} rounded-xl p-3 pt-5 shadow-lg`}
+            <div key={corredor} className="border border-purple-800/30 rounded-lg bg-[#160a29]">
+              {/* Cabecalho do corredor */}
+              <button
+                type="button"
+                onClick={() => onSectorClick?.(corredor)}
+                className="w-full flex items-center justify-between gap-3 px-3 py-2 bg-[#2a1245]/40 hover:bg-[#2a1245]/70 transition-colors rounded-t-lg border-b border-purple-800/30"
+                title={`Filtrar por corredor ${corredor}`}
               >
-                {/* Label do setor (chapa na borda superior - clicável) */}
-                <button
-                  type="button"
-                  onClick={() => onSectorClick?.(sectorKey)}
-                  className="absolute -top-3 left-4 flex items-center gap-1.5 bg-[#1e0f35] px-2 py-0.5 rounded hover:bg-[#2a1245] transition-colors cursor-pointer"
-                  title={`Filtrar por ${sectorKey}`}
-                >
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${palette.label}`}>
-                    {sectorKey}
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-sm font-bold">
+                    {corredor.slice(0, 3)}
                   </span>
-                  <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-full">
-                    {sectorVisited}/{list.length}
-                  </span>
-                </button>
-
-                {/* Progress bar do setor */}
-                <div className="w-full h-0.5 bg-purple-900/60 rounded-full overflow-hidden mb-2 mt-0.5">
-                  <div
-                    className={`h-full ${palette.bar} transition-all`}
-                    style={{ width: `${list.length > 0 ? (sectorVisited / list.length) * 100 : 0}%` }}
-                  />
-                </div>
-
-                {/* Grid 2D de stands (2 colunas) */}
-                <div className="grid grid-cols-2 gap-2">
-                  {list.map((b) => {
-                    const isVisited = b.status === 'VISITADO';
-                    const facade = b.visit?.photo_facade_url;
-                    const visitorName = b.visit?.user_name;
-                    const contactName = b.visit?.contact_name;
-                    const pType = b.visit?.prospect_type;
-
-                    const isHighlighted = highlightBoothId === b.id;
-                    const isLive = recentBoothIds?.has(b.id) ?? false;
-                    return (
-                      <button
-                        key={b.id}
-                        id={`booth-card-${b.id}`}
-                        onClick={() => onBoothClick(b)}
-                        className={`group relative w-[132px] h-[96px] rounded-lg border-2 transition-all hover:scale-[1.06] hover:z-10 text-left overflow-hidden shadow-md hover:shadow-xl hover:shadow-emerald-500/10 ${
-                          isHighlighted
-                            ? 'border-yellow-300 ring-4 ring-yellow-400/60 scale-110 z-20 shadow-2xl shadow-yellow-500/40 animate-pulse'
-                            : isLive
-                            ? 'border-cyan-300 ring-2 ring-cyan-400/60 shadow-xl shadow-cyan-500/30'
-                            : isVisited
-                            ? 'border-emerald-400/80'
-                            : 'bg-[#2a1245] border-purple-500/40 hover:border-emerald-500/60 hover:bg-[#34165a]'
-                        }`}
-                        title={`${b.company_name}${b.booth_number ? ` — #${b.booth_number}` : ''}${visitorName ? ` · visitado por ${visitorName}` : ''}${isLive ? ' · VISITADO AGORA' : ''}`}
-                      >
-                        {/* Live indicator (visita nos últimos 5 min) */}
-                        {isLive && (
-                          <span className="absolute -top-1 -left-1 z-30 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400 border-2 border-[#1e0f35]"></span>
-                          </span>
-                        )}
-                        {/* Foto da fachada como background (visitado) */}
-                        {isVisited && facade && (
-                          <>
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={facade}
-                              alt={b.company_name}
-                              className="absolute inset-0 w-full h-full object-cover"
-                              loading="lazy"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent" />
-                          </>
-                        )}
-                        {/* Fallback visitado sem foto */}
-                        {isVisited && !facade && (
-                          <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/25 via-emerald-500/10 to-transparent" />
-                        )}
-
-                        {/* Badge número do stand (canto sup esquerdo) */}
-                        {b.booth_number && (
-                          <span
-                            className={`absolute top-1.5 left-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded shadow-md ${
-                              isVisited
-                                ? 'bg-emerald-500 text-white'
-                                : 'bg-purple-500/80 text-white backdrop-blur-sm'
-                            }`}
-                          >
-                            {b.booth_number}
-                          </span>
-                        )}
-
-                        {/* Check icon ou tipo prospect (canto sup direito) */}
-                        {isVisited ? (
-                          <span className="absolute top-1.5 right-1.5 flex items-center gap-0.5">
-                            {pType && (
-                              <span className="text-xs drop-shadow-md" title={PROSPECT_TYPE_LABELS[pType] || pType}>
-                                {prospectIcon(pType)}
-                              </span>
-                            )}
-                            <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center shadow-md">
-                              <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400/70 animate-pulse" title="Pendente" />
-                        )}
-
-                        {/* Botão expandir foto (visível em hover) */}
-                        {isVisited && facade && onOpenLightbox && (
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            onClick={(e) => { e.stopPropagation(); onOpenLightbox(b); }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onOpenLightbox(b); } }}
-                            className="absolute bottom-[30px] right-1.5 w-5 h-5 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                            title="Ver foto em tela cheia"
-                          >
-                            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-                            </svg>
-                          </span>
-                        )}
-
-                        {/* Rodapé: nome empresa + quem visitou */}
-                        <div className="absolute bottom-0 left-0 right-0 p-1.5 space-y-0.5">
-                          <p className={`text-[10px] font-bold leading-tight line-clamp-2 ${isVisited ? 'text-white drop-shadow-md' : 'text-white/90'}`}>
-                            {b.company_name}
-                          </p>
-                          {isVisited && (visitorName || contactName) && (
-                            <div className="flex items-center gap-1">
-                              {visitorName && (
-                                <span
-                                  className="w-3.5 h-3.5 rounded-full bg-emerald-500 text-[8px] font-bold text-white flex items-center justify-center shrink-0 border border-white/30"
-                                  title={`Visitado por ${visitorName}`}
-                                >
-                                  {initial(visitorName)}
-                                </span>
-                              )}
-                              {contactName && (
-                                <p className="text-[8px] text-white/80 truncate drop-shadow-md">
-                                  {contactName}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Rua (corredor) entre setores */}
-              {!isLast && (
-                <div className="hidden lg:flex flex-col items-center justify-center self-stretch min-h-[200px] relative">
-                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-[2px] border-l-2 border-dashed border-purple-600/40" />
-                  <div className="relative bg-[#1e0f35] px-1 py-2">
-                    <span className="text-[9px] font-bold text-purple-300/50 uppercase tracking-widest [writing-mode:vertical-rl] rotate-180">
-                      {ruaLabels[sectorIdx % ruaLabels.length]}
-                    </span>
+                  <div className="text-left">
+                    <div className="text-xs font-bold text-white uppercase tracking-wider">
+                      {corredor === 'Sem corredor' ? 'Sem numero' : `Corredor ${corredor}`}
+                    </div>
+                    <div className="text-[10px] text-purple-300/60">
+                      {list.length} stands · {visited} visitados · {pct}%
+                    </div>
                   </div>
                 </div>
-              )}
+                <div className="w-32 h-1 bg-purple-900/50 rounded-full overflow-hidden hidden sm:block">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </button>
+
+              {/* Fileira horizontal de stands (wrap quando passa da linha) */}
+              <div className="flex flex-wrap gap-1.5 p-2.5">
+                {list.map((b) => {
+                  const isVisited = b.status === 'VISITADO';
+                  const isHighlighted = highlightBoothId === b.id;
+                  const isLive = recentBoothIds?.has(b.id) ?? false;
+                  const label = b.booth_number || b.company_name.slice(0, 4);
+
+                  return (
+                    <button
+                      key={b.id}
+                      id={`booth-card-${b.id}`}
+                      type="button"
+                      onClick={() => onBoothClick(b)}
+                      title={`${b.company_name}${b.booth_number ? ` — ${b.booth_number}` : ''}${isLive ? ' · VISITADO AGORA' : ''}${isVisited ? ' · visitado' : ' · pendente'}`}
+                      className={`relative min-w-[56px] h-10 px-2 rounded-md text-[11px] font-bold transition-all hover:scale-110 hover:z-10 flex items-center justify-center ${
+                        isHighlighted
+                          ? 'bg-yellow-400 text-black ring-2 ring-yellow-200 scale-110 z-20 animate-pulse'
+                          : isLive
+                          ? 'bg-cyan-500 text-white ring-2 ring-cyan-300'
+                          : isVisited
+                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                          : 'bg-[#2a1245] text-purple-200 border border-purple-700/40 hover:border-emerald-500/60 hover:bg-[#34165a]'
+                      }`}
+                    >
+                      <span className="truncate max-w-full">{label}</span>
+                      {isVisited && (
+                        <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-400 border border-[#1e0f35] flex items-center justify-center">
+                          <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        </span>
+                      )}
+                      {isLive && !isVisited && (
+                        <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400 border border-[#1e0f35]" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           );
         })}
       </div>
 
       {/* Legenda */}
-      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-6 pt-4 border-t border-purple-800/30 relative z-10">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded border border-purple-500/40 bg-[#2a1245] relative">
-            <div className="absolute top-0 right-0 w-1 h-1 rounded-full bg-amber-400/70" />
-          </div>
-          <span className="text-[10px] text-purple-300/60">Pendente</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded border border-emerald-400/80 bg-gradient-to-br from-emerald-500/40 to-emerald-500/10 relative">
-            <div className="absolute top-0 right-0 w-1 h-1 rounded-full bg-emerald-400" />
-          </div>
-          <span className="text-[10px] text-purple-300/60">Visitado</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px]">🛒</span>
-          <span className="text-[10px] text-purple-300/60">Comprador</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px]">📦</span>
-          <span className="text-[10px] text-purple-300/60">Fornecedor</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px]">↔️</span>
-          <span className="text-[10px] text-purple-300/60">Ambos</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full bg-emerald-500 text-[7px] font-bold text-white flex items-center justify-center border border-white/30">J</span>
-          <span className="text-[10px] text-purple-300/60">Quem visitou</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-purple-300/40">
-          <div className="w-4 border-t-2 border-dashed border-purple-600/40" />
-          <span className="text-[10px]">Rua / Corredor</span>
-        </div>
+      <div className="flex flex-wrap items-center justify-center gap-4 pt-3 border-t border-purple-800/30 text-[10px] text-purple-300/60">
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-[#2a1245] border border-purple-700/40" />Pendente</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-500" />Visitado</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-cyan-500" />Visitado agora</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-yellow-400" />Destacado</span>
       </div>
     </div>
   );
