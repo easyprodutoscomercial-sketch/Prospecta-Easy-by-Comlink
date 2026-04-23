@@ -651,6 +651,8 @@ export interface EventBooth {
   logo_url: string | null;
   website: string | null;
   external_id: string | null;
+  zapt_id: string | null;
+  polygon: number[][][] | null;
   created_at: string;
   updated_at: string;
   // joined

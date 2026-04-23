@@ -1269,6 +1269,7 @@ function BoothDrawer({
   const [selectedQrIdx, setSelectedQrIdx] = useState(0);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
+  const [qrSetupUrl, setQrSetupUrl] = useState<string | null>(null);
   const [qrCopied, setQrCopied] = useState(false);
 
   // Fetch or auto-create contact on mount
@@ -1370,11 +1371,16 @@ function BoothDrawer({
 
   // QR handlers
   const handleFetchQR = async () => {
-    setQrLoading(true); setQrError(null);
+    setQrLoading(true); setQrError(null); setQrSetupUrl(null);
     try {
       const res = await fetch(`/api/events/${eventId}/booths/${booth.id}/qr-link`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) { setQrError(data.error || 'Erro'); return; }
+      if (data.needs_setup || !data.links?.length) {
+        setQrError(data.error || 'Nenhum QR Code configurado');
+        setQrSetupUrl(data.setup_url || '/settings#qr-codes');
+        return;
+      }
       setQrLinks(data.links); setSelectedQrIdx(0);
       const QRCode = (await import('qrcode')).default;
       setQrDataUrl(await QRCode.toDataURL(data.links[0].url, { width: 300, margin: 2, color: { dark: '#000000', light: '#ffffff' } }));
@@ -1637,7 +1643,17 @@ function BoothDrawer({
           {/* QR Code section */}
           <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 space-y-3">
             <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">QR Code para Captura</h4>
-            {qrError && <div className="p-2 rounded-lg bg-red-500/15 text-red-400 text-xs border border-red-500/20">{qrError}</div>}
+            {qrError && (
+              <div className="p-3 rounded-lg bg-amber-500/10 text-amber-200 text-xs border border-amber-500/30 space-y-2">
+                <p>{qrError}</p>
+                {qrSetupUrl && (
+                  <a href={qrSetupUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 rounded-md font-semibold transition-colors">
+                    Criar QR Code agora
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  </a>
+                )}
+              </div>
+            )}
             {qrLinks.length === 0 ? (
               <button type="button" onClick={handleFetchQR} disabled={qrLoading} className="w-full py-2.5 bg-purple-600 text-white rounded-lg font-medium text-sm hover:bg-purple-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
                 {qrLoading ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Buscando...</> : 'Mostrar QR Code'}
@@ -2831,11 +2847,13 @@ function CheckInForm({
   const [selectedQrIdx, setSelectedQrIdx] = useState(0);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrError, setQrError] = useState<string | null>(null);
+  const [qrSetupUrl, setQrSetupUrl] = useState<string | null>(null);
   const [qrCopied, setQrCopied] = useState(false);
 
   const handleFetchQR = async () => {
     setQrLoading(true);
     setQrError(null);
+    setQrSetupUrl(null);
     try {
       const res = await fetch(`/api/events/${eventId}/booths/${booth.id}/qr-link`, {
         method: 'POST',
@@ -2845,9 +2863,13 @@ function CheckInForm({
         setQrError(data.error || 'Erro ao buscar QR Codes');
         return;
       }
+      if (data.needs_setup || !data.links?.length) {
+        setQrError(data.error || 'Nenhum QR Code configurado');
+        setQrSetupUrl(data.setup_url || '/settings#qr-codes');
+        return;
+      }
       setQrLinks(data.links);
       setSelectedQrIdx(0);
-      // Generate QR for the first link
       const QRCode = (await import('qrcode')).default;
       const dataUrl = await QRCode.toDataURL(data.links[0].url, {
         width: 300,
@@ -3106,8 +3128,14 @@ function CheckInForm({
         </p>
 
         {qrError && (
-          <div className="p-2 rounded-lg bg-red-500/15 text-red-400 text-xs border border-red-500/20">
-            {qrError}
+          <div className="p-3 rounded-lg bg-amber-500/10 text-amber-200 text-xs border border-amber-500/30 space-y-2">
+            <p>{qrError}</p>
+            {qrSetupUrl && (
+              <a href={qrSetupUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-100 rounded-md font-semibold transition-colors">
+                Criar QR Code agora
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+              </a>
+            )}
           </div>
         )}
 
@@ -5357,6 +5385,13 @@ function MapTab({
         <div className="text-center py-16 bg-[#1e0f35] rounded-xl border border-purple-800/30">
           <p className="text-purple-300/50 text-sm">Nenhum stand cadastrado neste evento</p>
         </div>
+      ) : booths.some((b) => b.polygon && b.polygon.length) ? (
+        <PolygonMapView
+          booths={filteredBooths}
+          highlightBoothId={highlightBoothId}
+          recentBoothIds={recentBoothIdSet}
+          onBoothClick={(b) => setSelectedBooth(b)}
+        />
       ) : mapUrl ? (
         <MapImageView
           mapUrl={mapUrl}
@@ -5848,6 +5883,172 @@ function CorridorView({
           <span className="text-[10px]">Rua / Corredor</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// --- Polygon Map View (desenha o layout oficial via polygons da Zapt) ---
+function PolygonMapView({
+  booths,
+  highlightBoothId,
+  recentBoothIds,
+  onBoothClick,
+}: {
+  booths: EventBooth[];
+  highlightBoothId?: string | null;
+  recentBoothIds?: Set<string>;
+  onBoothClick: (b: EventBooth) => void;
+}) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const withPolygon = booths.filter((b) => b.polygon && b.polygon.length);
+  const withPointOnly = booths.filter(
+    (b) => (!b.polygon || !b.polygon.length) && b.position_x != null && b.position_y != null
+  );
+
+  // Converte [[[x,y],[x,y]],...] em string "x1,y1 x2,y2 ..." (primeiro ponto de cada segmento).
+  function polygonToPoints(poly: number[][][] | null): string {
+    if (!poly || !poly.length) return '';
+    const pts: [number, number][] = [];
+    for (const seg of poly) {
+      if (!Array.isArray(seg) || !seg.length) continue;
+      const first = seg[0];
+      if (Array.isArray(first) && first.length >= 2) pts.push([first[0], first[1]]);
+    }
+    return pts.map((p) => `${p[0]},${p[1]}`).join(' ');
+  }
+
+  // Calcular viewBox real a partir dos polygons + pins pra caber tudo
+  let minX = 100, maxX = 0, minY = 100, maxY = 0;
+  for (const b of booths) {
+    if (b.polygon) {
+      for (const seg of b.polygon) {
+        for (const pt of seg) {
+          if (Array.isArray(pt) && pt.length >= 2) {
+            if (pt[0] < minX) minX = pt[0];
+            if (pt[0] > maxX) maxX = pt[0];
+            if (pt[1] < minY) minY = pt[1];
+            if (pt[1] > maxY) maxY = pt[1];
+          }
+        }
+      }
+    } else if (b.position_x != null && b.position_y != null) {
+      if (b.position_x < minX) minX = b.position_x;
+      if (b.position_x > maxX) maxX = b.position_x;
+      if (b.position_y < minY) minY = b.position_y;
+      if (b.position_y > maxY) maxY = b.position_y;
+    }
+  }
+  // Margem interna de 1 unidade
+  minX = Math.max(0, minX - 1);
+  minY = Math.max(0, minY - 1);
+  maxX = Math.min(100, maxX + 1);
+  maxY = Math.min(100, maxY + 1);
+  const vbW = maxX - minX;
+  const vbH = maxY - minY;
+  const viewBox = `${minX} ${minY} ${vbW} ${vbH}`;
+
+  // Cores por status
+  function fillFor(b: EventBooth) {
+    const isHighlighted = highlightBoothId === b.id;
+    const isLive = recentBoothIds?.has(b.id) ?? false;
+    const isHovered = hoveredId === b.id;
+    if (isHighlighted) return { fill: '#facc15', stroke: '#fef08a', opacity: 1 }; // yellow
+    if (isLive) return { fill: '#06b6d4', stroke: '#a5f3fc', opacity: 1 }; // cyan
+    if (b.status === 'VISITADO') return { fill: '#10b981', stroke: '#6ee7b7', opacity: isHovered ? 0.95 : 0.78 };
+    return { fill: '#7c3aed', stroke: '#c4b5fd', opacity: isHovered ? 0.95 : 0.62 };
+  }
+
+  return (
+    <div className="relative bg-[#120826] rounded-xl border border-purple-800/30 overflow-hidden">
+      <div className="absolute top-3 left-3 z-20 bg-[#1e0f35]/90 backdrop-blur-sm border border-purple-700/30 rounded-lg px-3 py-2 text-[10px] text-purple-200 shadow-lg">
+        <div className="flex items-center gap-3 flex-wrap">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-500" />Visitado</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-purple-600" />Pendente</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-cyan-500" />Agora</span>
+          <span className="text-purple-400/60">·</span>
+          <span className="text-purple-300/60">{withPolygon.length} stands · clique pra abrir</span>
+        </div>
+      </div>
+      {hoveredId && (() => {
+        const b = booths.find((x) => x.id === hoveredId);
+        if (!b) return null;
+        return (
+          <div className="absolute top-3 right-3 z-20 bg-[#1e0f35]/95 backdrop-blur-sm border border-purple-700/30 rounded-lg px-3 py-2 text-xs text-white shadow-xl max-w-[240px]">
+            <div className="font-bold truncate">{b.company_name}</div>
+            {b.booth_number && <div className="text-[11px] text-purple-300/70">Stand {b.booth_number}{b.sector ? ` · ${b.sector}` : ''}</div>}
+            <div className="text-[10px] mt-1 text-purple-300/50">{b.status === 'VISITADO' ? 'Visitado' : 'Pendente'}</div>
+          </div>
+        );
+      })()}
+      <svg
+        viewBox={viewBox}
+        preserveAspectRatio="xMidYMid meet"
+        className="w-full"
+        style={{ height: 'calc(100vh - 280px)', minHeight: 420, background: '#120826' }}
+      >
+        {/* Polygons (stands com forma) */}
+        {withPolygon.map((b) => {
+          const points = polygonToPoints(b.polygon);
+          if (!points) return null;
+          const s = fillFor(b);
+          const label = b.booth_number || '';
+          const isHovered = hoveredId === b.id;
+          return (
+            <g
+              key={b.id}
+              id={`booth-card-${b.id}`}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHoveredId(b.id)}
+              onMouseLeave={() => setHoveredId(null)}
+              onClick={() => onBoothClick(b)}
+            >
+              <polygon
+                points={points}
+                fill={s.fill}
+                stroke={s.stroke}
+                strokeWidth={isHovered ? 0.25 : 0.1}
+                fillOpacity={s.opacity}
+              />
+              {label && vbW < 60 && (
+                <text
+                  x={b.position_x ?? 0}
+                  y={b.position_y ?? 0}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={0.8}
+                  fill="#fff"
+                  fontWeight="bold"
+                  style={{ pointerEvents: 'none', userSelect: 'none' }}
+                >
+                  {label.slice(0, 5)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+        {/* Pins (stands sem polygon) */}
+        {withPointOnly.map((b) => {
+          const s = fillFor(b);
+          const isHovered = hoveredId === b.id;
+          return (
+            <circle
+              key={b.id}
+              id={`booth-card-${b.id}`}
+              cx={b.position_x ?? 0}
+              cy={b.position_y ?? 0}
+              r={isHovered ? 0.9 : 0.6}
+              fill={s.fill}
+              stroke={s.stroke}
+              strokeWidth={0.15}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={() => setHoveredId(b.id)}
+              onMouseLeave={() => setHoveredId(null)}
+              onClick={() => onBoothClick(b)}
+            />
+          );
+        })}
+      </svg>
     </div>
   );
 }

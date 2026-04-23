@@ -270,7 +270,7 @@ mini-crm/
 
 #### Eventos/Feiras
 - `events` — feiras (status: RASCUNHO, ATIVO, ENCERRADO), tem `map_url`, `pipeline_id`, `stage_id`, `cover_image_url`
-- `event_booths` — stands com `position_x/y` (% no mapa), status, sector
+- `event_booths` — stands com `position_x/y` (% no mapa), status, sector, `polygon JSONB` (forma do stand em % 0-100 — array de segmentos `[[[x,y],[x,y]],...]` do mapa oficial Zapt), `zapt_id` (id do stand no sistema Zapt pra resync)
 - `booth_visits` — check-ins com `photo_facade_url`, `photo_contact_url`, `prospect_type`
 
 #### Quiz Feira
@@ -565,6 +565,15 @@ Em `lib/ai/rules-engine.ts`:
 - **Uso:** busca web para enriquecimento (em `lib/ai/web-search.ts`)
 - **Env:** `SERPER_API_KEY`
 - **Status:** opcional, funciona sem
+
+### Zapt Maps (api.zapt.tech) — **Scrape one-shot, sem auth**
+
+- **Uso:** importar posicao + polygon dos stands do mapa oficial de feiras que usam Zapt (Agrishow 2026 usa). Fornece layout visual do pavilhao dentro do Controlei.
+- **Endpoint publico:** `GET https://api.zapt.tech/api/v1/locals/{placeId}/interests?limit=5000` (sem auth, sem token).
+- **Place ID** extraido da URL do mapa oficial (`https://maps.zapt.tech/#/place/{placeId}/map/0`). Agrishow 2026 = `-on2scahel17oa-ofwcr`.
+- **Scripts de integracao:** `scripts/scrape-zapt-stands.mjs` (baixa), `scripts/cross-zapt-swapcard.mjs` (cruza por `externalId`/swapcard_id), `scripts/apply-zapt-positions.mjs` + `scripts/apply-zapt-polygons.mjs` (popula `event_booths`).
+- **Componente:** `PolygonMapView` em `app/(dashboard)/eventos/[id]/page.tsx` — SVG que renderiza polygons como mapa interativo. Ativa automaticamente quando ao menos 1 booth tem polygon; caso contrario cai em `MapImageView` (imagem de fundo) ou `CorridorView` (lista por setor).
+- **Risco:** se a Zapt mudar a API, scrape quebra. Sem auto-sync — precisa rodar os scripts de novo manualmente.
 
 ### Supabase
 
