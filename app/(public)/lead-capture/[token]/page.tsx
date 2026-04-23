@@ -65,6 +65,12 @@ function LeadCapturePageInner() {
   const [submitMessage, setSubmitMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [whatsappVendedor, setWhatsappVendedor] = useState<string | null>(null);
+  const [debugLog, setDebugLog] = useState<string[]>([]);
+  const addDebug = (msg: string) => {
+    const ts = new Date().toLocaleTimeString();
+    setDebugLog((prev) => [...prev, `[${ts}] ${msg}`]);
+    console.log(`[lead-capture:debug] ${msg}`);
+  };
 
   // localStorage prefill
   const [prefilled, setPrefilled] = useState(false);
@@ -259,31 +265,48 @@ function LeadCapturePageInner() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    addDebug(`Submit clicado. nome=${name.trim()}, phone=${phone.trim()}, email=${email.trim() || '(vazio)'}, event=${eventId || '(sem)'}, booth=${boothId || '(sem)'}`);
+
+    if (!validate()) {
+      addDebug(`VALIDACAO FALHOU: ${JSON.stringify(fieldErrors)}`);
+      return;
+    }
+    addDebug('Validacao OK, enviando para /api/lead-capture...');
 
     setSubmitting(true);
     try {
+      const payload = {
+        token,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
+        company: company.trim() || undefined,
+        cargo: cargo.trim() || undefined,
+        notes: notes.trim() || undefined,
+        cidade: cidade.trim() || undefined,
+        estado: estado.trim() || undefined,
+        event_id: eventId || undefined,
+        booth_id: boothId || undefined,
+      };
+      addDebug(`POST enviado. URL=/api/lead-capture, body.length=${JSON.stringify(payload).length}`);
+
       const res = await fetch('/api/lead-capture', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          token,
-          name: name.trim(),
-          phone: phone.trim(),
-          email: email.trim() || undefined,
-          company: company.trim() || undefined,
-          cargo: cargo.trim() || undefined,
-          notes: notes.trim() || undefined,
-          cidade: cidade.trim() || undefined,
-          estado: estado.trim() || undefined,
-          event_id: eventId || undefined,
-          booth_id: boothId || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
+      addDebug(`Resposta recebida. HTTP=${res.status} ${res.statusText}`);
 
-      const data = await res.json();
+      const rawText = await res.text();
+      addDebug(`Body bruto (primeiros 200 chars): ${rawText.slice(0, 200)}`);
+
+      let data: any = {};
+      try { data = JSON.parse(rawText); } catch (parseErr) {
+        addDebug(`ERRO ao fazer parse do JSON: ${String(parseErr)}`);
+      }
 
       if (res.ok || data.success) {
+        addDebug('SUCESSO! Gravando localStorage e mostrando tela de obrigado.');
         localStorage.setItem('lead_capture_data', JSON.stringify({
           name: name.trim(),
           phone: phone.trim(),
@@ -298,12 +321,15 @@ function LeadCapturePageInner() {
         setSubmitMessage(data.message || 'Dados registrados com sucesso!');
         setSubmitted(true);
       } else {
-        setFieldErrors({ form: data.error || 'Erro ao enviar dados' });
+        addDebug(`RESPOSTA COM ERRO. status=${res.status}, error=${data.error || '(sem error)'}, debug_code=${data.debug_code || '-'}, debug_hint=${data.debug_hint || '-'}`);
+        setFieldErrors({ form: data.error || `Erro ${res.status}: ao enviar dados` });
       }
-    } catch {
-      setFieldErrors({ form: 'Erro de conexao. Tente novamente.' });
+    } catch (err: any) {
+      addDebug(`EXCECAO (fetch falhou): ${err?.message || String(err)}`);
+      setFieldErrors({ form: `Erro de conexao: ${err?.message || 'desconhecido'}` });
     } finally {
       setSubmitting(false);
+      addDebug('Submit finalizado.');
     }
   };
 
@@ -740,6 +766,19 @@ function LeadCapturePageInner() {
             Ao enviar, voce autoriza o contato comercial por telefone, WhatsApp ou email.
           </p>
         </form>
+
+        {/* Debug log (visivel em tela pra troubleshoot mobile) */}
+        {debugLog.length > 0 && (
+          <div className="mt-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-1 text-[10px] font-mono text-amber-200 max-h-64 overflow-y-auto">
+            <div className="font-bold mb-1 text-amber-100 flex items-center justify-between">
+              <span>Log de envio (debug)</span>
+              <button type="button" onClick={() => setDebugLog([])} className="text-[9px] bg-amber-500/30 px-2 py-0.5 rounded">limpar</button>
+            </div>
+            {debugLog.map((line, i) => (
+              <div key={i} className="break-all">{line}</div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
