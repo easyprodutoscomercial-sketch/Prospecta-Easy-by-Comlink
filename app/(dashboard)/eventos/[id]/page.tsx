@@ -5589,20 +5589,20 @@ function CorridorView({
   const globalPct = totalBooths > 0 ? Math.round((totalVisited / totalBooths) * 100) : 0;
 
   return (
-    <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 sm:p-5 space-y-4">
+    <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-3 sm:p-5 space-y-3 sm:space-y-4">
       {/* Header com stats globais */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-purple-800/30">
         <div className="flex items-center gap-2">
-          <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
-          <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Stands por Corredor</h3>
+          <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest truncate">Stands por Corredor</h3>
         </div>
-        <div className="flex items-center gap-3 text-[10px]">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
           <span><span className="text-purple-300/60">Total:</span> <span className="font-bold text-white">{totalBooths}</span></span>
-          <span className="text-purple-700/40">·</span>
+          <span className="text-purple-700/40 hidden sm:inline">·</span>
           <span><span className="text-purple-300/60">Visitados:</span> <span className="font-bold text-emerald-400">{totalVisited}</span></span>
-          <span className="text-purple-700/40">·</span>
+          <span className="text-purple-700/40 hidden sm:inline">·</span>
           <span><span className="text-purple-300/60">Cobertura:</span> <span className={`font-bold ${globalPct >= 80 ? 'text-emerald-400' : globalPct >= 50 ? 'text-amber-400' : 'text-purple-300'}`}>{globalPct}%</span></span>
         </div>
       </div>
@@ -5620,23 +5620,24 @@ function CorridorView({
               <button
                 type="button"
                 onClick={() => onSectorClick?.(corredor)}
-                className="w-full flex items-center justify-between gap-3 px-3 py-2 bg-[#2a1245]/40 hover:bg-[#2a1245]/70 transition-colors rounded-t-lg border-b border-purple-800/30"
+                className="w-full flex items-center justify-between gap-2 sm:gap-3 px-2.5 sm:px-3 py-2 bg-[#2a1245]/40 hover:bg-[#2a1245]/70 transition-colors rounded-t-lg border-b border-purple-800/30"
                 title={`Filtrar por corredor ${corredor}`}
               >
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-sm font-bold">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-sm font-bold shrink-0">
                     {corredor.slice(0, 3)}
                   </span>
-                  <div className="text-left">
-                    <div className="text-xs font-bold text-white uppercase tracking-wider">
+                  <div className="text-left min-w-0 flex-1">
+                    <div className="text-xs font-bold text-white uppercase tracking-wider truncate">
                       {corredor === 'Sem corredor' ? 'Sem numero' : `Corredor ${corredor}`}
                     </div>
-                    <div className="text-[10px] text-purple-300/60">
-                      {list.length} stands · {visited} visitados · {pct}%
+                    <div className="text-[10px] text-purple-300/60 truncate">
+                      <span className="sm:hidden">{list.length} · {visited}/{list.length} · {pct}%</span>
+                      <span className="hidden sm:inline">{list.length} stands · {visited} visitados · {pct}%</span>
                     </div>
                   </div>
                 </div>
-                <div className="w-32 h-1 bg-purple-900/50 rounded-full overflow-hidden hidden sm:block">
+                <div className="w-20 md:w-32 h-1 bg-purple-900/50 rounded-full overflow-hidden hidden sm:block shrink-0">
                   <div
                     className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all"
                     style={{ width: `${pct}%` }}
@@ -5645,7 +5646,7 @@ function CorridorView({
               </button>
 
               {/* Fileira horizontal de stands (wrap quando passa da linha) */}
-              <div className="flex flex-wrap gap-2 p-3">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2 p-2 sm:p-3">
                 {list.map((b) => {
                   const isVisited = b.status === 'VISITADO';
                   const isHighlighted = highlightBoothId === b.id;
@@ -5660,7 +5661,7 @@ function CorridorView({
                       type="button"
                       onClick={() => onBoothClick(b)}
                       title={`${b.company_name}${b.booth_number ? ` — ${b.booth_number}` : ''}${isLive ? ' · VISITADO AGORA' : ''}${isVisited ? ' · visitado' : ' · pendente'}`}
-                      className={`group relative w-[84px] h-[84px] rounded-lg transition-all hover:scale-110 hover:z-10 overflow-hidden flex flex-col shadow-sm ${
+                      className={`group relative w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] md:w-[84px] md:h-[84px] rounded-lg transition-all hover:scale-110 hover:z-10 overflow-hidden flex flex-col shadow-sm ${
                         isHighlighted
                           ? 'ring-4 ring-yellow-300 scale-110 z-20 animate-pulse'
                           : isLive
