@@ -1625,9 +1625,12 @@ function BoothDrawer({
                   {contact.cargo && <p className="text-xs text-purple-300/50">Cargo: {contact.cargo}</p>}
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => window.open(`/contacts?id=${contact.id}`, '_blank')} className="flex-1 px-3 py-2 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-500/25 transition-colors text-center">
+                  <a
+                    href={`/contacts/${contact.id}`}
+                    className="flex-1 px-3 py-2 bg-emerald-500/15 text-emerald-400 rounded-lg text-xs font-medium hover:bg-emerald-500/25 transition-colors text-center"
+                  >
                     Abrir Contato
-                  </button>
+                  </a>
                   {contact.phone && (
                     <a href={`https://wa.me/${contact.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="px-3 py-2 bg-green-500/15 text-green-400 rounded-lg text-xs font-medium hover:bg-green-500/25 transition-colors">
                       WhatsApp
