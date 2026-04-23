@@ -29,7 +29,7 @@ export async function GET() {
       .order('meeting_at', { ascending: true });
 
     if (!meetings || meetings.length === 0) {
-      return new Response('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ProspectaEasy//CRM//PT\r\nEND:VCALENDAR', {
+      return new Response('BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ControleiEasy//CRM//PT\r\nEND:VCALENDAR', {
         headers: {
           'Content-Type': 'text/calendar; charset=utf-8',
           'Content-Disposition': 'attachment; filename="reunioes.ics"',
@@ -43,7 +43,7 @@ export async function GET() {
     const contactMap: Record<string, string> = {};
     for (const c of contacts || []) contactMap[c.id] = c.name;
 
-    let ical = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ProspectaEasy//CRM//PT\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n';
+    let ical = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//ControleiEasy//CRM//PT\r\nCALSCALE:GREGORIAN\r\nMETHOD:PUBLISH\r\n';
 
     for (const m of meetings) {
       const start = toIcalDate(m.meeting_at);
@@ -54,7 +54,7 @@ export async function GET() {
       const description = escapeIcal([contactName ? `Contato: ${contactName}` : '', m.notes || ''].filter(Boolean).join('\\n'));
 
       ical += 'BEGIN:VEVENT\r\n';
-      ical += `UID:${m.id}@prospectaeasy\r\n`;
+      ical += `UID:${m.id}@controleieasy\r\n`;
       ical += `DTSTART:${start}\r\n`;
       ical += `DTEND:${end}\r\n`;
       ical += `SUMMARY:${summary}\r\n`;

@@ -25,7 +25,7 @@ export async function sendPushToUser(
 
   const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
   const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
-  const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@prospecta.easy';
+  const vapidEmail = process.env.VAPID_EMAIL || 'mailto:admin@controleieasy.app';
 
   if (!vapidPublic || !vapidPrivate) {
     console.warn('VAPID keys not configured. Skipping push.');

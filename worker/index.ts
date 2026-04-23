@@ -16,7 +16,7 @@ self.addEventListener('push', (event) => {
       badge: '/icons/icon-96x96.png',
       data: { url: url || '/' },
       vibrate: [200, 100, 200],
-      tag: `prospecta-${Date.now()}`,
+      tag: `controleieasy-${Date.now()}`,
       renotify: true,
     };
 

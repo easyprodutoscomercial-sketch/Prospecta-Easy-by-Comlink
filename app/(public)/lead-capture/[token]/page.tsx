@@ -187,7 +187,7 @@ function LeadCapturePageInner() {
           const { latitude, longitude } = position.coords;
           const res = await fetch(
             `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=pt-BR`,
-            { headers: { 'User-Agent': 'ProspectaEasy/1.0' } }
+            { headers: { 'User-Agent': 'ControleiEasy/1.0' } }
           );
           const data = await res.json();
           if (data.address) {
@@ -464,6 +464,15 @@ function LeadCapturePageInner() {
         className="hidden"
         onChange={handleFileSelected}
       />
+
+      {/* Logo bar */}
+      <div className="bg-white py-3 px-4 flex items-center justify-center gap-4 border-b border-neutral-200">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo do controlei.png" alt="Controlei" className="h-8 object-contain" />
+        <span className="text-neutral-300 text-lg font-light">·</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo_easy_comlink_200px.png" alt="Easy by Comlink" className="h-8 object-contain" />
+      </div>
 
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-4 py-5">
