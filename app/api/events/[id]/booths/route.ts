@@ -116,7 +116,7 @@ export async function POST(
         return NextResponse.json({ error: 'Nenhum stand cadastrado' }, { status: 400 });
       }
 
-      // Buscar booth_ids que ja tem contato vinculado
+      // TRAVA 1: Booth com booth_visit vinculado a contato
       const { data: existingVisits } = await admin
         .from('booth_visits')
         .select('booth_id')
@@ -124,10 +124,34 @@ export async function POST(
         .not('contact_id', 'is', null);
 
       const boothsWithContact = new Set((existingVisits || []).map((v: any) => v.booth_id));
-      const boothsToCreate = allBooths.filter((b: any) => !boothsWithContact.has(b.id));
+
+      // TRAVA 2: Contato ja existe no evento com mesmo company_name
+      // (cobre o caso onde visit foi orfanado por delete do contato anterior)
+      const { data: existingContacts } = await admin
+        .from('contacts')
+        .select('company')
+        .eq('organization_id', profile.organization_id)
+        .eq('event_id', id);
+
+      const companiesWithContact = new Set(
+        (existingContacts || [])
+          .map((c: any) => (c.company || '').toLowerCase().trim())
+          .filter(Boolean)
+      );
+
+      const boothsToCreate = allBooths.filter((b: any) => {
+        if (boothsWithContact.has(b.id)) return false; // ja tem visit vinculado
+        const companyKey = (b.company_name || '').toLowerCase().trim();
+        if (companiesWithContact.has(companyKey)) return false; // ja tem contato desta empresa
+        return true;
+      });
 
       if (boothsToCreate.length === 0) {
-        return NextResponse.json({ message: 'Todos os stands ja tem contatos criados', created: 0 });
+        return NextResponse.json({
+          message: 'Todos os stands ja tem contatos criados',
+          created: 0,
+          skipped: allBooths.length,
+        });
       }
 
       // Buscar primeiro stage do pipeline
