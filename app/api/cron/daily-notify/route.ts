@@ -138,10 +138,15 @@ function getGenericTip(c: PendingContact): string {
 // Roda de 1 em 1 hora. IA analisa contatos e envia dicas personalizadas.
 export async function GET(request: NextRequest) {
   try {
-    const secret = request.nextUrl.searchParams.get('secret');
     const cronSecret = process.env.CRON_SECRET;
-
-    if (cronSecret && secret !== cronSecret) {
+    if (!cronSecret) {
+      console.error('[cron] CRON_SECRET nao configurada — abortando pra evitar abuso');
+      return NextResponse.json({ error: 'CRON_SECRET obrigatorio' }, { status: 500 });
+    }
+    // Aceita secret via ?secret=X (legado) OU Authorization: Bearer X (padrao Vercel Cron)
+    const secret = request.nextUrl.searchParams.get('secret') ||
+                   request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+    if (secret !== cronSecret) {
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 

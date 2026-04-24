@@ -202,7 +202,7 @@ export async function POST(request: NextRequest) {
       // NAO encontrou contato existente pelo booth.
       // Antes de criar novo, checar se ja existe contato na org com mesmo phone/email.
       // Isso evita violar idx_contacts_unique_phone / idx_contacts_unique_email.
-      console.log('[lead-capture] Buscando duplicates por phone/email', { phoneNormalized, emailNormalized, org: link.organization_id });
+      console.log('[lead-capture] Buscando duplicates', { hasPhone: !!phoneNormalized, hasEmail: !!emailNormalized, org: link.organization_id });
       let duplicateContact: { id: string } | null = null;
       if (phoneNormalized) {
         const { data } = await admin
@@ -284,7 +284,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Link sem dono configurado' }, { status: 500 });
       }
 
-      console.log('[lead-capture] Criando novo contato', { name: name.trim(), phoneNormalized, event_id, booth_id });
+      console.log('[lead-capture] Criando novo contato', { event_id, booth_id, org: link.organization_id });
       const boothCompany = booth?.company_name || company?.trim() || null;
 
       const newContactData: Record<string, any> = {

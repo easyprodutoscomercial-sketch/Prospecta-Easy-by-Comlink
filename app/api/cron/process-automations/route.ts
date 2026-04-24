@@ -1,13 +1,29 @@
 import { getAdminClient } from '@/lib/supabase/admin';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { processTimeBasedRules } from '@/lib/automations/engine';
 
+function assertCronAuth(request: NextRequest): NextResponse | null {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) {
+    console.error('[cron] CRON_SECRET nao configurada — abortando pra evitar abuso');
+    return NextResponse.json({ error: 'CRON_SECRET obrigatorio' }, { status: 500 });
+  }
+  const secret = request.nextUrl.searchParams.get('secret') ||
+                 request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
+  if (secret !== cronSecret) {
+    return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
+  }
+  return null;
+}
+
 // POST /api/cron/process-automations — called by Vercel cron every 2 hours
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const authErr = assertCronAuth(request);
+  if (authErr) return authErr;
+
   try {
     const admin = getAdminClient();
 
-    // Fetch all organizations
     const { data: orgs } = await admin.from('organizations').select('id');
     if (!orgs || orgs.length === 0) {
       return NextResponse.json({ message: 'No organizations', executed: 0 });
@@ -27,6 +43,6 @@ export async function POST() {
 }
 
 // Also support GET for Vercel cron
-export async function GET() {
-  return POST();
+export async function GET(request: NextRequest) {
+  return POST(request);
 }

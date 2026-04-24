@@ -297,9 +297,8 @@ export async function POST(request: NextRequest) {
     const admin = getAdminClient();
     const body = await request.json();
 
-    console.log('[API CONTACTS POST] Body recebido:', JSON.stringify(body, null, 2));
-    console.log('[API CONTACTS POST] CPF:', body.cpf, '| CNPJ:', body.cnpj);
-    console.log('[API CONTACTS POST] CPF digits:', (body.cpf || '').replace(/\D/g, '').length, '| CNPJ digits:', (body.cnpj || '').replace(/\D/g, '').length);
+    // Log sem dados sensiveis (nao vazar PII em logs do Vercel)
+    console.log('[API CONTACTS POST] Body recebido. fields=', Object.keys(body).length);
 
     // Limpar strings vazias → null (formulario envia "" para campos opcionais)
     const REQUIRED_FIELDS = ['name'];
@@ -309,15 +308,15 @@ export async function POST(request: NextRequest) {
         value === '' && !REQUIRED_FIELDS.includes(key) ? null : value,
       ])
     );
-    console.log('[API CONTACTS POST] Body limpo:', JSON.stringify(cleanedBody, null, 2));
 
     // Validar dados
     let validated;
     try {
       validated = contactSchema.parse(cleanedBody);
-      console.log('[API CONTACTS POST] Validacao OK');
     } catch (validationErr: any) {
-      console.error('[API CONTACTS POST] Erro de validacao:', JSON.stringify(validationErr.errors || validationErr.message, null, 2));
+      // Loga apenas os campos com erro, nao os valores
+      const fields = (validationErr.errors || []).map((e: any) => e.path?.join('.')).join(', ');
+      console.error('[API CONTACTS POST] Erro de validacao em:', fields);
       throw validationErr;
     }
 
@@ -328,7 +327,6 @@ export async function POST(request: NextRequest) {
 
     // Normalizar dados
     const normalized = normalizeContactData(validated);
-    console.log('[API CONTACTS POST] Dados normalizados:', JSON.stringify(normalized, null, 2));
 
     // DEDUPLICAÇÃO - buscar duplicados
     const duplicateChecks = [];
