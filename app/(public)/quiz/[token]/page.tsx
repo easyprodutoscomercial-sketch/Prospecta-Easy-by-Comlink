@@ -23,7 +23,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 }
 
 function Logo({ size = 'md' }: { size?: 'sm' | 'md' }) {
-  const h = size === 'md' ? 40 : 28;
+  const h = size === 'md' ? 160 : 112;
   return <img src="/logo_easy.png" alt="Easy by Comlink" style={{ height: h }} className="qz-logo-img" />;
 }
 
@@ -606,9 +606,9 @@ const styles = `
 
   .qz-welcome-hero-logo {
     display: block;
-    margin: 0 auto 24px;
-    width: min(70vw, 320px);
-    max-height: 160px;
+    margin: 0 auto 32px;
+    width: min(90vw, 720px);
+    max-height: 400px;
     object-fit: contain;
     animation: qzFloat 4s ease-in-out infinite;
     filter: drop-shadow(0 0 30px rgba(124,58,237,0.4));

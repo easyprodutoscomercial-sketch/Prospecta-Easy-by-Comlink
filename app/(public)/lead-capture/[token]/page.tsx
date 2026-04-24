@@ -492,12 +492,12 @@ function LeadCapturePageInner() {
       />
 
       {/* Logo bar */}
-      <div className="bg-white py-4 px-4 flex items-center justify-center gap-4 border-b border-neutral-200">
+      <div className="bg-white py-6 px-4 flex items-center justify-center gap-6 border-b border-neutral-200">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo do controlei.png" alt="Controlei" className="h-10 object-contain" />
-        <span className="text-neutral-300 text-lg font-light">·</span>
+        <img src="/logo do controlei.png" alt="Controlei" className="h-24 sm:h-32 md:h-40 object-contain" />
+        <span className="text-neutral-300 text-2xl font-light">·</span>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo_easy.png" alt="Easy by Comlink" className="h-10 object-contain" />
+        <img src="/logo_easy.png" alt="Easy by Comlink" className="h-24 sm:h-32 md:h-40 object-contain" />
       </div>
 
       {/* Header */}
