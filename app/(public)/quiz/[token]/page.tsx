@@ -24,7 +24,7 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 
 function Logo({ size = 'md' }: { size?: 'sm' | 'md' }) {
   const h = size === 'md' ? 40 : 28;
-  return <img src="/logo_easy.jpg" alt="Easy by Comlink" style={{ height: h }} className="qz-logo-img" />;
+  return <img src="/logo_easy.png" alt="Easy by Comlink" style={{ height: h }} className="qz-logo-img" />;
 }
 
 /* Step indicator */
@@ -284,7 +284,7 @@ export default function QuizPublicPage() {
         <div className="qz-welcome-inner">
           {/* Logo */}
           <img
-            src="/logo_easy.jpg"
+            src="/logo_easy.png"
             alt="Easy by Comlink"
             className="qz-welcome-hero-logo"
           />
