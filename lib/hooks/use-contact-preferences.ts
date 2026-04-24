@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export type DensityMode = 'compact' | 'normal' | 'expanded';
-export type ContactView = 'list' | 'map' | 'import';
+export type ContactView = 'list' | 'map' | 'import' | 'feiras';
 
 interface ContactPreferences {
   density: number;

@@ -18,6 +18,7 @@ import ContactCard from '@/components/contacts/contact-card';
 import ContactsToolbar from '@/components/contacts/contacts-toolbar';
 import ContactsMapView from '@/components/contacts/contacts-map-view';
 import ContactsImportView from '@/components/contacts/contacts-import-view';
+import ContactsFeirasView from '@/components/contacts/contacts-feiras-view';
 import EmptyState from '@/components/ui/empty-state';
 
 interface UserInfo {
@@ -117,6 +118,7 @@ function ContactsPageContent() {
 
   const isMapView = prefs.activeView === 'map';
   const isImportView = prefs.activeView === 'import';
+  const isFeirasView = prefs.activeView === 'feiras';
 
   useEffect(() => {
     async function fetchUsersAndMe() {
@@ -560,7 +562,10 @@ function ContactsPageContent() {
       />
 
       {/* Content */}
-      {isImportView ? (
+      {isFeirasView ? (
+        /* ========== FEIRAS VIEW ========== */
+        <ContactsFeirasView />
+      ) : isImportView ? (
         /* ========== IMPORT VIEW ========== */
         <ContactsImportView onImportComplete={loadContacts} />
       ) : isMapView ? (
