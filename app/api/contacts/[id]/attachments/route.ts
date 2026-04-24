@@ -3,7 +3,8 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { NextRequest, NextResponse } from 'next/server';
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_EXTS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'heic', 'heif', 'ppt', 'pptx']);
 
 // GET /api/contacts/[id]/attachments - Listar anexos
 export async function GET(
@@ -132,12 +133,17 @@ export async function POST(
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      console.log('[ATTACH] File too large (FormData)', { fileSize: file.size, max: MAX_FILE_SIZE });
-      return NextResponse.json({ error: 'Arquivo muito grande. Maximo 50MB.' }, { status: 400 });
+      return NextResponse.json({ error: 'Arquivo muito grande. Maximo 10MB.' }, { status: 400 });
     }
 
-    // Generate unique file path
-    const ext = file.name.split('.').pop() || 'bin';
+    // Validar extensao contra whitelist (bloqueia .exe, .sh, .zip, etc.)
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+    if (!ALLOWED_EXTS.has(ext)) {
+      return NextResponse.json(
+        { error: `Tipo de arquivo nao permitido (.${ext}). Aceitos: documento, planilha, imagem.` },
+        { status: 400 }
+      );
+    }
     const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
     const filePath = `${profile.organization_id}/${id}/${safeName}`;
 

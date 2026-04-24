@@ -19,10 +19,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Imagem obrigatoria' }, { status: 400 });
     }
 
+    // Limite de tamanho (evita custo OpenAI alto + DoS via imagem gigante)
+    const MAX_SCAN_SIZE = 8 * 1024 * 1024; // 8MB
+    if (file.size > MAX_SCAN_SIZE) {
+      return NextResponse.json({ error: 'Imagem muito grande. Tire uma foto mais leve (max 8MB).' }, { status: 400 });
+    }
+
+    // So aceita imagens (evita enviar arquivo arbitrario pra OpenAI)
+    const mimeType = file.type || 'image/jpeg';
+    if (!mimeType.startsWith('image/')) {
+      return NextResponse.json({ error: 'Apenas imagens sao aceitas (jpg, png, webp).' }, { status: 400 });
+    }
+
     // Convert file to base64
     const bytes = await file.arrayBuffer();
     const base64 = Buffer.from(bytes).toString('base64');
-    const mimeType = file.type || 'image/jpeg';
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
