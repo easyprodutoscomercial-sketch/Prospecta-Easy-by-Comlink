@@ -90,11 +90,17 @@ export default function ContactsFeirasView() {
     loadData();
   }, [loadData]);
 
-  // Indexar contatos por company_name (match com stand) OU por event_id (fallback)
+  // Indexar contatos por company_name (match com stand) OU por event_id (fallback).
+  // Filtra contatos "shell" (placeholders sem dados reais) criados pelo botao
+  // "criar contatos dos stands" — se nao tem phone, email, nem contato_nome, e
+  // apenas um placeholder vinculado ao stand, nao aparece como contato separado.
   const contactsByBooth = useMemo(() => {
     const map: Record<string, FeiraContact[]> = {};
     const byCompany: Record<string, FeiraContact[]> = {};
-    for (const c of contacts) {
+    const realContacts = contacts.filter((c) => {
+      return !!(c.phone?.trim() || c.email?.trim() || c.contato_nome?.trim());
+    });
+    for (const c of realContacts) {
       const key = (c.company || c.name || '').toLowerCase().trim();
       if (!byCompany[key]) byCompany[key] = [];
       byCompany[key].push(c);
