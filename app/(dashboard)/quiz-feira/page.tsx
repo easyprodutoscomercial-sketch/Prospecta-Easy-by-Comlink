@@ -28,6 +28,7 @@ interface QuizConfig {
   data_inicio: string | null;
   dias_feira: number;
   dias_config: DiaConfig[];
+  sorteio_unico: boolean;
 }
 
 interface Pipeline {
@@ -1042,10 +1043,51 @@ export default function QuizFeiraPage() {
                       }}
                       className="w-full bg-[#120826] border border-purple-700/30 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-emerald-500/50"
                     />
-                    <p className="text-xs text-purple-300/40 mt-1">1 = sorteio único, 2+ = um sorteio por dia</p>
+                    <p className="text-xs text-purple-300/40 mt-1">Quantos dias dura a feira</p>
                   </div>
                 </div>
               </>
+            )}
+
+            {/* Tipo de sorteio (aparece sempre que a feira tem 2+ dias, seja por evento ou manual) */}
+            {(isMultiDia || (formConfig.dias_feira || 1) > 1) && (
+              <div className="pt-4 border-t border-purple-700/15">
+                <label className="block text-sm text-white font-medium mb-2">Tipo de sorteio</label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormConfig({ ...formConfig, sorteio_unico: false })}
+                    className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                      !formConfig.sorteio_unico
+                        ? 'bg-emerald-500/10 border-emerald-500 text-white'
+                        : 'bg-[#120826] border-purple-700/30 text-purple-200 hover:bg-[#2a1245]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">📅</span>
+                      <span className="font-bold">Um por dia</span>
+                      {!formConfig.sorteio_unico && <span className="ml-auto text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-bold">ATIVO</span>}
+                    </div>
+                    <p className="text-xs opacity-70">1 vencedor pra cada dia da feira. Cada dia com seu valor exato, descrição e VIP próprios.</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormConfig({ ...formConfig, sorteio_unico: true })}
+                    className={`p-4 rounded-lg border-2 text-left transition-colors ${
+                      formConfig.sorteio_unico
+                        ? 'bg-emerald-500/10 border-emerald-500 text-white'
+                        : 'bg-[#120826] border-purple-700/30 text-purple-200 hover:bg-[#2a1245]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">🎯</span>
+                      <span className="font-bold">Único</span>
+                      {formConfig.sorteio_unico && <span className="ml-auto text-[10px] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-bold">ATIVO</span>}
+                    </div>
+                    <p className="text-xs opacity-70">Apenas 1 vencedor considerando TODOS os palpites da feira. Usa valor exato único (não precisa configurar por dia).</p>
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 

@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     // Get quiz config to know the exact value
     let configQuery = admin
       .from('quiz_configuracoes')
-      .select('id, valor_exato, dias_config')
+      .select('id, valor_exato, dias_config, sorteio_unico, dias_feira')
       .eq('organization_id', orgId);
     if (quizId) configQuery = configQuery.eq('id', quizId);
     const { data: config } = await configQuery.single();
@@ -35,10 +35,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Quiz não configurado' }, { status: 404 });
     }
 
-    // Determine valor_exato for the day
+    // Se sorteio_unico = true, ignora o dia mesmo que o quiz seja multi-dia:
+    // usa valor_exato default e considera todos os participantes juntos.
+    const isSorteioUnico = !!config.sorteio_unico;
+
+    // Determine valor_exato
     let valorExato = config.valor_exato;
     const diasConfig: any[] = config.dias_config || [];
-    if (diaParam) {
+    if (!isSorteioUnico && diaParam) {
       const dia = parseInt(diaParam);
       const dayConfig = diasConfig[dia - 1];
       if (dayConfig && dayConfig.valor_exato != null) {
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get participants (filtered by quiz and day if specified)
+    // Get participants (filtered by quiz and day if applicable)
     let query = admin
       .from('quiz_participantes')
       .select('*')
@@ -56,7 +60,8 @@ export async function GET(request: NextRequest) {
     if (config.id) {
       query = query.eq('quiz_config_id', config.id);
     }
-    if (diaParam) {
+    // So filtra por dia se nao for sorteio_unico
+    if (!isSorteioUnico && diaParam) {
       query = query.eq('dia_feira', parseInt(diaParam));
     }
 

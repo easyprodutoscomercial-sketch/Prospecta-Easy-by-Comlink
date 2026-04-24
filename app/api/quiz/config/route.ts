@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
     const allowedFields = [
       'nome_evento', 'event_id', 'valor_exato', 'descricao_desafio',
       'mensagem_pausa', 'pipeline_id', 'crm_tag', 'telefone_vip',
-      'data_inicio', 'dias_feira', 'dias_config',
+      'data_inicio', 'dias_feira', 'dias_config', 'sorteio_unico',
     ];
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
