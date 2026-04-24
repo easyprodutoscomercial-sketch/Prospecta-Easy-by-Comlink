@@ -84,6 +84,44 @@ export default function QuizPublicPage() {
   const [duplicateMsg, setDuplicateMsg] = useState('');
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [hasContactPicker, setHasContactPicker] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleScanCard = () => { fileInputRef.current?.click(); };
+
+  const handleFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setScanning(true);
+    setError('');
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      const res = await fetch('/api/scan-card', { method: 'POST', body: formData });
+      if (!res.ok) {
+        let msg = 'Erro ao processar imagem. Preencha manualmente.';
+        try { const d = await res.json(); msg = d.error || msg; } catch {}
+        setError(msg);
+        return;
+      }
+      const data = await res.json();
+      let filled = 0;
+      if (data.name) { setNome(data.name); filled++; }
+      if (data.phone) { setTelefone(formatPhone(data.phone)); filled++; }
+      if (data.email) { setEmail(data.email.toLowerCase()); filled++; }
+      if (data.company) { setEmpresa(data.company); filled++; }
+      if (data.cargo) { setCargo(data.cargo); filled++; }
+      if (data.cidade) { setCidade(data.cidade); filled++; }
+      if (filled === 0) {
+        setError('Nao foi possivel ler dados do cartao. Preencha manualmente.');
+      }
+    } catch (err: any) {
+      setError(`Erro: ${err?.message || 'falha de conexao'}. Preencha manualmente.`);
+    } finally {
+      setScanning(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     setHasContactPicker('contacts' in navigator && 'ContactsManager' in window);
@@ -356,12 +394,42 @@ export default function QuizPublicPage() {
           <p className="qz-section-sub">Preencha para validar sua participacao</p>
           <div className="qz-spacer-sm" />
 
-          {hasContactPicker && (
-            <button type="button" onClick={pickContact} className="qz-btn-contact-picker">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
-              Buscar do celular
+          {/* Hidden file input pro OCR de cartao */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="qz-hidden"
+            onChange={handleFileSelected}
+          />
+
+          <div className="qz-shortcuts">
+            <button
+              type="button"
+              onClick={handleScanCard}
+              disabled={scanning}
+              className="qz-btn-contact-picker"
+            >
+              {scanning ? (
+                <>
+                  <span className="qz-spinner-sm" />
+                  Lendo cartao...
+                </>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  Escanear cartao
+                </>
+              )}
             </button>
-          )}
+            {hasContactPicker && (
+              <button type="button" onClick={pickContact} className="qz-btn-contact-picker">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" /></svg>
+                Buscar do celular
+              </button>
+            )}
+          </div>
 
           {/* Required fields */}
           <InputField icon="user" label="Nome completo" type="text" value={nome}
@@ -977,6 +1045,40 @@ const styles = `
     border-top-color: #fff;
     border-radius: 50%;
     animation: spin .6s linear infinite;
+  }
+  .qz-hidden { display: none; }
+  .qz-shortcuts {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .qz-btn-contact-picker {
+    flex: 1 1 140px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(124,58,237,0.12);
+    border: 1px solid rgba(124,58,237,0.35);
+    color: rgba(196,181,253,0.95);
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background .15s, transform .15s;
+  }
+  .qz-btn-contact-picker:hover { background: rgba(124,58,237,0.22); }
+  .qz-btn-contact-picker:disabled { opacity: .6; cursor: not-allowed; }
+  .qz-btn-contact-picker:active { transform: scale(0.98); }
+  .qz-spinner-sm {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(196,181,253,0.3);
+    border-top-color: rgba(196,181,253,0.95);
+    border-radius: 50%;
+    animation: spin .6s linear infinite;
+    display: inline-block;
   }
 
   /* Success / Thanks */
