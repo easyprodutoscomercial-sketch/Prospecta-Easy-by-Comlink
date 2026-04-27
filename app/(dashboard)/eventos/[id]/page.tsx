@@ -1347,6 +1347,9 @@ function BoothDrawer({
   const [notes, setNotes] = useState(parsed.userNotes);
 
   // Photos: existing URLs + new files (#2)
+  // Inicia com as fotos da visit do user atual; em seguida useEffect carrega
+  // fotos de TODAS as visits do booth (de outros vendedores tambem) — assim
+  // ninguem perde foto quando varios visitam o mesmo stand.
   const [existingPhotos, setExistingPhotos] = useState<string[]>(() => {
     const urls: string[] = [];
     if (visit?.photo_facade_url) urls.push(visit.photo_facade_url);
@@ -1354,6 +1357,30 @@ function BoothDrawer({
     urls.push(...parsed.extraPhotos);
     return urls;
   });
+
+  // Lista de TODAS as visitas do stand (todos vendedores) - somando contatos
+  const [allVisits, setAllVisits] = useState<any[]>([]);
+
+  // Carrega fotos + visits de TODAS as visitas do booth (qualquer vendedor)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/events/${eventId}/booths/${booth.id}/visits`);
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        const allPhotos: string[] = [];
+        for (const v of (data.visits || [])) {
+          if (v.photo_facade_url) allPhotos.push(v.photo_facade_url);
+          if (v.photo_contact_url) allPhotos.push(v.photo_contact_url);
+        }
+        const merged = Array.from(new Set([...allPhotos, ...parsed.extraPhotos]));
+        if (!cancelled && merged.length > 0) setExistingPhotos(merged);
+        if (!cancelled) setAllVisits(data.visits || []);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [booth.id, eventId, parsed.extraPhotos]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
   const [newPreviews, setNewPreviews] = useState<string[]>([]);
   // Base64 paralelo pra salvar em draft (sobrevive recarga de página)
@@ -2004,6 +2031,28 @@ function BoothDrawer({
             <label className="block text-xs font-medium text-purple-200/80 mb-1">Observações</label>
             <textarea placeholder="O que conversou, interesses, próximos passos..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
           </div>
+
+          {/* Historico de visitas de todos os vendedores */}
+          {allVisits.length > 0 && (
+            <div className="pt-3 border-t border-purple-800/30">
+              <p className="text-[10px] font-bold text-purple-300/60 uppercase tracking-wider mb-2">
+                {allVisits.length} check-in{allVisits.length !== 1 ? 's' : ''} neste stand (toda a equipe)
+              </p>
+              <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                {allVisits.map((v: any) => (
+                  <div key={v.id} className="flex items-center gap-2 px-2 py-1.5 rounded bg-[#1e0f35] text-[11px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="font-bold text-white">{v.user_name}</span>
+                    {v.contact_name && <span className="text-purple-300/70">→ {v.contact_name}</span>}
+                    <span className="ml-auto text-purple-300/40 shrink-0">
+                      {new Date(v.visited_at || v.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                    {(v.photo_facade_url || v.photo_contact_url) && <span className="text-emerald-400 text-[9px]">📷</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Aviso se feira nao ativa — bloqueia o botao de registrar visita */}
           {eventStatus && eventStatus !== 'ATIVO' && (
