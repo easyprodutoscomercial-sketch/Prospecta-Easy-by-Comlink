@@ -1990,7 +1990,7 @@ function BoothDrawer({
                       type="tel"
                       inputMode="numeric"
                       placeholder="Telefone"
-                      value={c.phone}
+                      value={c.phone || ''}
                       onChange={(e) => updateContact(idx, 'phone', e.target.value)}
                       className={fieldClass}
                     />
@@ -2032,6 +2032,30 @@ function BoothDrawer({
             <textarea placeholder="O que conversou, interesses, próximos passos..." rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
           </div>
 
+          {/* Resumo do que vai ser enviado — pro vendedor conferir antes de salvar */}
+          {(contacts.some((c) => c.name?.trim() || c.phone?.trim() || c.cargo?.trim()) || newFiles.length > 0) && (
+            <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+              <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-2">Pronto pra salvar</p>
+              <div className="space-y-1 text-[11px] text-emerald-200">
+                {contacts.filter((c) => c.name?.trim() || c.phone?.trim()).map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 flex-wrap">
+                    <span>👤</span>
+                    {c.name?.trim() && <span className="font-bold">{c.name}</span>}
+                    {c.phone?.trim() && <span className="font-mono">📞 {c.phone}</span>}
+                    {c.cargo?.trim() && <span>· {c.cargo}</span>}
+                  </div>
+                ))}
+                {newFiles.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span>📷</span>
+                    <span>{newFiles.length} foto{newFiles.length > 1 ? 's' : ''} pronta{newFiles.length > 1 ? 's' : ''}</span>
+                  </div>
+                )}
+                <p className="text-[10px] text-emerald-300/60 mt-1.5">↓ Aperte o botao verde abaixo pra salvar</p>
+              </div>
+            </div>
+          )}
+
           {/* Historico de visitas de todos os vendedores */}
           {allVisits.length > 0 && (
             <div className="pt-3 border-t border-purple-800/30">
@@ -2060,6 +2084,9 @@ function BoothDrawer({
               Esta feira nao esta ativa. Voce pode editar os dados do stand, mas <strong>registrar visita</strong> so funciona com a feira ATIVA. Peca ao admin para ativar em Feiras &amp; Eventos.
             </div>
           )}
+
+          {/* Versao do build — pra debug em feira ao vivo (vendedor confirma versao nova) */}
+          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-27.4 (com phone+debug)</p>
 
           {/* ===== Two Buttons — mobile friendly (touch area ≥ 48px) ===== */}
           <div className="flex gap-3 pb-2 pt-1 sticky bottom-0 bg-[#120826]/95 backdrop-blur-sm -mx-0 px-0 py-2">
