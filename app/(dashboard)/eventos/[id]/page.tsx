@@ -1618,14 +1618,24 @@ function BoothDrawer({
         setSuccessMsg(markVisited ? 'Offline — check-in salvo na fila' : 'Offline — dados salvos na fila');
         setTimeout(() => { onUpdate(); }, 1500);
       } else if (result.response) {
-        // Erro HTTP de negócio — reporta. MANTÉM o rascunho pro usuário tentar de novo.
-        setSuccessMsg('Erro ao enviar. Tente novamente.');
-        setTimeout(() => setSuccessMsg(null), 3000);
+        // Erro HTTP de negócio — captura mensagem real do server pra debugar.
+        let errMsg = `Erro ${result.response.status}`;
+        try {
+          const txt = await result.response.text();
+          try {
+            const j = JSON.parse(txt);
+            errMsg = `Erro ${result.response.status}: ${j.error || j.message || txt.slice(0, 150)}`;
+          } catch {
+            errMsg = `Erro ${result.response.status}: ${txt.slice(0, 150) || 'sem mensagem'}`;
+          }
+        } catch { /* ignore */ }
+        setSuccessMsg(errMsg);
+        setTimeout(() => setSuccessMsg(null), 8000);
       }
-    } catch {
-      // Em último caso, tenta enfileirar mesmo assim
-      setSuccessMsg('Erro inesperado');
-      setTimeout(() => setSuccessMsg(null), 3000);
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      setSuccessMsg(`Erro inesperado: ${msg.slice(0, 200)}`);
+      setTimeout(() => setSuccessMsg(null), 8000);
     } finally {
       setSubmitting(null);
     }

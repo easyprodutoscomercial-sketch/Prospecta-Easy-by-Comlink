@@ -58,10 +58,10 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    // 12mb: cobre check-in com 2 fotos de celular (~5MB cada) + margem;
-    // antes estava 30mb, permitindo DoS com payload gigante.
+    // 25mb: celulares modernos tiram fotos de 5-10MB cada. Com 2 fotos de
+    // check-in mais alguma margem, 25mb cobre. Acima disso e DoS.
     serverActions: {
-      bodySizeLimit: '12mb',
+      bodySizeLimit: '25mb',
     },
   },
 };
