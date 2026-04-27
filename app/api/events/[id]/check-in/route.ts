@@ -197,25 +197,60 @@ export async function POST(
       : userNotes || null;
 
     // Create the visit record
-    const { data: visit, error: visitError } = await admin
+    // TRAVA contra clique duplicado: se o mesmo user ja registrou esse booth
+    // nos ultimos 60 segundos, retorna a visita existente em vez de criar
+    // outra. Evita duplicatas geradas por click-spam ou retry de rede.
+    const sixtySecAgo = new Date(Date.now() - 60_000).toISOString();
+    const { data: recentVisit } = await admin
       .from('booth_visits')
-      .insert({
-        booth_id: boothId,
-        event_id: eventId,
-        organization_id: profile.organization_id,
-        user_id: user.id,
-        user_name: profile.name,
-        photo_facade_url: photoFacadeUrl,
-        photo_contact_url: photoContactUrl,
-        contact_name: contactName,
-        contact_role: contactRole,
-        prospect_type: prospectType,
-        notes: packedNotes,
-      })
-      .select()
-      .single();
+      .select('*')
+      .eq('booth_id', boothId)
+      .eq('event_id', eventId)
+      .eq('user_id', user.id)
+      .gte('created_at', sixtySecAgo)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (visitError) throw visitError;
+    let visit: any;
+    if (recentVisit) {
+      console.log('[check-in] Duplicado detectado (user clicou de novo em <60s) — retornando visit existente', recentVisit.id);
+      // Atualiza visit existente com os dados novos (caso user tenha mudado algo)
+      const { data: updated } = await admin
+        .from('booth_visits')
+        .update({
+          photo_facade_url: photoFacadeUrl || recentVisit.photo_facade_url,
+          photo_contact_url: photoContactUrl || recentVisit.photo_contact_url,
+          contact_name: contactName || recentVisit.contact_name,
+          contact_role: contactRole || recentVisit.contact_role,
+          prospect_type: prospectType,
+          notes: packedNotes || recentVisit.notes,
+        })
+        .eq('id', recentVisit.id)
+        .select()
+        .single();
+      visit = updated || recentVisit;
+    } else {
+      const { data: newVisit, error: visitError } = await admin
+        .from('booth_visits')
+        .insert({
+          booth_id: boothId,
+          event_id: eventId,
+          organization_id: profile.organization_id,
+          user_id: user.id,
+          user_name: profile.name,
+          photo_facade_url: photoFacadeUrl,
+          photo_contact_url: photoContactUrl,
+          contact_name: contactName,
+          contact_role: contactRole,
+          prospect_type: prospectType,
+          notes: packedNotes,
+        })
+        .select()
+        .single();
+      if (visitError) throw visitError;
+      visit = newVisit;
+    }
 
     // Mark booth as visited only if requested
     if (markVisited) {
