@@ -1234,9 +1234,11 @@ function BoothDrawer({
   const [loadingContact, setLoadingContact] = useState(true);
 
   // Pre-fill form from existing visit (#1)
-  const [contacts, setContacts] = useState<{ name: string; cargo: string }[]>(() => {
-    const primary = { name: visit?.contact_name || '', cargo: visit?.contact_role || '' };
-    const extra = parsed.extraContacts.length > 0 ? parsed.extraContacts : [];
+  const [contacts, setContacts] = useState<{ name: string; cargo: string; phone: string }[]>(() => {
+    const primary = { name: visit?.contact_name || '', cargo: visit?.contact_role || '', phone: '' };
+    const extra = parsed.extraContacts.length > 0
+      ? parsed.extraContacts.map((e) => ({ ...e, phone: (e as any).phone || '' }))
+      : [];
     return [primary, ...extra];
   });
   const [prospectType, setProspectType] = useState(visit?.prospect_type || 'COMPRADOR');
@@ -1315,7 +1317,7 @@ function BoothDrawer({
       draftPruneOld(DRAFT_MAX_AGE_MS).catch(() => {});
       try {
         const saved = await draftLoad<{
-          contacts: { name: string; cargo: string }[];
+          contacts: { name: string; cargo: string; phone?: string }[];
           prospectType: string;
           notes: string;
           photos: Array<{ name: string; type: string; dataUrl: string }>;
@@ -1325,7 +1327,9 @@ function BoothDrawer({
           return;
         }
         const d = saved.data;
-        if (Array.isArray(d.contacts) && d.contacts.length > 0) setContacts(d.contacts);
+        if (Array.isArray(d.contacts) && d.contacts.length > 0) {
+          setContacts(d.contacts.map((c) => ({ name: c.name || '', cargo: c.cargo || '', phone: c.phone || '' })));
+        }
         if (d.prospectType === 'COMPRADOR' || d.prospectType === 'FORNECEDOR' || d.prospectType === 'AMBOS') {
           setProspectType(d.prospectType);
         }
@@ -1421,8 +1425,10 @@ function BoothDrawer({
     await draftClear(draftKey).catch(() => {});
     setDraftRestoredAt(null);
     // Reseta o form pro estado inicial (do visit existente, se houver)
-    const primary = { name: visit?.contact_name || '', cargo: visit?.contact_role || '' };
-    const extra = parsed.extraContacts.length > 0 ? parsed.extraContacts : [];
+    const primary = { name: visit?.contact_name || '', cargo: visit?.contact_role || '', phone: '' };
+    const extra = parsed.extraContacts.length > 0
+      ? parsed.extraContacts.map((e) => ({ ...e, phone: (e as any).phone || '' }))
+      : [];
     setContacts([primary, ...extra]);
     setProspectType(visit?.prospect_type || 'COMPRADOR');
     setNotes(parsed.userNotes);
@@ -1432,10 +1438,10 @@ function BoothDrawer({
   };
 
   // Contact list handlers (#5)
-  const updateContact = (idx: number, field: 'name' | 'cargo', value: string) => {
+  const updateContact = (idx: number, field: 'name' | 'cargo' | 'phone', value: string) => {
     setContacts((prev) => prev.map((c, i) => i === idx ? { ...c, [field]: value } : c));
   };
-  const addContact = () => setContacts((prev) => [...prev, { name: '', cargo: '' }]);
+  const addContact = () => setContacts((prev) => [...prev, { name: '', cargo: '', phone: '' }]);
   const removeContact = (idx: number) => {
     if (contacts.length <= 1) return;
     setContacts((prev) => prev.filter((_, i) => i !== idx));
@@ -1454,11 +1460,12 @@ function BoothDrawer({
         booth_id: booth.id,
         contact_name: contacts[0]?.name || '',
         contact_role: contacts[0]?.cargo || '',
+        contact_phone: contacts[0]?.phone || '',
         prospect_type: prospectType,
         notes: notes,
         mark_visited: markVisited ? 'true' : 'false',
       };
-      const extras = contacts.slice(1).filter((c) => c.name.trim());
+      const extras = contacts.slice(1).filter((c) => c.name.trim() || c.phone.trim());
       if (extras.length > 0) {
         fields.extra_contacts = JSON.stringify(extras);
       }
@@ -1795,31 +1802,42 @@ function BoothDrawer({
               </button>
             </div>
             <div className="space-y-2">
-              {contacts.map((c, idx) => (
-                <div key={idx} className="grid grid-cols-[1fr_7rem_auto] items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Nome do contato"
-                    value={c.name}
-                    onChange={(e) => updateContact(idx, 'name', e.target.value)}
-                    className="px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30 min-w-0 w-full"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Cargo"
-                    value={c.cargo}
-                    onChange={(e) => updateContact(idx, 'cargo', e.target.value)}
-                    className="px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30 min-w-0 w-full"
-                  />
-                  {contacts.length > 1 ? (
-                    <button type="button" onClick={() => removeContact(idx)} className="p-1.5 text-red-400/40 hover:text-red-400">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-                </div>
-              ))}
+              {contacts.map((c, idx) => {
+                const fieldClass = 'px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30 min-w-0 w-full';
+                return (
+                  <div key={idx} className="grid grid-cols-1 sm:grid-cols-[1fr_8rem_8rem_auto] items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nome do contato"
+                      value={c.name}
+                      onChange={(e) => updateContact(idx, 'name', e.target.value)}
+                      className={fieldClass}
+                    />
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      placeholder="Telefone"
+                      value={c.phone}
+                      onChange={(e) => updateContact(idx, 'phone', e.target.value)}
+                      className={fieldClass}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Cargo"
+                      value={c.cargo}
+                      onChange={(e) => updateContact(idx, 'cargo', e.target.value)}
+                      className={fieldClass}
+                    />
+                    {contacts.length > 1 ? (
+                      <button type="button" onClick={() => removeContact(idx)} className="p-1.5 text-red-400/40 hover:text-red-400 justify-self-end sm:justify-self-auto">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    ) : (
+                      <span className="hidden sm:block" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
