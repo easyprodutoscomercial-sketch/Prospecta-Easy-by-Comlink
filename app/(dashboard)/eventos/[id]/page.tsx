@@ -1895,7 +1895,20 @@ function BoothDrawer({
 
           {/* ===== Photos Gallery (#2) ===== */}
           <div>
-            <label className="block text-xs font-medium text-purple-200/80 mb-2">Fotos</label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-medium text-purple-200/80">Fotos</label>
+              {(existingPhotos.length + newFiles.length) > 0 && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
+                  ✓ {existingPhotos.length + newFiles.length} adicionada{existingPhotos.length + newFiles.length > 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
+            {newFiles.length > 0 && (
+              <div className="mb-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300 flex items-center gap-2">
+                <span>📸</span>
+                <span>Foto pronta. Comprimida automaticamente. <strong>Vai junto quando voce salvar.</strong></span>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2">
               {/* Existing photos */}
               {existingPhotos.map((url, idx) => (
@@ -1908,8 +1921,9 @@ function BoothDrawer({
               ))}
               {/* New photo previews */}
               {newPreviews.map((url, idx) => (
-                <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-emerald-500/30">
+                <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border-2 border-emerald-500 shadow-lg shadow-emerald-500/30">
                   <img src={url} alt={`Nova ${idx + 1}`} className="w-full h-full object-cover" />
+                  <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-emerald-500 text-white text-[9px] font-bold">NOVA</span>
                   <button type="button" onClick={() => handleRemoveNew(idx)} className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white hover:bg-red-600 transition-colors">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                   </button>
@@ -1917,9 +1931,9 @@ function BoothDrawer({
               ))}
               {/* Add photo button */}
               <input ref={photoInputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { handleAddPhotos(e.target.files); e.target.value = ''; }} />
-              <button type="button" onClick={() => photoInputRef.current?.click()} className="aspect-square rounded-lg border-2 border-dashed border-purple-700/30 hover:border-emerald-500/40 transition-colors flex flex-col items-center justify-center gap-1 bg-[#2a1245]">
-                <svg className="w-6 h-6 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" /></svg>
-                <span className="text-[9px] text-purple-300/40">Adicionar</span>
+              <button type="button" onClick={() => photoInputRef.current?.click()} className="aspect-square rounded-lg border-2 border-dashed border-emerald-500/50 hover:border-emerald-500 active:bg-emerald-500/10 transition-colors flex flex-col items-center justify-center gap-1 bg-[#2a1245]">
+                <svg className="w-7 h-7 text-emerald-400/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                <span className="text-[10px] font-bold text-emerald-400">Tirar foto</span>
               </button>
             </div>
           </div>
