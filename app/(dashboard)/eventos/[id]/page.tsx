@@ -2085,8 +2085,12 @@ function BoothDrawer({
             </div>
           )}
 
-          {/* Versao do build — pra debug em feira ao vivo (vendedor confirma versao nova) */}
-          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-27.4 (com phone+debug)</p>
+          {/* Legenda dos 2 botoes */}
+          <div className="text-[10px] text-purple-300/50 text-center px-2 pt-1 leading-tight">
+            <strong className="text-purple-300/80">Salvar Dados</strong> = atualiza contato (sem novo check-in)<br/>
+            <strong className="text-emerald-400/80">Registrar Check-in</strong> = cria visita nova + marca como visitado
+          </div>
+          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-27.5</p>
 
           {/* ===== Two Buttons — mobile friendly (touch area ≥ 48px) ===== */}
           <div className="flex gap-3 pb-2 pt-1 sticky bottom-0 bg-[#120826]/95 backdrop-blur-sm -mx-0 px-0 py-2">
@@ -2094,19 +2098,19 @@ function BoothDrawer({
               type="button"
               onClick={() => handleSubmit(false)}
               disabled={submitting !== null}
-              className="flex-1 py-4 min-h-[56px] bg-purple-600 text-white rounded-xl font-bold text-base hover:bg-purple-700 active:bg-purple-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-purple-900/30"
-              title="Salva os dados sem marcar como visitado"
+              className="flex-1 py-4 min-h-[56px] bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 active:bg-purple-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-purple-900/30"
+              title="Atualiza dados do contato (telefone, nome, cargo) sem criar checkin novo"
             >
-              {submitting === 'save' ? 'Salvando...' : 'Só Salvar'}
+              {submitting === 'save' ? 'Salvando...' : 'Salvar Dados'}
             </button>
             <button
               type="button"
               onClick={() => handleSubmit(true)}
               disabled={submitting !== null || (eventStatus !== undefined && eventStatus !== 'ATIVO')}
-              className="flex-1 py-4 min-h-[56px] bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 active:bg-emerald-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/30"
-              title={eventStatus && eventStatus !== 'ATIVO' ? 'Ative a feira pra registrar visitas' : 'Salva os dados e marca o stand como visitado'}
+              className="flex-[1.3] py-4 min-h-[56px] bg-emerald-500 text-white rounded-xl font-bold text-base hover:bg-emerald-600 active:bg-emerald-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/30"
+              title={eventStatus && eventStatus !== 'ATIVO' ? 'Ative a feira pra registrar visitas' : 'Cria check-in novo + marca stand como visitado'}
             >
-              {submitting === 'visit' ? 'Registrando...' : '✓ Registrar Visita'}
+              {submitting === 'visit' ? 'Registrando...' : '✓ Registrar Check-in'}
             </button>
           </div>
         </div>

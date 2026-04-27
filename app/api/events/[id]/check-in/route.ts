@@ -201,13 +201,45 @@ export async function POST(
 
     // Create the visit record
     // ============================================
-    // TRAVA DE DUPLICACAO em 2 camadas:
-    // 1. idempotency_key (UUID gerado pelo cliente) — proteção forte:
-    //    se enviar a mesma key 2x, retorna a visita existente. Cobre
-    //    click-spam, retry de rede, sync offline duplo.
-    // 2. Fallback temporal de 60s (caso cliente antigo nao envie key)
+    // MODO 'SO ATUALIZAR DADOS' (mark_visited=false):
+    // Se ja existe visit do mesmo user/booth, NAO cria visit nova —
+    // apenas atualiza o contato vinculado (telefone, nome, cargo, etc).
+    // Isso permite voltar no stand pra adicionar info que faltou sem
+    // duplicar checkins.
     // ============================================
     let visit: any = null;
+    if (!markVisited) {
+      const { data: anyVisit } = await admin
+        .from('booth_visits')
+        .select('*')
+        .eq('booth_id', boothId)
+        .eq('event_id', eventId)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (anyVisit) {
+        console.log('[check-in] Modo so-atualizar — usando visit existente sem criar nova', anyVisit.id);
+        visit = anyVisit;
+        // Atualiza dados da visita com info nova (se enviada)
+        const visitPatch: any = {};
+        if (photoFacadeUrl) visitPatch.photo_facade_url = photoFacadeUrl;
+        if (photoContactUrl) visitPatch.photo_contact_url = photoContactUrl;
+        if (contactName) visitPatch.contact_name = contactName;
+        if (contactRole) visitPatch.contact_role = contactRole;
+        if (prospectType) visitPatch.prospect_type = prospectType;
+        if (packedNotes) visitPatch.notes = packedNotes;
+        if (Object.keys(visitPatch).length > 0) {
+          const { data: updated } = await admin
+            .from('booth_visits')
+            .update(visitPatch)
+            .eq('id', anyVisit.id)
+            .select()
+            .single();
+          if (updated) visit = updated;
+        }
+      }
+    }
 
     if (idempotencyKey) {
       const { data: existingByKey } = await admin
@@ -336,25 +368,27 @@ export async function POST(
           .from('booth_visits')
           .update({ contact_id: existingVisit.contact_id })
           .eq('id', visit.id);
-        // Se temos phone/email escaneados e o contato existente não tem, atualiza
-        if (contactPhone || contactEmail) {
-          const { data: existingContactRow } = await admin
-            .from('contacts')
-            .select('phone, email')
-            .eq('id', existingVisit.contact_id)
-            .single();
-          const patch: any = {};
-          if (contactPhone && !existingContactRow?.phone) {
-            patch.phone = contactPhone;
-            if (phoneNorm) patch.phone_normalized = phoneNorm;
-          }
-          if (contactEmail && !existingContactRow?.email) {
-            patch.email = contactEmail;
-            if (emailNorm) patch.email_normalized = emailNorm;
-          }
-          if (Object.keys(patch).length > 0) {
-            await admin.from('contacts').update(patch).eq('id', existingVisit.contact_id);
-          }
+        // SEMPRE atualiza phone/email/nome/cargo do contato existente
+        // se vendedor preencheu (sobrescreve campos vazios e completa).
+        // Antes so atualizava se contato nao tinha — agora atualiza
+        // mesmo se ja tinha (vendedor pode estar corrigindo dado).
+        const patch: any = {};
+        if (contactName) {
+          patch.contato_nome = contactName;
+        }
+        if (contactRole) patch.cargo = contactRole;
+        if (contactPhone) {
+          patch.phone = contactPhone;
+          if (phoneNorm) patch.phone_normalized = phoneNorm;
+          patch.whatsapp = contactPhone;
+        }
+        if (contactEmail) {
+          patch.email = contactEmail;
+          if (emailNorm) patch.email_normalized = emailNorm;
+        }
+        if (Object.keys(patch).length > 0) {
+          console.log('[check-in] Atualizando contato vinculado', existingVisit.contact_id, Object.keys(patch));
+          await admin.from('contacts').update(patch).eq('id', existingVisit.contact_id);
         }
       } else if (contactName) {
         // Avatar: photo_contact_url (foto do cartao) e o melhor que temos aqui
