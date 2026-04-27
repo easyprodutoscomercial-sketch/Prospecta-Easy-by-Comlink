@@ -53,7 +53,58 @@ export async function GET(
       return { ...att, public_url: data.publicUrl };
     });
 
-    return NextResponse.json({ contact, interactions: interactions || [], attachments: attachmentsWithUrls });
+    // Buscar info do stand vinculado (se tiver event_id)
+    // Mostra logo da marca, fotos da visita e dados do stand na ficha
+    let standInfo: any = null;
+    if (contact.event_id) {
+      // Tenta achar booth_visit pelo contact_id (vinculo direto)
+      const { data: visits } = await admin
+        .from('booth_visits')
+        .select('id, booth_id, event_id, user_name, contact_name, contact_role, prospect_type, photo_facade_url, photo_contact_url, notes, visited_at, created_at')
+        .eq('contact_id', id)
+        .order('created_at', { ascending: false });
+
+      let primaryBoothId: string | null = visits?.[0]?.booth_id || null;
+
+      // Fallback: se nao ha visit vinculada por contact_id, tenta achar booth pela company_name + event_id
+      if (!primaryBoothId && contact.company) {
+        const { data: matchBooth } = await admin
+          .from('event_booths')
+          .select('id')
+          .eq('event_id', contact.event_id)
+          .ilike('company_name', contact.company)
+          .limit(1)
+          .maybeSingle();
+        if (matchBooth) primaryBoothId = matchBooth.id;
+      }
+
+      if (primaryBoothId) {
+        const { data: booth } = await admin
+          .from('event_booths')
+          .select('id, company_name, booth_number, sector, logo_url, website, status')
+          .eq('id', primaryBoothId)
+          .single();
+
+        const { data: event } = await admin
+          .from('events')
+          .select('id, name, status, start_date, end_date')
+          .eq('id', contact.event_id)
+          .single();
+
+        standInfo = {
+          event,
+          booth,
+          visits: visits || [],
+        };
+      }
+    }
+
+    return NextResponse.json({
+      contact,
+      interactions: interactions || [],
+      attachments: attachmentsWithUrls,
+      stand: standInfo,
+    });
 
   } catch (error: any) {
     console.error('Error fetching contact:', error);

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Contact, PipelineStage, TelefoneAdicional } from '@/lib/types';
+import { useToast } from '@/lib/toast-context';
 import {
   formatStatus,
   getStatusColor,
@@ -73,6 +74,7 @@ export default function ContactSidebar({
   const [phoneValue, setPhoneValue] = useState(contact.phone || '');
   const [whatsappValue, setWhatsappValue] = useState(contact.whatsapp || '');
   const [savingField, setSavingField] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     setPhoneValue(contact.phone || '');
@@ -81,24 +83,32 @@ export default function ContactSidebar({
 
   const saveField = async (field: 'phone' | 'whatsapp', value: string) => {
     setSavingField(true);
+    let ok = false;
     try {
       const res = await fetch(`/api/contacts/${contact.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [field]: value || null }),
       });
-      if (!res.ok) {
+      if (res.ok) {
+        ok = true;
+        toast.success(`${field === 'phone' ? 'Telefone' : 'WhatsApp'} salvo!`);
+      } else {
         // revert on failure
         if (field === 'phone') setPhoneValue(contact.phone || '');
         else setWhatsappValue(contact.whatsapp || '');
+        toast.error('Nao foi possivel salvar. Verifique a internet.');
       }
     } catch {
       if (field === 'phone') setPhoneValue(contact.phone || '');
       else setWhatsappValue(contact.whatsapp || '');
+      toast.error('Erro de conexao ao salvar.');
     }
     setSavingField(false);
-    if (field === 'phone') setEditingPhone(false);
-    else setEditingWhatsapp(false);
+    if (ok) {
+      if (field === 'phone') setEditingPhone(false);
+      else setEditingWhatsapp(false);
+    }
   };
 
   // Telefones adicionais state

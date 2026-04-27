@@ -104,6 +104,8 @@ export const contactUpdateSchema = z.object({
   telefones_adicionais: z.array(z.object({
     phone: z.string().min(1),
     nome_contato: z.string().optional().default(''),
+    empresa: z.string().optional().default(''),
+    setor: z.string().optional().default(''),
     correto: z.boolean().default(true),
   })).optional().nullable(),
 });

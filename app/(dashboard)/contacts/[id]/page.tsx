@@ -33,6 +33,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [attachments, setAttachments] = useState<AttachmentWithUrl[]>([]);
+  const [stand, setStand] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -94,6 +95,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     setContact(data.contact);
     setInteractions(data.interactions || []);
     setAttachments(data.attachments || []);
+    setStand(data.stand || null);
     if (meetingsRes.ok) {
       const meetingsData = await meetingsRes.json();
       setMeetings(meetingsData.meetings || meetingsData || []);
@@ -380,7 +382,83 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         </div>
 
         {/* Main area */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 space-y-4">
+          {/* ===== Stand vinculado (vem de check-in de feira) ===== */}
+          {stand && stand.booth && (
+            <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 sm:p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+                  Stand de origem
+                </h3>
+                <a href={`/eventos/${stand.event?.id}`} className="text-[10px] text-emerald-400 hover:underline">Abrir stand →</a>
+              </div>
+              <div className="flex items-start gap-4 flex-wrap">
+                {/* Logo da marca */}
+                <div className="w-20 h-20 bg-white rounded-lg flex items-center justify-center shrink-0 overflow-hidden border border-purple-700/30">
+                  {stand.booth.logo_url ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={stand.booth.logo_url} alt={stand.booth.company_name} className="max-w-full max-h-full object-contain" />
+                  ) : (
+                    <span className="text-[10px] font-bold text-neutral-500 text-center px-1 line-clamp-3">{stand.booth.company_name.slice(0, 18)}</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-bold text-white">{stand.booth.company_name}</p>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {stand.booth.booth_number && <span className="text-[11px] font-mono bg-[#2a1245] text-purple-300 px-2 py-0.5 rounded">Stand {stand.booth.booth_number}</span>}
+                    {stand.booth.sector && <span className="text-[11px] text-purple-300/70">{stand.booth.sector}</span>}
+                    {stand.booth.status === 'VISITADO' && <span className="text-[11px] font-bold bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded">VISITADO</span>}
+                  </div>
+                  {stand.event && <p className="text-xs text-purple-300/60 mt-1">{stand.event.name}</p>}
+                  {stand.booth.website && (
+                    <a href={stand.booth.website} target="_blank" rel="noopener noreferrer" className="text-[11px] text-cyan-400 hover:underline mt-1 inline-block">{stand.booth.website}</a>
+                  )}
+                </div>
+              </div>
+
+              {/* Fotos da visita */}
+              {stand.visits && stand.visits.length > 0 && stand.visits.some((v: any) => v.photo_facade_url || v.photo_contact_url) && (
+                <div className="mt-4 pt-4 border-t border-purple-800/30">
+                  <p className="text-[10px] font-bold text-purple-300/60 uppercase tracking-wider mb-2">Fotos da visita</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {stand.visits.flatMap((v: any) => {
+                      const photos = [];
+                      if (v.photo_facade_url) photos.push({ url: v.photo_facade_url, label: 'Fachada', visitedAt: v.visited_at });
+                      if (v.photo_contact_url) photos.push({ url: v.photo_contact_url, label: 'Cartao', visitedAt: v.visited_at });
+                      return photos;
+                    }).map((p: any, idx: number) => (
+                      <a
+                        key={idx}
+                        href={p.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="relative w-24 h-20 rounded-lg overflow-hidden border border-purple-700/30 hover:border-emerald-500 transition-colors group"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.url} alt={p.label} className="w-full h-full object-cover" loading="lazy" />
+                        <span className="absolute bottom-0 left-0 right-0 bg-black/70 text-white text-[9px] py-0.5 text-center">{p.label}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Visitas registradas */}
+              <div className="mt-4 pt-4 border-t border-purple-800/30">
+                <p className="text-[10px] font-bold text-purple-300/60 uppercase tracking-wider mb-2">{stand.visits?.length || 0} visita{(stand.visits?.length || 0) !== 1 ? 's' : ''} registrada{(stand.visits?.length || 0) !== 1 ? 's' : ''}</p>
+                {stand.visits && stand.visits.slice(0, 3).map((v: any) => (
+                  <div key={v.id} className="text-[11px] text-purple-200/70 flex items-center gap-2 py-1">
+                    <span className="w-1 h-1 rounded-full bg-emerald-400 shrink-0" />
+                    <span className="font-medium text-white">{v.user_name}</span>
+                    <span className="text-purple-300/50">visitou</span>
+                    <span className="text-purple-300/40">{new Date(v.visited_at || v.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30">
             {/* Tabs */}
             <div className="px-4 sm:px-5 pt-3">
