@@ -58,6 +58,9 @@ export default function ContactCard({
 
           <Link href={`/contacts/${contact.id}`} className={`text-xs font-semibold hover:text-emerald-400 transition-colors truncate flex-1 min-w-0 ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
             {contact.name}
+            {contact.contato_nome && contact.contato_nome.trim() && (
+              <span className="ml-1.5 text-[10px] font-normal text-emerald-300/90">· {contact.contato_nome}</span>
+            )}
           </Link>
           {isInexistente && (
             <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400 whitespace-nowrap shrink-0">Inexistente</span>
@@ -143,6 +146,13 @@ export default function ContactCard({
                 <Link href={`/contacts/${contact.id}`} className={`text-sm font-semibold hover:text-emerald-400 transition-colors truncate ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
                   {contact.name}
                 </Link>
+                {/* Pessoa de contato (Alex Lopes etc) — destaque verde quando empresa tem contato */}
+                {contact.contato_nome && contact.contato_nome.trim() && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    {contact.contato_nome}
+                  </span>
+                )}
                 {isInexistente && (
                   <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Inexistente</span>
                 )}
@@ -282,6 +292,12 @@ export default function ContactCard({
               <Link href={`/contacts/${contact.id}`} className={`text-base font-semibold hover:text-emerald-400 transition-colors truncate ${isInexistente ? 'line-through text-neutral-500' : 'text-white'}`}>
                 {contact.name}
               </Link>
+              {contact.contato_nome && contact.contato_nome.trim() && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-bold rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  {contact.contato_nome}
+                </span>
+              )}
               {isInexistente && (
                 <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Inexistente</span>
               )}
