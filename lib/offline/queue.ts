@@ -59,20 +59,64 @@ async function base64ToBlob(base64: string, type: string): Promise<Blob> {
   return res.blob();
 }
 
+/**
+ * Comprime imagem no cliente antes de upload (essencial em rede ruim).
+ * Reduz fotos de 5-10MB pra ~300-800KB mantendo qualidade visual.
+ * - Max width 1920px (suficiente pra qualquer tela/print)
+ * - JPEG qualidade 0.82
+ * - Se nao for imagem, retorna o file original sem mexer
+ */
+export async function compressImage(file: File, maxWidth = 1920, quality = 0.82): Promise<File> {
+  if (!file.type.startsWith('image/')) return file;
+  if (file.size < 500 * 1024) return file; // < 500KB nao precisa
+  try {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error('image load failed'));
+      i.src = dataUrl;
+    });
+    const ratio = img.width > maxWidth ? maxWidth / img.width : 1;
+    const w = Math.round(img.width * ratio);
+    const h = Math.round(img.height * ratio);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(img, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', quality)
+    );
+    if (!blob || blob.size >= file.size) return file; // se nao reduziu, mantem original
+    return new File([blob], file.name.replace(/\.(heic|heif|png|webp)$/i, '.jpg'), { type: 'image/jpeg' });
+  } catch {
+    return file; // em qualquer erro, manda o original
+  }
+}
+
 export async function fileToBase64(file: File): Promise<{ name: string; type: string; base64: string }> {
+  // Comprime ANTES de virar base64 (reduz IndexedDB + payload de rede)
+  const compressed = await compressImage(file);
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
       const comma = dataUrl.indexOf(',');
       resolve({
-        name: file.name,
-        type: file.type || 'application/octet-stream',
+        name: compressed.name,
+        type: compressed.type || 'application/octet-stream',
         base64: dataUrl.substring(comma + 1),
       });
     };
     reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(compressed);
   });
 }
 
@@ -80,16 +124,26 @@ export async function fileToBase64(file: File): Promise<{ name: string; type: st
  * Enfileira um item offline. Se estiver online, tenta enviar imediatamente
  * e só enfileira em caso de falha de rede.
  */
+// Erros HTTP que sao TRANSITORIOS (rede/server) — vale tentar de novo na fila
+// 408 timeout, 425 too early, 429 rate limit, 5xx server errors
+const TRANSIENT_HTTP = new Set([408, 425, 429, 500, 502, 503, 504, 507, 508, 522, 524]);
+
 export async function enqueueOrSend(item: Omit<QueuedItem, 'id' | 'createdAt' | 'tries'>): Promise<{ sent: boolean; response?: Response; queued: boolean }> {
   if (isOnline()) {
     try {
       const fake: QueuedItem = { ...item, createdAt: Date.now(), tries: 0 };
       const res = await sendItem(fake);
       if (res.ok) return { sent: true, response: res, queued: false };
-      // Erro HTTP — não enfileira (é problema de negócio, não de conectividade)
+      // Erro HTTP transitorio (timeout, server error) → enfileira pra retry
+      if (TRANSIENT_HTTP.has(res.status)) {
+        await queueAdd(item);
+        emit();
+        return { sent: false, queued: true, response: res };
+      }
+      // Erro de negocio (400, 401, 403, 404, 409, 413, 422) → nao enfileira
       return { sent: false, response: res, queued: false };
     } catch (e) {
-      // Falha de rede — enfileira
+      // Falha de rede (timeout, DNS, sem conexao) — enfileira sempre
       await queueAdd(item);
       emit();
       return { sent: false, queued: true };
