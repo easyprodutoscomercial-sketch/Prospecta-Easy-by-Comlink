@@ -49,6 +49,7 @@ export async function POST(
     let markVisited = true;
     let extraPhotosUrls: string[] = [];
     let extraContacts: { name: string; cargo: string }[] = [];
+    let idempotencyKey: string | null = null;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -60,6 +61,7 @@ export async function POST(
       prospectType = formData.get('prospect_type') as string || 'COMPRADOR';
       notes = formData.get('notes') as string || null;
       markVisited = formData.get('mark_visited') !== 'false';
+      idempotencyKey = (formData.get('idempotency_key') as string) || null;
 
       // Parse extra contacts JSON
       const extraContactsStr = formData.get('extra_contacts') as string || '';
@@ -100,6 +102,7 @@ export async function POST(
       autoCreate = !!body.auto_create;
       markVisited = body.mark_visited !== false;
       extraContacts = body.extra_contacts || [];
+      idempotencyKey = body.idempotency_key || null;
     }
 
     if (!boothId) {
@@ -197,40 +200,62 @@ export async function POST(
       : userNotes || null;
 
     // Create the visit record
-    // TRAVA contra clique duplicado: se o mesmo user ja registrou esse booth
-    // nos ultimos 60 segundos, retorna a visita existente em vez de criar
-    // outra. Evita duplicatas geradas por click-spam ou retry de rede.
-    const sixtySecAgo = new Date(Date.now() - 60_000).toISOString();
-    const { data: recentVisit } = await admin
-      .from('booth_visits')
-      .select('*')
-      .eq('booth_id', boothId)
-      .eq('event_id', eventId)
-      .eq('user_id', user.id)
-      .gte('created_at', sixtySecAgo)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // ============================================
+    // TRAVA DE DUPLICACAO em 2 camadas:
+    // 1. idempotency_key (UUID gerado pelo cliente) — proteção forte:
+    //    se enviar a mesma key 2x, retorna a visita existente. Cobre
+    //    click-spam, retry de rede, sync offline duplo.
+    // 2. Fallback temporal de 60s (caso cliente antigo nao envie key)
+    // ============================================
+    let visit: any = null;
 
-    let visit: any;
-    if (recentVisit) {
-      console.log('[check-in] Duplicado detectado (user clicou de novo em <60s) — retornando visit existente', recentVisit.id);
-      // Atualiza visit existente com os dados novos (caso user tenha mudado algo)
-      const { data: updated } = await admin
+    if (idempotencyKey) {
+      const { data: existingByKey } = await admin
         .from('booth_visits')
-        .update({
-          photo_facade_url: photoFacadeUrl || recentVisit.photo_facade_url,
-          photo_contact_url: photoContactUrl || recentVisit.photo_contact_url,
-          contact_name: contactName || recentVisit.contact_name,
-          contact_role: contactRole || recentVisit.contact_role,
-          prospect_type: prospectType,
-          notes: packedNotes || recentVisit.notes,
-        })
-        .eq('id', recentVisit.id)
-        .select()
-        .single();
-      visit = updated || recentVisit;
-    } else {
+        .select('*')
+        .eq('organization_id', profile.organization_id)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle();
+      if (existingByKey) {
+        console.log('[check-in] idempotency_key match — retornando visit existente', existingByKey.id);
+        visit = existingByKey;
+      }
+    }
+
+    if (!visit) {
+      // Fallback: trava temporal pra clientes antigos que nao mandam idempotency_key
+      const sixtySecAgo = new Date(Date.now() - 60_000).toISOString();
+      const { data: recentVisit } = await admin
+        .from('booth_visits')
+        .select('*')
+        .eq('booth_id', boothId)
+        .eq('event_id', eventId)
+        .eq('user_id', user.id)
+        .is('idempotency_key', null)
+        .gte('created_at', sixtySecAgo)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (recentVisit) {
+        console.log('[check-in] Fallback temporal — visit existente em <60s', recentVisit.id);
+        const { data: updated } = await admin
+          .from('booth_visits')
+          .update({
+            photo_facade_url: photoFacadeUrl || recentVisit.photo_facade_url,
+            photo_contact_url: photoContactUrl || recentVisit.photo_contact_url,
+            contact_name: contactName || recentVisit.contact_name,
+            contact_role: contactRole || recentVisit.contact_role,
+            prospect_type: prospectType,
+            notes: packedNotes || recentVisit.notes,
+          })
+          .eq('id', recentVisit.id)
+          .select()
+          .single();
+        visit = updated || recentVisit;
+      }
+    }
+
+    if (!visit) {
       const { data: newVisit, error: visitError } = await admin
         .from('booth_visits')
         .insert({
@@ -245,11 +270,29 @@ export async function POST(
           contact_role: contactRole,
           prospect_type: prospectType,
           notes: packedNotes,
+          idempotency_key: idempotencyKey,
         })
         .select()
         .single();
-      if (visitError) throw visitError;
-      visit = newVisit;
+      if (visitError) {
+        // Se UNIQUE INDEX rejeitou, e porque outra requisicao em paralelo
+        // criou com a mesma key. Buscar e retornar essa.
+        if (idempotencyKey && visitError.code === '23505') {
+          const { data: race } = await admin
+            .from('booth_visits')
+            .select('*')
+            .eq('organization_id', profile.organization_id)
+            .eq('idempotency_key', idempotencyKey)
+            .maybeSingle();
+          if (race) {
+            console.log('[check-in] Race condition resolvida via UNIQUE INDEX', race.id);
+            visit = race;
+          }
+        }
+        if (!visit) throw visitError;
+      } else {
+        visit = newVisit;
+      }
     }
 
     // Mark booth as visited only if requested

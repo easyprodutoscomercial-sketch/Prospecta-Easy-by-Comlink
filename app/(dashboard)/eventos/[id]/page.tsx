@@ -1210,6 +1210,108 @@ function parseNotesMeta(notes: string | null): { userNotes: string; extraPhotos:
 }
 
 // --- Booth Drawer ---
+// Botoes de validacao do contato (Captavel / Descartar)
+// Versao robusta: feedback de loading, erro visivel, sem usar confirm() nativo (que falha em PWA mobile)
+function ValidationButtons({ contact, setContact }: { contact: any; setContact: (c: any) => void }) {
+  const [loading, setLoading] = useState<'captavel' | 'descartar' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDescartar, setConfirmDescartar] = useState(false);
+
+  const updateInexistente = async (newValue: boolean) => {
+    setError(null);
+    setLoading(newValue ? 'descartar' : 'captavel');
+    const prev = contact.inexistente;
+    // Optimistic
+    setContact({ ...contact, inexistente: newValue });
+    try {
+      const res = await fetch(`/api/contacts/${contact.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inexistente: newValue }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${txt.slice(0, 100)}`);
+      }
+      setConfirmDescartar(false);
+    } catch (err: any) {
+      setContact({ ...contact, inexistente: prev });
+      setError(err?.message || 'Erro ao salvar. Tente novamente.');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  return (
+    <div className="pt-3 border-t border-purple-800/30 space-y-2">
+      <p className="text-[10px] font-bold text-purple-300/60 uppercase tracking-wider">Esse lead vale a pena?</p>
+
+      {confirmDescartar ? (
+        <div className="space-y-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+          <p className="text-xs text-red-200">Tem certeza que quer descartar este contato? Ele sai da pipeline.</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmDescartar(false)}
+              disabled={loading !== null}
+              className="flex-1 px-3 py-2 rounded-lg text-xs font-medium bg-[#2a1245] text-purple-200 hover:bg-[#34165a] border border-purple-700/30"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={() => updateInexistente(true)}
+              disabled={loading !== null}
+              className="flex-1 px-3 py-2 rounded-lg text-xs font-bold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50"
+            >
+              {loading === 'descartar' ? 'Descartando...' : 'Sim, descartar'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => updateInexistente(false)}
+            disabled={loading !== null}
+            className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border disabled:opacity-50 ${
+              contact.inexistente === false
+                ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/30'
+                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+            }`}
+          >
+            {loading === 'captavel' ? 'Salvando...' : (contact.inexistente === false ? '✓ Captavel' : 'Captavel')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmDescartar(true)}
+            disabled={loading !== null}
+            className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border disabled:opacity-50 ${
+              contact.inexistente === true
+                ? 'bg-red-500 text-white border-red-400 shadow-md shadow-red-500/30'
+                : 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'
+            }`}
+          >
+            {contact.inexistente === true ? '✗ Descartado' : 'Descartar'}
+          </button>
+        </div>
+      )}
+
+      {error && (
+        <p className="text-[10px] text-red-300 bg-red-500/10 border border-red-500/30 rounded p-2">
+          ❌ {error}
+        </p>
+      )}
+
+      {contact.inexistente === true && !confirmDescartar && (
+        <p className="text-[10px] text-red-300/70 leading-tight">
+          Contato descartado — sai da pipeline. Acessivel em /contacts no filtro &quot;Descartados&quot;.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function BoothDrawer({
   booth,
   eventId,
@@ -1260,6 +1362,13 @@ function BoothDrawer({
 
   const [submitting, setSubmitting] = useState<'save' | 'visit' | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // Idempotency key: gera UUID na 1a renderizacao, envia em todo submit.
+  // Backend usa pra rejeitar duplicatas mesmo apos varios cliques/retries/sync offline.
+  const idempotencyKeyRef = useRef<string>(
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
   // Draft state: chave única por evento+stand, toast de restauração, skip do save inicial
   const draftKey = `checkin-drawer-${eventId}-${booth.id}`;
   const [draftRestoredAt, setDraftRestoredAt] = useState<number | null>(null);
@@ -1464,6 +1573,7 @@ function BoothDrawer({
         prospect_type: prospectType,
         notes: notes,
         mark_visited: markVisited ? 'true' : 'false',
+        idempotency_key: idempotencyKeyRef.current,
       };
       const extras = contacts.slice(1).filter((c) => c.name.trim() || c.phone.trim());
       if (extras.length > 0) {
@@ -1689,65 +1799,7 @@ function BoothDrawer({
                 </div>
 
                 {/* Validacao: captavel ou descartar */}
-                <div className="pt-3 border-t border-purple-800/30 space-y-2">
-                  <p className="text-[10px] font-bold text-purple-300/60 uppercase tracking-wider">Esse lead vale a pena?</p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const prev = contact.inexistente;
-                        setContact({ ...contact, inexistente: false });
-                        try {
-                          const res = await fetch(`/api/contacts/${contact.id}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ inexistente: false }),
-                          });
-                          if (!res.ok) throw new Error();
-                        } catch {
-                          setContact({ ...contact, inexistente: prev });
-                        }
-                      }}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
-                        contact.inexistente === false
-                          ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/30'
-                          : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                      }`}
-                    >
-                      {contact.inexistente === false ? '✓ Captavel' : 'Captavel'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!confirm('Descartar este contato? Ele sai da pipeline e da listagem principal (fica acessivel no filtro "Descartados").')) return;
-                        const prev = contact.inexistente;
-                        setContact({ ...contact, inexistente: true });
-                        try {
-                          const res = await fetch(`/api/contacts/${contact.id}`, {
-                            method: 'PATCH',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ inexistente: true }),
-                          });
-                          if (!res.ok) throw new Error();
-                        } catch {
-                          setContact({ ...contact, inexistente: prev });
-                        }
-                      }}
-                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
-                        contact.inexistente === true
-                          ? 'bg-red-500 text-white border-red-400 shadow-md shadow-red-500/30'
-                          : 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'
-                      }`}
-                    >
-                      {contact.inexistente === true ? '✗ Descartado' : 'Descartar'}
-                    </button>
-                  </div>
-                  {contact.inexistente === true && (
-                    <p className="text-[10px] text-red-300/70 leading-tight">
-                      Este contato esta descartado. Ele nao aparece na pipeline principal, so no filtro "Descartados" em /contacts.
-                    </p>
-                  )}
-                </div>
+                <ValidationButtons contact={contact} setContact={setContact} />
               </div>
             ) : (
               <p className="text-xs text-purple-300/40">Evento sem pipeline configurado</p>
