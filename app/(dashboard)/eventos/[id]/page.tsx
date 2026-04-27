@@ -1796,13 +1796,27 @@ function BoothDrawer({
             </div>
             <div className="space-y-2">
               {contacts.map((c, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <input type="text" placeholder="Nome do contato" value={c.name} onChange={(e) => updateContact(idx, 'name', e.target.value)} className={`${inputClass} flex-1 min-w-0`} />
-                  <input type="text" placeholder="Cargo" value={c.cargo} onChange={(e) => updateContact(idx, 'cargo', e.target.value)} className={`${inputClass} w-28 shrink-0`} />
-                  {contacts.length > 1 && (
-                    <button type="button" onClick={() => removeContact(idx)} className="p-1.5 text-red-400/40 hover:text-red-400 shrink-0">
+                <div key={idx} className="grid grid-cols-[1fr_7rem_auto] items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nome do contato"
+                    value={c.name}
+                    onChange={(e) => updateContact(idx, 'name', e.target.value)}
+                    className="px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30 min-w-0 w-full"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Cargo"
+                    value={c.cargo}
+                    onChange={(e) => updateContact(idx, 'cargo', e.target.value)}
+                    className="px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30 min-w-0 w-full"
+                  />
+                  {contacts.length > 1 ? (
+                    <button type="button" onClick={() => removeContact(idx)} className="p-1.5 text-red-400/40 hover:text-red-400">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                     </button>
+                  ) : (
+                    <span />
                   )}
                 </div>
               ))}
