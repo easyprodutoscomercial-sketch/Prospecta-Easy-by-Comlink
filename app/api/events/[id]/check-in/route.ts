@@ -356,9 +356,13 @@ export async function POST(
         // Avatar: photo_contact_url (foto do cartao) e o melhor que temos aqui
         // porque check-in de stand nao tira foto da pessoa, so do cartao.
         const avatarUrl = photoContactUrl || null;
+        // Padrao do CRM: name = empresa (do stand), contato_nome = pessoa.
+        // Antes salvava contato como pessoa solta (sem destaque pra empresa).
+        const empresaName = booth.company_name || contactName;
         const insertPayload: any = {
           organization_id: profile.organization_id,
-          name: contactName,
+          name: empresaName,
+          contato_nome: contactName,
           company: booth.company_name,
           cargo: contactRole,
           pipeline_id: event.pipeline_id,
@@ -369,7 +373,7 @@ export async function POST(
           notes: userNotes ? `[Feira] ${userNotes}` : null,
           status: 'NOVO',
           created_by_user_id: user.id,
-          name_normalized: contactName.toLowerCase().trim(),
+          name_normalized: empresaName.toLowerCase().trim(),
           avatar_url: avatarUrl,
         };
         if (contactPhone) {
@@ -402,23 +406,30 @@ export async function POST(
           const extraName = (extra.name || '').trim();
           if (!extraName) continue;
           const baseNotes = userNotes ? `[Feira] ${userNotes}` : '[Feira]';
-          await admin
-            .from('contacts')
-            .insert({
-              organization_id: profile.organization_id,
-              name: extraName,
-              company: booth.company_name,
-              cargo: extra.cargo || null,
-              pipeline_id: event.pipeline_id,
-              stage_id: event.stage_id,
-              origem: 'FEIRA',
-              event_id: eventId,
-              tipo: tipoArr,
-              notes: baseNotes,
-              status: 'NOVO',
-              created_by_user_id: user.id,
-              name_normalized: extraName.toLowerCase(),
-            });
+          const empresaName = booth.company_name || extraName;
+          const extraPhone = ((extra as any).phone || '').trim();
+          const phoneN = extraPhone ? extraPhone.replace(/\D/g, '') : null;
+          const extraPayload: any = {
+            organization_id: profile.organization_id,
+            name: empresaName,
+            contato_nome: extraName,
+            company: booth.company_name,
+            cargo: extra.cargo || null,
+            pipeline_id: event.pipeline_id,
+            stage_id: event.stage_id,
+            origem: 'FEIRA',
+            event_id: eventId,
+            tipo: tipoArr,
+            notes: baseNotes,
+            status: 'NOVO',
+            created_by_user_id: user.id,
+            name_normalized: empresaName.toLowerCase(),
+          };
+          if (extraPhone) {
+            extraPayload.phone = extraPhone;
+            if (phoneN) extraPayload.phone_normalized = phoneN;
+          }
+          await admin.from('contacts').insert(extraPayload);
         }
       }
     }

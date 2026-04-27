@@ -1644,9 +1644,16 @@ function BoothDrawer({
   const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
 
   // Tela de feedback (loading + sucesso) - aparece sobre o drawer inteiro
-  // pra impedir cliques duplicados e dar feedback visual claro
+  // pra impedir cliques duplicados e dar feedback visual claro.
+  // Detecta sucesso por palavras-chave de sucesso E ausencia de palavras de erro.
   const showLoading = submitting !== null;
-  const showSuccess = !!successMsg && (successMsg.includes('realizado') || successMsg.includes('salvos'));
+  const successKeywords = ['registrada', 'registrado', 'realizado', 'salvos', 'salva', 'fila'];
+  const errorKeywords = ['erro', 'falhou', 'inesperado'];
+  const showSuccess = !!successMsg
+    && successKeywords.some((k) => successMsg.toLowerCase().includes(k))
+    && !errorKeywords.some((k) => successMsg.toLowerCase().includes(k));
+  const showError = !!successMsg
+    && errorKeywords.some((k) => successMsg.toLowerCase().includes(k));
 
   return (
     <>
@@ -1683,6 +1690,29 @@ function BoothDrawer({
               <p className="text-2xl font-bold text-emerald-400">{successMsg}</p>
               <p className="text-sm text-purple-300/70">Tudo certo, pode continuar.</p>
             </div>
+          </div>
+        )}
+
+        {/* Tela de ERRO grande — fica ate user clicar OK pra fechar */}
+        {showError && !showLoading && (
+          <div className="absolute inset-0 z-[60] bg-[#120826]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 gap-4">
+            <div className="w-24 h-24 rounded-full bg-red-500 flex items-center justify-center shadow-xl shadow-red-500/40">
+              <svg className="w-14 h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+            <div className="text-center space-y-2 max-w-xs">
+              <p className="text-xl font-bold text-red-400">Nao deu certo</p>
+              <p className="text-sm text-purple-200/90 break-words">{successMsg}</p>
+              <p className="text-xs text-purple-300/50">Os dados ainda estao no formulario. Tente de novo.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSuccessMsg(null)}
+              className="mt-2 px-6 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700"
+            >
+              Voltar e tentar
+            </button>
           </div>
         )}
 
