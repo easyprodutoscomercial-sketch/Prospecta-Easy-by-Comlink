@@ -1620,6 +1620,9 @@ function BoothDrawer({
               <div className="space-y-3">
                 <div className="space-y-1">
                   <p className="text-sm text-white font-medium">{contact.name}</p>
+                  {contact.contato_nome && contact.contato_nome !== contact.name && (
+                    <p className="text-xs text-emerald-300/90 font-medium">👤 {contact.contato_nome}</p>
+                  )}
                   {contact.phone && <p className="text-xs text-purple-200/70">{contact.phone}</p>}
                   {contact.email && <p className="text-xs text-purple-200/70">{contact.email}</p>}
                   {contact.cargo && <p className="text-xs text-purple-300/50">Cargo: {contact.cargo}</p>}
@@ -1794,8 +1797,8 @@ function BoothDrawer({
             <div className="space-y-2">
               {contacts.map((c, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <input type="text" placeholder="Nome" value={c.name} onChange={(e) => updateContact(idx, 'name', e.target.value)} className={`${inputClass} flex-1`} />
-                  <input type="text" placeholder="Cargo" value={c.cargo} onChange={(e) => updateContact(idx, 'cargo', e.target.value)} className={`${inputClass} w-28`} />
+                  <input type="text" placeholder="Nome do contato" value={c.name} onChange={(e) => updateContact(idx, 'name', e.target.value)} className={`${inputClass} flex-1 min-w-0`} />
+                  <input type="text" placeholder="Cargo" value={c.cargo} onChange={(e) => updateContact(idx, 'cargo', e.target.value)} className={`${inputClass} w-28 shrink-0`} />
                   {contacts.length > 1 && (
                     <button type="button" onClick={() => removeContact(idx)} className="p-1.5 text-red-400/40 hover:text-red-400 shrink-0">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
