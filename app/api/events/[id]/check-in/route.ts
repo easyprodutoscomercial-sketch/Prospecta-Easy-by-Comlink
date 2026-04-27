@@ -391,6 +391,48 @@ export async function POST(
           await admin.from('contacts').update(patch).eq('id', existingVisit.contact_id);
         }
       } else if (contactName) {
+        // ANTES de criar novo: ja existe contato dessa EMPRESA nesse EVENTO?
+        // Se sim, REUSA — atualiza dados do existente em vez de duplicar.
+        // (Bug anterior: cada check-in criava contato novo por empresa, gerando
+        // 3-7 'Generac Pramac' fantasmas pro mesmo stand.)
+        const empresaSearch = (booth.company_name || contactName).trim();
+        const { data: empresaExistente } = await admin
+          .from('contacts')
+          .select('id, phone, email, contato_nome')
+          .eq('organization_id', profile.organization_id)
+          .eq('event_id', eventId)
+          .ilike('company', empresaSearch)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (empresaExistente?.id) {
+          console.log('[check-in] Empresa ja tem contato no evento — reusando', empresaExistente.id);
+          createdContact = { id: empresaExistente.id };
+          await admin.from('booth_visits').update({ contact_id: empresaExistente.id }).eq('id', visit.id);
+          // Atualiza com dados novos (sobrescreve apenas o que vier preenchido)
+          const patch: any = {};
+          if (contactName) patch.contato_nome = contactName;
+          if (contactRole) patch.cargo = contactRole;
+          if (contactPhone) {
+            patch.phone = contactPhone;
+            if (phoneNorm) patch.phone_normalized = phoneNorm;
+            patch.whatsapp = contactPhone;
+          }
+          if (contactEmail) {
+            patch.email = contactEmail;
+            if (emailNorm) patch.email_normalized = emailNorm;
+          }
+          if (photoContactUrl && !empresaExistente.contato_nome) {
+            patch.avatar_url = photoContactUrl;
+          }
+          if (Object.keys(patch).length > 0) {
+            await admin.from('contacts').update(patch).eq('id', empresaExistente.id);
+          }
+          // Pula o insert
+          // ts: precisa de bloco vazio pra fluxo
+        } else {
+
         // Avatar: photo_contact_url (foto do cartao) e o melhor que temos aqui
         // porque check-in de stand nao tira foto da pessoa, so do cartao.
         const avatarUrl = photoContactUrl || null;
@@ -435,6 +477,7 @@ export async function POST(
             .update({ contact_id: newContact.id })
             .eq('id', visit.id);
         }
+        } // fim do else (criou novo)
       }
 
       // Create extra contacts in the pipeline too — only on the first save to avoid duplicates
