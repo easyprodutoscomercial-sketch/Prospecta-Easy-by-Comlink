@@ -223,35 +223,40 @@ export async function POST(
     }
 
     if (!visit) {
-      // Fallback: trava temporal pra clientes antigos que nao mandam idempotency_key
-      const sixtySecAgo = new Date(Date.now() - 60_000).toISOString();
-      const { data: recentVisit } = await admin
+      // Fallback: 1 visita por user+booth+DIA (timezone Sao Paulo).
+      // Antes era 60s, mas vendedor pode reabrir o stand horas depois e
+      // duplicar — agora consolida na MESMA visita do dia.
+      const todayStartSP = new Date();
+      todayStartSP.setHours(0, 0, 0, 0); // local server, ajuste pra TZ correto via SQL no UNIQUE INDEX
+      const startISO = new Date(todayStartSP.getTime() - 12 * 3600_000).toISOString(); // -12h margem TZ
+      const { data: todayVisit } = await admin
         .from('booth_visits')
         .select('*')
         .eq('booth_id', boothId)
         .eq('event_id', eventId)
         .eq('user_id', user.id)
-        .is('idempotency_key', null)
-        .gte('created_at', sixtySecAgo)
+        .gte('created_at', startISO)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (recentVisit) {
-        console.log('[check-in] Fallback temporal — visit existente em <60s', recentVisit.id);
+      if (todayVisit) {
+        console.log('[check-in] Visita do mesmo user/stand HOJE ja existe, atualizando', todayVisit.id);
         const { data: updated } = await admin
           .from('booth_visits')
           .update({
-            photo_facade_url: photoFacadeUrl || recentVisit.photo_facade_url,
-            photo_contact_url: photoContactUrl || recentVisit.photo_contact_url,
-            contact_name: contactName || recentVisit.contact_name,
-            contact_role: contactRole || recentVisit.contact_role,
+            photo_facade_url: photoFacadeUrl || todayVisit.photo_facade_url,
+            photo_contact_url: photoContactUrl || todayVisit.photo_contact_url,
+            contact_name: contactName || todayVisit.contact_name,
+            contact_role: contactRole || todayVisit.contact_role,
             prospect_type: prospectType,
-            notes: packedNotes || recentVisit.notes,
+            notes: packedNotes || todayVisit.notes,
+            // Marca a key dessa requisicao se ainda nao tinha
+            idempotency_key: todayVisit.idempotency_key || idempotencyKey,
           })
-          .eq('id', recentVisit.id)
+          .eq('id', todayVisit.id)
           .select()
           .single();
-        visit = updated || recentVisit;
+        visit = updated || todayVisit;
       }
     }
 
