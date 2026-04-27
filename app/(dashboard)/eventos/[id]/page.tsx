@@ -1419,7 +1419,9 @@ function BoothDrawer({
         if (visit?.contact_id) {
           const res = await fetch(`/api/contacts/${visit.contact_id}`);
           if (res.ok) {
-            loaded = await res.json();
+            const data = await res.json();
+            // API retorna { contact, interactions, attachments, stand }
+            loaded = data.contact || data;
             setContact(loaded);
           }
         } else {
@@ -2110,7 +2112,7 @@ function BoothDrawer({
             <strong className="text-purple-300/80">Salvar Dados</strong> = atualiza contato (sem novo check-in)<br/>
             <strong className="text-emerald-400/80">Registrar Check-in</strong> = cria visita nova + marca como visitado
           </div>
-          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-27.6 (phone autoload)</p>
+          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-27.7 (phone OK)</p>
 
           {/* ===== Two Buttons — mobile friendly (touch area ≥ 48px) ===== */}
           <div className="flex gap-3 pb-2 pt-1 sticky bottom-0 bg-[#120826]/95 backdrop-blur-sm -mx-0 px-0 py-2">
