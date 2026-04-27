@@ -1415,9 +1415,13 @@ function BoothDrawer({
     const loadContact = async () => {
       setLoadingContact(true);
       try {
+        let loaded: any = null;
         if (visit?.contact_id) {
           const res = await fetch(`/api/contacts/${visit.contact_id}`);
-          if (res.ok) setContact(await res.json());
+          if (res.ok) {
+            loaded = await res.json();
+            setContact(loaded);
+          }
         } else {
           const res = await fetch(`/api/events/${eventId}/check-in`, {
             method: 'POST',
@@ -1426,8 +1430,24 @@ function BoothDrawer({
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.contact) setContact(data.contact);
+            if (data.contact) { loaded = data.contact; setContact(data.contact); }
           }
+        }
+        // Pre-popular o form de contato com dados ja salvos
+        // (telefone, contato_nome, cargo) — assim vendedor abre stand e ve
+        // o que ja tem, em vez de campos vazios.
+        if (loaded) {
+          setContacts((prev) => {
+            const first = prev[0] || { name: '', cargo: '', phone: '' };
+            return [
+              {
+                name: first.name || loaded.contato_nome || visit?.contact_name || '',
+                cargo: first.cargo || loaded.cargo || visit?.contact_role || '',
+                phone: first.phone || loaded.phone || '',
+              },
+              ...prev.slice(1),
+            ];
+          });
         }
       } catch { /* silent */ } finally { setLoadingContact(false); }
     };
@@ -2090,7 +2110,7 @@ function BoothDrawer({
             <strong className="text-purple-300/80">Salvar Dados</strong> = atualiza contato (sem novo check-in)<br/>
             <strong className="text-emerald-400/80">Registrar Check-in</strong> = cria visita nova + marca como visitado
           </div>
-          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-27.5</p>
+          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-27.6 (phone autoload)</p>
 
           {/* ===== Two Buttons — mobile friendly (touch area ≥ 48px) ===== */}
           <div className="flex gap-3 pb-2 pt-1 sticky bottom-0 bg-[#120826]/95 backdrop-blur-sm -mx-0 px-0 py-2">
