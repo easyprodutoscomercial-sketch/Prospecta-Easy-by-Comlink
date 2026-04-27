@@ -1494,11 +1494,12 @@ function BoothDrawer({
         // Limpa o rascunho — dados estão seguros no servidor
         draftClear(draftKey).catch(() => {});
         if (markVisited) {
-          setSuccessMsg('Check-in realizado!');
-          setTimeout(() => { onUpdate(); }, 1200);
+          setSuccessMsg('Visita registrada!');
+          // Da tempo pro user VER a confirmacao antes de fechar
+          setTimeout(() => { onUpdate(); }, 2500);
         } else {
           setSuccessMsg('Dados salvos!');
-          setTimeout(() => setSuccessMsg(null), 2000);
+          setTimeout(() => setSuccessMsg(null), 2500);
         }
       } else if (result.queued) {
         // Enfileirou offline: o payload (incluindo fotos em base64) já está
@@ -1522,10 +1523,49 @@ function BoothDrawer({
 
   const inputClass = 'w-full px-3 py-2 text-sm border rounded-lg bg-[#2a1245] text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500 border-purple-700/30';
 
+  // Tela de feedback (loading + sucesso) - aparece sobre o drawer inteiro
+  // pra impedir cliques duplicados e dar feedback visual claro
+  const showLoading = submitting !== null;
+  const showSuccess = !!successMsg && (successMsg.includes('realizado') || successMsg.includes('salvos'));
+
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px]" onClick={onClose} />
       <div className="fixed top-0 right-0 h-full z-50 w-full sm:w-[480px] bg-[#120826] border-l border-purple-800/20 flex flex-col" style={{ animation: 'slideInRight 0.3s ease-out' }}>
+
+        {/* Overlay BLOQUEANTE durante envio — impede clique duplo e mostra que ta processando */}
+        {showLoading && (
+          <div className="absolute inset-0 z-[60] bg-[#120826]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 gap-4" style={{ pointerEvents: 'all' }}>
+            <div className="w-20 h-20 border-4 border-purple-700/30 border-t-emerald-500 rounded-full animate-spin" />
+            <div className="text-center space-y-2">
+              <p className="text-xl font-bold text-white">
+                {submitting === 'visit' ? 'Registrando visita...' : 'Salvando dados...'}
+              </p>
+              <p className="text-sm text-purple-300/70">
+                {newFiles.length > 0
+                  ? `Enviando ${newFiles.length} foto${newFiles.length > 1 ? 's' : ''}, aguarde...`
+                  : 'Aguarde, nao feche a tela.'}
+              </p>
+              <p className="text-xs text-purple-300/40 mt-2">Pode demorar alguns segundos em rede ruim</p>
+            </div>
+          </div>
+        )}
+
+        {/* Tela de SUCESSO grande — fica ate o user fechar ou auto-fecha em 2.5s */}
+        {showSuccess && (
+          <div className="absolute inset-0 z-[60] bg-[#120826]/95 backdrop-blur-md flex flex-col items-center justify-center p-6 gap-4">
+            <div className="w-24 h-24 rounded-full bg-emerald-500 flex items-center justify-center shadow-xl shadow-emerald-500/40 animate-bounce">
+              <svg className="w-14 h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="text-center space-y-1">
+              <p className="text-2xl font-bold text-emerald-400">{successMsg}</p>
+              <p className="text-sm text-purple-300/70">Tudo certo, pode continuar.</p>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="p-4 border-b border-purple-800/20 flex items-center gap-3 shrink-0">
           {booth.logo_url && (
