@@ -535,82 +535,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH /api/lead-capture - Complementar dados do lead (step 2)
-export async function PATCH(request: NextRequest) {
-  try {
-    // FECHADO: rota PATCH publica permitia sobrescrever email/company/notes
-    // de qualquer contato sabendo apenas o telefone + token publico (que
-    // esta impresso em QR codes na feira). Atacante poderia redirecionar
-    // leads pra phishing. Quem precisar de update deve usar PATCH /api/contacts/[id]
-    // que requer auth.
-    return NextResponse.json({ error: 'Endpoint desabilitado por seguranca' }, { status: 410 });
-
-    // CODIGO ABAIXO MANTIDO COMO REFERENCIA (nao executa apos return acima)
-    /* eslint-disable @typescript-eslint/no-unused-vars */
-    const admin = getAdminClient();
-    const body = await request.json();
-
-    const { token, phone, email, company, cargo, notes } = body;
-
-    if (!token || !phone) {
-      return NextResponse.json({ error: 'Token e telefone sao obrigatorios' }, { status: 400 });
-    }
-
-    // Buscar link para pegar organization_id
-    const { data: link, error: linkError } = await admin
-      .from('lead_capture_links')
-      .select('organization_id')
-      .eq('token', token)
-      .single();
-
-    if (linkError || !link) {
-      return NextResponse.json({ error: 'Link nao encontrado' }, { status: 404 });
-    }
-
-    // Buscar contato pelo telefone normalizado na mesma org
-    const phoneNormalized = normalizePhone(phone);
-    const { data: contact, error: contactError } = await admin
-      .from('contacts')
-      .select('id')
-      .eq('organization_id', link.organization_id)
-      .eq('phone_normalized', phoneNormalized)
-      .limit(1)
-      .maybeSingle();
-
-    if (contactError || !contact) {
-      return NextResponse.json({ error: 'Contato nao encontrado' }, { status: 404 });
-    }
-
-    // Montar update apenas com campos preenchidos
-    const updates: Record<string, unknown> = {};
-    if (email?.trim()) {
-      updates.email = email.trim();
-      updates.email_normalized = normalizeEmail(email);
-    }
-    if (company?.trim()) updates.company = company.trim();
-    if (cargo?.trim()) updates.cargo = cargo.trim();
-    if (notes?.trim()) updates.notes = notes.trim();
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ success: true, message: 'Nenhum dado para atualizar.' });
-    }
-
-    const { error: updateError } = await admin
-      .from('contacts')
-      .update(updates)
-      .eq('id', contact.id);
-
-    if (updateError) {
-      console.error('Error updating lead via PATCH:', updateError);
-      throw updateError;
-    }
-
-    return NextResponse.json({
-      success: true,
-      message: 'Dados complementados com sucesso!',
-    });
-  } catch (error: any) {
-    console.error('Error patching lead capture:', error);
-    return NextResponse.json({ error: 'Erro ao atualizar dados.' }, { status: 500 });
-  }
+// PATCH /api/lead-capture - DESABILITADO (vulneravel a sobrescrita publica)
+export async function PATCH(_request: NextRequest) {
+  // FECHADO: rota PATCH publica permitia sobrescrever email/company/notes
+  // de qualquer contato sabendo apenas o telefone + token publico (que
+  // esta impresso em QR codes na feira). Atacante poderia redirecionar
+  // leads pra phishing. Quem precisar de update deve usar PATCH /api/contacts/[id]
+  // que requer auth.
+  return NextResponse.json({ error: 'Endpoint desabilitado por seguranca' }, { status: 410 });
 }
