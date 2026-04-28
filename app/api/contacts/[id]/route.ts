@@ -21,12 +21,18 @@ export async function GET(
       return NextResponse.json({ error: 'Não autorizado' }, { status: 401 });
     }
 
+    const profile = await ensureProfile(supabase, user);
+    if (!profile) {
+      return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
+    }
+
     const admin = getAdminClient();
 
     const { data: contact, error } = await admin
       .from('contacts')
       .select('*')
       .eq('id', id)
+      .eq('organization_id', profile.organization_id)
       .single();
 
     if (error || !contact) {

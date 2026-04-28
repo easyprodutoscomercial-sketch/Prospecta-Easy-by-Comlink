@@ -4,9 +4,39 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
+// Rate limit em memoria: 5 chamadas/minuto por IP. Protege contra bot que
+// queime o saldo OpenAI (cada chamada ~R$ 0.30-1.00 com gpt-4o detail:high).
+const RATE_WINDOW_MS = 60_000;
+const RATE_MAX = 5;
+const ipBuckets = new Map<string, number[]>();
+
+function getClientIp(req: NextRequest): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0].trim()
+    || req.headers.get('x-real-ip')
+    || 'anon';
+}
+
+function checkRate(ip: string): boolean {
+  const now = Date.now();
+  const bucket = (ipBuckets.get(ip) || []).filter((t) => now - t < RATE_WINDOW_MS);
+  if (bucket.length >= RATE_MAX) {
+    ipBuckets.set(ip, bucket);
+    return false;
+  }
+  bucket.push(now);
+  ipBuckets.set(ip, bucket);
+  return true;
+}
+
 // POST /api/scan-card - Extrai dados de cartao de visita via IA (sem auth - publico)
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit pra impedir bot queimando saldo OpenAI
+    const ip = getClientIp(request);
+    if (!checkRate(ip)) {
+      return NextResponse.json({ error: 'Muitas tentativas em pouco tempo. Aguarde 1 minuto.' }, { status: 429 });
+    }
+
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: 'IA nao configurada' }, { status: 500 });

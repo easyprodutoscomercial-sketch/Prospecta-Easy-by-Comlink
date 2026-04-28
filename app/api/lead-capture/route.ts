@@ -538,6 +538,15 @@ export async function POST(request: NextRequest) {
 // PATCH /api/lead-capture - Complementar dados do lead (step 2)
 export async function PATCH(request: NextRequest) {
   try {
+    // FECHADO: rota PATCH publica permitia sobrescrever email/company/notes
+    // de qualquer contato sabendo apenas o telefone + token publico (que
+    // esta impresso em QR codes na feira). Atacante poderia redirecionar
+    // leads pra phishing. Quem precisar de update deve usar PATCH /api/contacts/[id]
+    // que requer auth.
+    return NextResponse.json({ error: 'Endpoint desabilitado por seguranca' }, { status: 410 });
+
+    // CODIGO ABAIXO MANTIDO COMO REFERENCIA (nao executa apos return acima)
+    /* eslint-disable @typescript-eslint/no-unused-vars */
     const admin = getAdminClient();
     const body = await request.json();
 
