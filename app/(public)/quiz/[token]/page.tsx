@@ -239,16 +239,29 @@ export default function QuizPublicPage() {
     setSubmitting(false);
   };
 
-  // Apos a tela de obrigado, direciona pro Instagram da Easy automaticamente
-  // (objetivo: converter participacao em seguidor). Tempo curto pra fluir
-  // no estande, mas suficiente pro animation de check + ler o palpite.
+  // Apos a tela de obrigado, direciona pro Instagram da Easy.
+  // Em PWA standalone (instalado), window.location.href as vezes nao navega
+  // pra dominio externo. Por isso usamos 3 caminhos: tenta deep link nativo
+  // do app instagram, depois window.open num click simulado (anchor click),
+  // e por ultimo location.replace como fallback.
   useEffect(() => {
-    if (screen === 'thanks') {
-      const t = setTimeout(() => {
-        window.location.href = 'https://www.instagram.com/easybycomlink';
-      }, 5000);
-      return () => clearTimeout(t);
-    }
+    if (screen !== 'thanks') return;
+    const t = setTimeout(() => {
+      const url = 'https://www.instagram.com/easybycomlink';
+      try {
+        // Tenta abrir como anchor click — funciona melhor em PWA standalone
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch { /* fallback below */ }
+      // Fallback definitivo
+      setTimeout(() => { window.location.href = url; }, 200);
+    }, 5000);
+    return () => clearTimeout(t);
   }, [screen]);
 
   // Day badge helper — only show valid days (1..total)
