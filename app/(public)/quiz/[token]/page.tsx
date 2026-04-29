@@ -239,9 +239,14 @@ export default function QuizPublicPage() {
     setSubmitting(false);
   };
 
+  // Apos a tela de obrigado, direciona pro Instagram da Easy automaticamente
+  // (objetivo: converter participacao em seguidor). Tempo curto pra fluir
+  // no estande, mas suficiente pro animation de check + ler o palpite.
   useEffect(() => {
     if (screen === 'thanks') {
-      const t = setTimeout(() => { resetForm(); setScreen('welcome'); fetchConfig(); }, 6000);
+      const t = setTimeout(() => {
+        window.location.href = 'https://www.instagram.com/easybycomlink';
+      }, 4000);
       return () => clearTimeout(t);
     }
   }, [screen]);
@@ -558,8 +563,20 @@ export default function QuizPublicPage() {
           )}
 
           <div className="qz-spacer" />
+          <a
+            href="https://www.instagram.com/easybycomlink"
+            className="qz-btn qz-btn-primary qz-btn-lg"
+            style={{ background: 'linear-gradient(135deg, #f58529 0%, #dd2a7b 50%, #8134af 100%)', textDecoration: 'none' }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+              <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+            </svg>
+            Seguir @easybycomlink
+          </a>
           <div className="qz-return-bar"><div className="qz-return-bar-fill" /></div>
-          <p className="qz-sub" style={{ fontSize: 12, marginTop: 8 }}>Voltando ao inicio...</p>
+          <p className="qz-sub" style={{ fontSize: 12, marginTop: 8 }}>Te levando pro Instagram da Easy...</p>
         </Card>
       )}
 
@@ -1138,7 +1155,7 @@ const styles = `
     height: 100%; width: 100%;
     background: linear-gradient(90deg,#7c3aed,#a78bfa);
     border-radius: 4px;
-    animation: qzReturn 6s linear forwards;
+    animation: qzReturn 4s linear forwards;
   }
   @keyframes qzReturn { from { width: 100%; } to { width: 0%; } }
 
