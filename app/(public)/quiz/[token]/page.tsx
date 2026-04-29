@@ -246,7 +246,7 @@ export default function QuizPublicPage() {
     if (screen === 'thanks') {
       const t = setTimeout(() => {
         window.location.href = 'https://www.instagram.com/easybycomlink';
-      }, 4000);
+      }, 5000);
       return () => clearTimeout(t);
     }
   }, [screen]);
@@ -1155,7 +1155,7 @@ const styles = `
     height: 100%; width: 100%;
     background: linear-gradient(90deg,#7c3aed,#a78bfa);
     border-radius: 4px;
-    animation: qzReturn 4s linear forwards;
+    animation: qzReturn 5s linear forwards;
   }
   @keyframes qzReturn { from { width: 100%; } to { width: 0%; } }
 
