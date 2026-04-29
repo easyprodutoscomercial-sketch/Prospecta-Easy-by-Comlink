@@ -69,7 +69,9 @@ export default function ContactsFeirasView() {
     try {
       const [bRes, cRes] = await Promise.all([
         fetch(`/api/events/${selectedEventId}/booths`),
-        fetch(`/api/contacts?event_id=${selectedEventId}&limit=500`),
+        // descartados=all: a view de Feiras tem filtro proprio (Captavel/Descartado)
+        // entao precisa ver tudo pra ja exibir os descartados quando o user clica.
+        fetch(`/api/contacts?event_id=${selectedEventId}&limit=500&descartados=all`),
       ]);
       if (bRes.ok) {
         const bData = await bRes.json();

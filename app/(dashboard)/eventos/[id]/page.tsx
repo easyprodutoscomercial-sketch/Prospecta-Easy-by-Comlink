@@ -19,6 +19,7 @@ import {
 import EditEventModal from '@/components/eventos/edit-event-modal';
 import DeleteConfirmModal from '@/components/ui/delete-confirm-modal';
 import ContactAvatar from '@/components/contacts/contact-avatar';
+import { useToast } from '@/lib/toast-context';
 
 // Parser seguro de data ISO vinda do banco. Aceita tanto 'YYYY-MM-DD' quanto
 // 'YYYY-MM-DDT...' (com tempo/zona), sempre fixando ao meio-dia local pra
@@ -1211,17 +1212,16 @@ function parseNotesMeta(notes: string | null): { userNotes: string; extraPhotos:
 
 // --- Booth Drawer ---
 // Botoes de validacao do contato (Captavel / Descartar)
-// Versao robusta: feedback de loading, erro visivel, sem usar confirm() nativo (que falha em PWA mobile)
+// Versao 1-clique: clicou, fez. Sem modal de confirmacao (estava confundindo
+// no celular em feira). Toast verde/vermelho da feedback. Click de novo desfaz.
 function ValidationButtons({ contact, setContact }: { contact: any; setContact: (c: any) => void }) {
+  const toast = useToast();
   const [loading, setLoading] = useState<'captavel' | 'descartar' | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [confirmDescartar, setConfirmDescartar] = useState(false);
 
   const updateInexistente = async (newValue: boolean) => {
-    setError(null);
+    if (loading || !contact?.id) return;
     setLoading(newValue ? 'descartar' : 'captavel');
     const prev = contact.inexistente;
-    // Optimistic
     setContact({ ...contact, inexistente: newValue });
     try {
       const res = await fetch(`/api/contacts/${contact.id}`, {
@@ -1233,10 +1233,10 @@ function ValidationButtons({ contact, setContact }: { contact: any; setContact: 
         const txt = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status}: ${txt.slice(0, 100)}`);
       }
-      setConfirmDescartar(false);
+      toast.success(newValue ? 'Contato descartado — saiu da pipeline' : 'Contato marcado como captavel');
     } catch (err: any) {
       setContact({ ...contact, inexistente: prev });
-      setError(err?.message || 'Erro ao salvar. Tente novamente.');
+      toast.error(err?.message || 'Erro ao salvar. Tente novamente.');
     } finally {
       setLoading(null);
     }
@@ -1245,67 +1245,36 @@ function ValidationButtons({ contact, setContact }: { contact: any; setContact: 
   return (
     <div className="pt-3 border-t border-purple-800/30 space-y-2">
       <p className="text-[10px] font-bold text-purple-300/60 uppercase tracking-wider">Esse lead vale a pena?</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => updateInexistente(false)}
+          disabled={loading !== null}
+          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border disabled:opacity-50 ${
+            contact.inexistente === false
+              ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/30'
+              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+          }`}
+        >
+          {loading === 'captavel' ? 'Salvando...' : (contact.inexistente === false ? '✓ Captavel' : 'Captavel')}
+        </button>
+        <button
+          type="button"
+          onClick={() => updateInexistente(true)}
+          disabled={loading !== null}
+          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border disabled:opacity-50 ${
+            contact.inexistente === true
+              ? 'bg-red-500 text-white border-red-400 shadow-md shadow-red-500/30'
+              : 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'
+          }`}
+        >
+          {loading === 'descartar' ? 'Descartando...' : (contact.inexistente === true ? '✗ Descartado' : 'Descartar')}
+        </button>
+      </div>
 
-      {confirmDescartar ? (
-        <div className="space-y-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-          <p className="text-xs text-red-200">Tem certeza que quer descartar este contato? Ele sai da pipeline.</p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setConfirmDescartar(false)}
-              disabled={loading !== null}
-              className="flex-1 px-3 py-2 rounded-lg text-xs font-medium bg-[#2a1245] text-purple-200 hover:bg-[#34165a] border border-purple-700/30"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => updateInexistente(true)}
-              disabled={loading !== null}
-              className="flex-1 px-3 py-2 rounded-lg text-xs font-bold bg-red-500 text-white hover:bg-red-600 disabled:opacity-50"
-            >
-              {loading === 'descartar' ? 'Descartando...' : 'Sim, descartar'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => updateInexistente(false)}
-            disabled={loading !== null}
-            className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border disabled:opacity-50 ${
-              contact.inexistente === false
-                ? 'bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-500/30'
-                : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-            }`}
-          >
-            {loading === 'captavel' ? 'Salvando...' : (contact.inexistente === false ? '✓ Captavel' : 'Captavel')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirmDescartar(true)}
-            disabled={loading !== null}
-            className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border disabled:opacity-50 ${
-              contact.inexistente === true
-                ? 'bg-red-500 text-white border-red-400 shadow-md shadow-red-500/30'
-                : 'bg-red-500/10 text-red-400 border-red-500/30 hover:bg-red-500/20'
-            }`}
-          >
-            {contact.inexistente === true ? '✗ Descartado' : 'Descartar'}
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <p className="text-[10px] text-red-300 bg-red-500/10 border border-red-500/30 rounded p-2">
-          ❌ {error}
-        </p>
-      )}
-
-      {contact.inexistente === true && !confirmDescartar && (
+      {contact.inexistente === true && (
         <p className="text-[10px] text-red-300/70 leading-tight">
-          Contato descartado — sai da pipeline. Acessivel em /contacts no filtro &quot;Descartados&quot;.
+          Sumiu da pipeline. Pra voltar, clique &quot;Captavel&quot; de novo.
         </p>
       )}
     </div>
@@ -2112,7 +2081,7 @@ function BoothDrawer({
             <strong className="text-purple-300/80">Salvar Dados</strong> = atualiza contato (sem novo check-in)<br/>
             <strong className="text-emerald-400/80">Registrar Check-in</strong> = cria visita nova + marca como visitado
           </div>
-          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-27.7 (phone OK)</p>
+          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-28.1 (descartar)</p>
 
           {/* ===== Two Buttons — mobile friendly (touch area ≥ 48px) ===== */}
           <div className="flex gap-3 pb-2 pt-1 sticky bottom-0 bg-[#120826]/95 backdrop-blur-sm -mx-0 px-0 py-2">

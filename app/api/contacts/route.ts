@@ -42,6 +42,7 @@ function applyContactFilters(
     produtos_fornecidos?: string | null;
     event_id?: string | null;
     draft_mode?: 'exclude' | 'only' | 'all';
+    inexistente_mode?: 'exclude' | 'only' | 'all';
   }
 ) {
   // Filtrar por pipelines permitidas (non-admin)
@@ -97,6 +98,18 @@ function applyContactFilters(
     // sem filtro
   } else {
     query = query.eq('is_draft', false);
+  }
+
+  // Filtro de descartados (inexistente=true): exclude (default) = so ativos;
+  // only = so descartados; all = tudo.
+  // Por que default exclude: Descartar tem que TIRAR da pipeline / lista; senao
+  // o vendedor marca e o contato continua aparecendo, da impressao que nao funcionou.
+  if (filters.inexistente_mode === 'only') {
+    query = query.eq('inexistente', true);
+  } else if (filters.inexistente_mode === 'all') {
+    // sem filtro
+  } else {
+    query = query.eq('inexistente', false);
   }
 
   return query;
@@ -202,6 +215,13 @@ export async function GET(request: NextRequest) {
       draft_mode: (searchParams.get('drafts') === 'true'
         ? 'only'
         : searchParams.get('drafts') === 'all'
+          ? 'all'
+          : 'exclude') as 'exclude' | 'only' | 'all',
+      // ?descartados=only -> ver so descartados; ?descartados=all -> ver tudo;
+      // default (sem param ou qualquer outro valor) -> esconde descartados.
+      inexistente_mode: (searchParams.get('descartados') === 'only'
+        ? 'only'
+        : searchParams.get('descartados') === 'all'
           ? 'all'
           : 'exclude') as 'exclude' | 'only' | 'all',
     };

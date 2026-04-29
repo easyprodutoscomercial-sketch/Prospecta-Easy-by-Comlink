@@ -439,21 +439,10 @@ export default function QuizPublicPage() {
           <InputField icon="phone" label="Telefone / WhatsApp" type="tel" inputMode="numeric" value={telefone}
             onChange={(e) => setTelefone(formatPhone(e.target.value))} placeholder="(00) 00000-0000" autoComplete="tel" />
 
-          {/* Optional fields - collapsible area */}
-          <div className="qz-optional-divider">
-            <span className="qz-optional-divider-line" />
-            <span className="qz-optional-divider-text">Opcional</span>
-            <span className="qz-optional-divider-line" />
-          </div>
-
-          <div className="qz-optional-grid">
-            <InputField icon="email" label="Email" optional type="email" value={email}
-              onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" autoComplete="email" />
-            <InputField icon="map" label="Cidade" optional type="text" value={cidade}
-              onChange={(e) => setCidade(e.target.value)} placeholder="Sua cidade" autoComplete="address-level2" />
-            <InputField icon="briefcase" label="Funcao" optional type="text" value={cargo}
-              onChange={(e) => setCargo(e.target.value)} placeholder="Seu cargo" autoComplete="organization-title" />
-          </div>
+          {/* Campos opcionais (email/cidade/cargo) ficam ESCONDIDOS no form pra
+              acelerar o preenchimento no estande. Os values continuam nos states e
+              sao preenchidos automaticamente pelo scan-card / contact-picker se vier
+              do cartao, e seguem pro POST normalmente. So nao mostra input. */}
 
           {error && <p className="qz-error">{error}</p>}
           <div className="qz-spacer-sm" />
