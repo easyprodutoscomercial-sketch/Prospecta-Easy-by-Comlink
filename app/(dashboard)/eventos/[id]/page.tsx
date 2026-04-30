@@ -39,7 +39,18 @@ export default function EventDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [event, setEvent] = useState<FairEvent | null>(null);
-  const [tab, setTab] = useState<Tab>('dashboard');
+  // Tab inicial vem da URL (?tab=contatos) — permite linkar direto, e o Ranking
+  // de Vendedores navega pra ca trazendo ?tab=contatos&vendedor=xxx
+  const [tab, setTab] = useState<Tab>(() => (searchParams.get('tab') as Tab) || 'dashboard');
+
+  // Sincroniza tab com URL quando muda (ex: clicar no Ranking de Vendedores
+  // que faz router.push(?tab=contatos&vendedor=X) na MESMA rota — sem unmount).
+  useEffect(() => {
+    const t = searchParams.get('tab') as Tab;
+    if (t && t !== tab) setTab(t);
+    // intencional: nao incluir tab nas deps pra evitar loop quando user clica aba manualmente
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [loading, setLoading] = useState(true);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePreview, setDeletePreview] = useState<any>(null);
@@ -792,7 +803,7 @@ function SellersAtEvent({ eventId }: { eventId: string }) {
             <button
               key={s.user_id}
               type="button"
-              onClick={() => router.push(`/contacts?event_id=${eventId}&assigned=${s.user_id}`)}
+              onClick={() => router.push(`/eventos/${eventId}?tab=contatos&vendedor=${s.user_id}`)}
               className={`text-left rounded-lg border p-3 transition-all hover:scale-[1.01] relative ${
                 isLeader
                   ? 'bg-gradient-to-br from-amber-500/15 to-[#2a1245] border-amber-400/50 hover:border-amber-400/80 shadow-md shadow-amber-500/10'
@@ -4498,19 +4509,33 @@ function WalkInForm({
 // Mostra nome, empresa, telefone/email, tipo (Stand/Avulso), vendedor, quando criado.
 // Clicar na linha abre o contato em nova aba.
 function ContatosTab({ eventId }: { eventId: string }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [contacts, setContacts] = useState<any[]>([]);
+  const [sellers, setSellers] = useState<Array<{ user_id: string; name: string; avatar_url: string | null; contacts_captured: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Filtro por vendedor: 'all' = todos, 'unassigned' = sem vendedor, ou UUID do user.
+  // Pega valor inicial da URL (?vendedor=xxx) pra que a navegacao do Ranking de
+  // Vendedores ja chegue com filtro aplicado.
+  const [vendedorFilter, setVendedorFilter] = useState<string>(searchParams.get('vendedor') || 'all');
 
   useEffect(() => {
     let abort = false;
     (async () => {
       try {
         setLoading(true);
-        const res = await fetch(`/api/contacts?event_id=${eventId}&limit=500`);
-        if (res.ok) {
-          const data = await res.json();
+        const [contactsRes, sellersRes] = await Promise.all([
+          fetch(`/api/contacts?event_id=${eventId}&limit=500`),
+          fetch(`/api/events/${eventId}/sellers`),
+        ]);
+        if (contactsRes.ok) {
+          const data = await contactsRes.json();
           if (!abort) setContacts(data.contacts || data || []);
+        }
+        if (sellersRes.ok) {
+          const data = await sellersRes.json();
+          if (!abort) setSellers(data.sellers || []);
         }
       } catch { /* silent */ }
       finally { if (!abort) setLoading(false); }
@@ -4518,7 +4543,34 @@ function ContatosTab({ eventId }: { eventId: string }) {
     return () => { abort = true; };
   }, [eventId]);
 
+  // Atualiza URL quando muda o filtro — pra link compartilhavel + voltar mantem
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (vendedorFilter === 'all') params.delete('vendedor');
+    else params.set('vendedor', vendedorFilter);
+    const qs = params.toString();
+    const url = `${window.location.pathname}${qs ? '?' + qs : ''}`;
+    window.history.replaceState({}, '', url);
+  }, [vendedorFilter]);
+
+  // Map de userId -> seller pra render rapido das info do vendedor
+  const sellerMap = useMemo(() => {
+    const m: Record<string, typeof sellers[number]> = {};
+    sellers.forEach((s) => { m[s.user_id] = s; });
+    return m;
+  }, [sellers]);
+
   const filtered = contacts.filter((c) => {
+    // Filtro por vendedor (created_by ou assigned)
+    if (vendedorFilter !== 'all') {
+      const ownerId = c.created_by_user_id || c.assigned_to_user_id || null;
+      if (vendedorFilter === 'unassigned') {
+        if (ownerId) return false;
+      } else {
+        if (ownerId !== vendedorFilter) return false;
+      }
+    }
+    // Filtro de busca textual
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     return (
@@ -4545,34 +4597,90 @@ function ContatosTab({ eventId }: { eventId: string }) {
     );
   }
 
+  // Vendedor selecionado pra mostrar no header
+  const selectedSeller = vendedorFilter !== 'all' && vendedorFilter !== 'unassigned' ? sellerMap[vendedorFilter] : null;
+
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-lg font-bold text-white">
           Contatos da feira
-          <span className="ml-2 text-sm text-purple-300/60 font-normal">({filtered.length})</span>
+          <span className="ml-2 text-sm text-purple-300/60 font-normal">({filtered.length}{filtered.length !== contacts.length && ` de ${contacts.length}`})</span>
         </h3>
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nome, empresa, telefone..."
-          className="flex-1 max-w-sm px-3 py-2 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-        />
+        <div className="flex items-center gap-2 flex-wrap flex-1 justify-end">
+          <select
+            value={vendedorFilter}
+            onChange={(e) => setVendedorFilter(e.target.value)}
+            className="px-3 py-2 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 min-w-[180px]"
+          >
+            <option value="all">Todos os vendedores</option>
+            <option value="unassigned">Sem vendedor</option>
+            {sellers.length > 0 && (
+              <optgroup label="Por vendedor">
+                {sellers.map((s) => (
+                  <option key={s.user_id} value={s.user_id}>
+                    {s.name} ({s.contacts_captured})
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, empresa, telefone..."
+            className="flex-1 max-w-sm min-w-[200px] px-3 py-2 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 placeholder-purple-300/40 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+          />
+        </div>
       </div>
+
+      {/* Chip do vendedor selecionado — visualmente claro com avatar e botao limpar */}
+      {(selectedSeller || vendedorFilter === 'unassigned') && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex-wrap">
+          <span className="text-xs text-emerald-300/80">Filtrando por:</span>
+          <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-xs font-medium">
+            {selectedSeller ? (
+              <>
+                {selectedSeller.avatar_url ? (
+                  <img src={selectedSeller.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
+                ) : (
+                  <span className="w-5 h-5 rounded-full bg-emerald-500/40 flex items-center justify-center text-[10px] font-bold">{selectedSeller.name.charAt(0).toUpperCase()}</span>
+                )}
+                <span>{selectedSeller.name}</span>
+                <span className="text-emerald-200/60">· {selectedSeller.contacts_captured} contato{selectedSeller.contacts_captured !== 1 ? 's' : ''}</span>
+              </>
+            ) : (
+              <span>Sem vendedor atribuido</span>
+            )}
+            <button
+              type="button"
+              onClick={() => setVendedorFilter('all')}
+              className="ml-1 -mr-0.5 hover:text-white"
+              aria-label="Limpar filtro"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </span>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-12 text-center">
           <p className="text-purple-300/60 text-sm">
             {contacts.length === 0
               ? 'Ainda nao ha contatos registrados nesta feira. Faca um check-in ou walk-in.'
-              : 'Nenhum contato encontrado pra essa busca.'}
+              : (vendedorFilter !== 'all' || search.trim())
+                ? 'Nenhum contato encontrado com esse filtro.'
+                : 'Nenhum contato encontrado.'}
           </p>
         </div>
       ) : (
         <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden">
           <div className="divide-y divide-purple-800/20">
             {filtered.map((c) => {
+              const ownerId = c.created_by_user_id || c.assigned_to_user_id || null;
+              const owner = ownerId ? sellerMap[ownerId] : null;
               return (
               <Link
                 key={c.id}
@@ -4581,7 +4689,7 @@ function ContatosTab({ eventId }: { eventId: string }) {
               >
                 <ContactAvatar name={c.name} avatarUrl={c.avatar_url} size="lg" />
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <p className="text-white font-semibold truncate">{c.name}</p>
                     {isAvulso(c) ? (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
@@ -4590,6 +4698,17 @@ function ContatosTab({ eventId }: { eventId: string }) {
                     ) : (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
                         STAND
+                      </span>
+                    )}
+                    {/* Badge do vendedor responsavel — facilita identificar de batida */}
+                    {owner && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                        {owner.avatar_url ? (
+                          <img src={owner.avatar_url} alt="" className="w-3.5 h-3.5 rounded-full object-cover" />
+                        ) : (
+                          <span className="w-3.5 h-3.5 rounded-full bg-emerald-500/30 flex items-center justify-center text-[8px] font-bold">{owner.name.charAt(0).toUpperCase()}</span>
+                        )}
+                        {owner.name.split(' ')[0]}
                       </span>
                     )}
                   </div>
