@@ -697,12 +697,15 @@ type SellerStats = {
   user_id: string;
   name: string;
   avatar_url: string | null;
-  contacts_captured: number;
+  contacts_captured: number; // unicos atribuidos (uniao QR + stand)
   stands_visited: number;
   coverage_pct: number;
+  via_qr: number;
+  via_stand: number;
+  overlap_both: number;
   total_visits: number;
-  qr_leads: number;
-  manual_checkins: number;
+  qr_leads: number; // alias de via_qr (compat)
+  manual_checkins: number; // alias de via_stand (compat)
   total: number;
   last_activity: string | null;
 };
@@ -726,8 +729,10 @@ function SellersAtEvent({ eventId }: { eventId: string }) {
     total_sellers: number;
     active_sellers: number;
     total_stands: number;
+    total_contacts: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
     const load = () => {
@@ -768,20 +773,28 @@ function SellersAtEvent({ eventId }: { eventId: string }) {
     );
   }
 
-  // Totais agregados pra mostrar contexto no header
-  const totalContatos = data.sellers.reduce((sum, s) => sum + s.contacts_captured, 0);
-  const totalStandsCobertos = new Set<string>();
-  // Esse Set seria por backend, aqui usamos so a soma simples por seller (best-effort)
-  const totalStandsHits = data.sellers.reduce((sum, s) => sum + s.stands_visited, 0);
-  void totalStandsCobertos; void totalStandsHits;
+  // Total de contatos UNICOS no evento (vem do backend, nao soma dos cards
+  // que poderia ter dupla contagem entre vendedores).
+  const totalContatos = data.total_contacts ?? 0;
 
   return (
     <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <div>
-          <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Ranking de Vendedores</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Ranking de Vendedores</h3>
+            <button
+              type="button"
+              onClick={() => setShowHelp((v) => !v)}
+              className="w-4 h-4 rounded-full bg-purple-800/40 text-purple-300/70 text-[10px] font-bold flex items-center justify-center hover:bg-purple-700/50 hover:text-white"
+              title="Como ler estes numeros"
+              aria-label="Como ler estes numeros"
+            >
+              ?
+            </button>
+          </div>
           <p className="text-[11px] text-purple-300/50 mt-0.5">
-            {data.active_sellers} ativo{data.active_sellers !== 1 ? 's' : ''} · {totalContatos} contato{totalContatos !== 1 ? 's' : ''} · {data.total_stands} stand{data.total_stands !== 1 ? 's' : ''} no evento
+            {data.active_sellers} ativo{data.active_sellers !== 1 ? 's' : ''} · {totalContatos} contato{totalContatos !== 1 ? 's' : ''} unico{totalContatos !== 1 ? 's' : ''} · {data.total_stands} stand{data.total_stands !== 1 ? 's' : ''} no evento
           </p>
         </div>
         <button
@@ -792,6 +805,14 @@ function SellersAtEvent({ eventId }: { eventId: string }) {
           Ver todos os contatos
         </button>
       </div>
+
+      {showHelp && (
+        <div className="mb-4 p-3 rounded-lg bg-[#1a0a2e] border border-purple-700/30 text-[11px] text-purple-200/80 space-y-1.5 leading-relaxed">
+          <div><strong className="text-cyan-300">Stands</strong>: lugares fisicos UNICOS que o vendedor visitou no evento. Se ele abriu o mesmo stand 2 vezes pra corrigir, conta 1.</div>
+          <div><strong className="text-emerald-300">Contatos</strong>: pessoas UNICAS capturadas — nao duplica. Se um cliente passou pelo seu QR e depois voce o atendeu no stand, conta 1 contato (nao 2).</div>
+          <div><strong className="text-purple-200">QR + stand (detalhe)</strong>: do total de contatos, quantos vieram via QR Code e quantos via check-in de stand. A soma desses dois pode ser <em>maior</em> que o total porque o mesmo contato pode ter os 2 caminhos — isso e enriquecimento, nao duplicacao.</div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {data.sellers.map((s, idx) => {
@@ -866,7 +887,10 @@ function SellersAtEvent({ eventId }: { eventId: string }) {
                     <div className="text-[10px] text-purple-300/50 mt-0.5">{s.coverage_pct}% do evento</div>
                   )}
                 </div>
-                <div className="bg-[#1a0a2e]/70 rounded-md p-2 border border-purple-800/30">
+                <div
+                  className="bg-[#1a0a2e]/70 rounded-md p-2 border border-purple-800/30"
+                  title={`${s.contacts_captured} contatos UNICOS\n${s.via_qr} via QR · ${s.via_stand} via stand${s.overlap_both > 0 ? `\n${s.overlap_both} contato(s) vieram pelos dois caminhos` : ''}`}
+                >
                   <div className="flex items-center gap-1 text-[10px] font-semibold text-purple-300/60 uppercase tracking-wider">
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -874,8 +898,10 @@ function SellersAtEvent({ eventId }: { eventId: string }) {
                     Contatos
                   </div>
                   <div className="text-xl font-extrabold text-emerald-300 leading-tight mt-1">{s.contacts_captured}</div>
-                  {s.qr_leads > 0 && s.manual_checkins > 0 && (
-                    <div className="text-[10px] text-purple-300/50 mt-0.5">{s.qr_leads} QR · {s.manual_checkins} manual</div>
+                  {(s.via_qr > 0 || s.via_stand > 0) && (
+                    <div className="text-[10px] text-purple-300/50 mt-0.5">
+                      {s.via_qr} via QR · {s.via_stand} via stand
+                    </div>
                   )}
                 </div>
               </div>
