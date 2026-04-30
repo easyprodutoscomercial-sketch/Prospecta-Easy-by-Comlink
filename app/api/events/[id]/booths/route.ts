@@ -93,38 +93,40 @@ export async function GET(
       }
     });
 
-    // Busca avatar_url dos vendedores que visitaram pra mostrar avatar real na UI.
-    // Filtra por organization_id pra defense in depth — visitas ja sao da org,
-    // mas profiles e tabela compartilhada e service_role bypassa RLS, entao
-    // explicitar org_id e a forma certa.
-    const avatarMap: Record<string, string | null> = {};
-    if (visitorUserIds.size > 0) {
-      const { data: profs } = await admin
-        .from('profiles')
-        .select('user_id, avatar_url, name')
-        .eq('organization_id', profile.organization_id)
-        .in('user_id', Array.from(visitorUserIds));
-      (profs || []).forEach((p: any) => {
-        avatarMap[p.user_id] = p.avatar_url || null;
-      });
-    }
+    // Profiles e contacts sao independentes — paraleliza pra reduzir tempo
+    // de resposta. Pra AGRISHOW (800 booths, ~4000 visits) economiza um
+    // round trip; antes era serial (booths → visits → profiles → contacts).
+    const [profsRes, contactsRes] = await Promise.all([
+      visitorUserIds.size > 0
+        ? admin
+            .from('profiles')
+            .select('user_id, avatar_url, name')
+            .eq('organization_id', profile.organization_id)
+            .in('user_id', Array.from(visitorUserIds))
+        : Promise.resolve({ data: [] as any[] }),
+      allContactIds.size > 0
+        ? admin
+            .from('contacts')
+            .select('id, name, role, phone')
+            .eq('organization_id', profile.organization_id)
+            .in('id', Array.from(allContactIds))
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
     // Aplica avatar_url no array de visitors
+    const avatarMap: Record<string, string | null> = {};
+    (profsRes.data || []).forEach((p: any) => {
+      avatarMap[p.user_id] = p.avatar_url || null;
+    });
     Object.values(visitorsByBooth).forEach((list) => {
       list.forEach((v) => { v.avatar_url = avatarMap[v.user_id] ?? null; });
     });
 
-    // Busca dados dos contatos (filtra por org pra seguranca, mesmo com admin client)
+    // Mapa de contatos pra enriquecer cada booth com lista de contacts[]
     const contactsMap: Record<string, { id: string; name: string; role: string | null; phone: string | null }> = {};
-    if (allContactIds.size > 0) {
-      const { data: contactsData } = await admin
-        .from('contacts')
-        .select('id, name, role, phone')
-        .eq('organization_id', profile.organization_id)
-        .in('id', Array.from(allContactIds));
-      (contactsData || []).forEach((c: any) => {
-        contactsMap[c.id] = c;
-      });
-    }
+    (contactsRes.data || []).forEach((c: any) => {
+      contactsMap[c.id] = c;
+    });
 
     const enriched = (booths || []).map((b: any) => {
       const ids = contactIdsByBooth[b.id] ? Array.from(contactIdsByBooth[b.id]) : [];

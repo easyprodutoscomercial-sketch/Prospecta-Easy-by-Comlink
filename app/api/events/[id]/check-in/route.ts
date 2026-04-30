@@ -212,7 +212,12 @@ export async function POST(
       return NextResponse.json({ contact: null, message: 'Evento sem pipeline configurado' }, { status: 200 });
     }
 
-    // Pack metadata (extra photos + extra contacts) into notes
+    // Pack metadata (extra photos + extra contacts) into notes.
+    // DIVIDA TECNICA (FRAGIL #5): essa info esta DUPLICADA — extras tambem
+    // sao criados como rows separadas em `contacts`. O drawer le do JSON
+    // aqui pra pre-popular form ao reabrir o stand. Pra unificar, drawer
+    // precisa puxar contatos via API e nao depender desse JSON. Enquanto
+    // isso, mantemos a redundancia pra nao quebrar fluxo de edicao em campo.
     const hasMeta = extraPhotosUrls.length > 0 || extraContacts.length > 0;
     const userNotes = notes || '';
     const packedNotes = hasMeta

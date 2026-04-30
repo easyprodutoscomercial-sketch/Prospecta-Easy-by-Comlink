@@ -620,10 +620,9 @@ function MetaUrgenciaCard({ event, stats }: { event: FairEvent; stats: any }) {
   // Velocidade requerida (stands/dia) pra bater 100% até o fim
   const requiredPerDay = daysRemaining > 0 ? Math.ceil(pending / daysRemaining) : pending;
 
-  // Se o evento tá no meio do caminho, compara progresso esperado vs real
-  // esperado = (daysElapsed / totalDays) * 100
+  // Se o evento tá no meio do caminho, compara progresso esperado vs real.
+  // expectedPct ainda e usado pelo marcador branco na barra de progresso.
   const expectedPct = Math.min(100, Math.round((Math.max(1, daysElapsed) / totalDays) * 100));
-  const delta = progressPct - expectedPct; // positivo = à frente, negativo = atrás
 
   // Determina urgência
   let urgencia: 'ok' | 'atencao' | 'critico' | 'concluido' | 'aguardando' = 'ok';
@@ -660,27 +659,42 @@ function MetaUrgenciaCard({ event, stats }: { event: FairEvent; stats: any }) {
       bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300',
       barFrom: 'from-emerald-600', barTo: 'to-emerald-400', icon: 'text-emerald-400',
     };
-  } else if (delta < -15) {
-    urgencia = 'critico';
-    mensagem = `🚨 Atrasado: faltam ${pending} stands em ${daysRemaining} dia(s). Ritmo necessário: ${requiredPerDay}/dia.`;
-    cor = {
-      bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-300',
-      barFrom: 'from-red-600', barTo: 'to-red-400', icon: 'text-red-400',
-    };
-  } else if (delta < 0) {
-    urgencia = 'atencao';
-    mensagem = `⚠️ Ritmo apertado: faltam ${pending} stands em ${daysRemaining} dia(s). Necessário ${requiredPerDay}/dia.`;
-    cor = {
-      bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-300',
-      barFrom: 'from-amber-600', barTo: 'to-amber-400', icon: 'text-amber-400',
-    };
   } else {
-    urgencia = 'ok';
-    mensagem = `✅ No ritmo: ${pending} stand(s) restante(s) em ${daysRemaining} dia(s).`;
-    cor = {
-      bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300',
-      barFrom: 'from-emerald-600', barTo: 'to-emerald-400', icon: 'text-emerald-400',
-    };
+    // Urgencia agora se baseia em RITMO REAL vs RITMO NECESSARIO, nao em
+    // % delta fixo. Antes "delta < -15" disparava critico igual em feira
+    // de 50 stands e em feira de 800 — operacionalmente cenarios bem
+    // diferentes. Agora compara o que ja foi feito por dia com o que
+    // precisa ser feito por dia pra fechar.
+    const velocidadeHistorica = daysElapsed > 0 ? visited / daysElapsed : 0;
+    const velocidadeNecessaria = daysRemaining > 0 ? pending / daysRemaining : pending;
+    // Ratio: quantas vezes o vendedor precisa acelerar o ritmo. >1 = precisa
+    // mais que o ritmo medio ate agora; >2 = precisa dobrar.
+    const ratio = velocidadeHistorica > 0
+      ? velocidadeNecessaria / velocidadeHistorica
+      : (pending > 0 && daysElapsed >= 1 ? Infinity : 1);
+
+    if (ratio > 2 || (daysRemaining <= 1 && pending > visited)) {
+      urgencia = 'critico';
+      mensagem = `🚨 Atrasado: faltam ${pending} stands em ${daysRemaining} dia(s). Ritmo necessário: ${requiredPerDay}/dia.`;
+      cor = {
+        bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-300',
+        barFrom: 'from-red-600', barTo: 'to-red-400', icon: 'text-red-400',
+      };
+    } else if (ratio > 1.3) {
+      urgencia = 'atencao';
+      mensagem = `⚠️ Ritmo apertado: faltam ${pending} stands em ${daysRemaining} dia(s). Necessário ${requiredPerDay}/dia.`;
+      cor = {
+        bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-300',
+        barFrom: 'from-amber-600', barTo: 'to-amber-400', icon: 'text-amber-400',
+      };
+    } else {
+      urgencia = 'ok';
+      mensagem = `✅ No ritmo: ${pending} stand(s) restante(s) em ${daysRemaining} dia(s).`;
+      cor = {
+        bg: 'bg-emerald-500/10', border: 'border-emerald-500/30', text: 'text-emerald-300',
+        barFrom: 'from-emerald-600', barTo: 'to-emerald-400', icon: 'text-emerald-400',
+      };
+    }
   }
 
   return (
@@ -765,9 +779,33 @@ type SellerStats = {
   last_activity: string | null;
 };
 
+// Helper unico de OCR de cartao via /api/scan-card. Antes existiam 3 copias
+// (BoothDrawer, WalkInForm, CheckInForm) com tratamento de erro ligeiramente
+// diferente — bug em uma nao corrigia nas outras (DUP #4).
+type ScanCardResult =
+  | { success: true; data: { name?: string; cargo?: string; phone?: string; email?: string; company?: string; associacao?: string } }
+  | { success: false; error: string };
+
+async function scanBusinessCardOCR(file: File): Promise<ScanCardResult> {
+  try {
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await fetch('/api/scan-card', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({} as any));
+    if (!res.ok) {
+      return { success: false, error: data?.error || `Erro HTTP ${res.status} ao ler cartao` };
+    }
+    return { success: true, data };
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Erro de rede ao ler cartao' };
+  }
+}
+
 function formatLastActivity(iso: string | null): string {
   if (!iso) return 'sem atividade';
-  const diff = Date.now() - new Date(iso).getTime();
+  // Math.max(0, ...) evita "ha -3 min" quando ha clock skew entre cliente e
+  // servidor (timestamp do server pode chegar levemente no futuro).
+  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
   const min = Math.floor(diff / 60000);
   if (min < 1) return 'agora mesmo';
   if (min < 60) return `ha ${min} min`;
@@ -3566,15 +3604,14 @@ function CheckInForm({
     setScanLoading(true);
     setScanError(null);
     setScannedExtras(null);
+    const result = await scanBusinessCardOCR(file);
+    if (!result.success) {
+      setScanError(result.error);
+      setScanLoading(false);
+      return;
+    }
+    const data = result.data;
     try {
-      const fd = new FormData();
-      fd.append('image', file);
-      const res = await fetch('/api/scan-card', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) {
-        setScanError(data.error || 'Erro ao ler cartão');
-        return;
-      }
       // Preenche campos do form
       setForm((f) => ({
         ...f,
@@ -4277,32 +4314,26 @@ function WalkInForm({
       setCardB64({ name: file.name, type: file.type || 'application/octet-stream', dataUrl });
     } catch { /* silent */ }
 
-    // OCR via OpenAI pra pre-preencher os campos
+    // OCR via helper unico (DUP #4 — antes era duplicado)
     setScanLoading(true);
     setScanError(null);
-    try {
-      const fd = new FormData();
-      fd.append('image', file);
-      const res = await fetch('/api/scan-card', { method: 'POST', body: fd });
-      const data = await res.json();
-      if (!res.ok) {
-        setScanError(data.error || 'Erro ao ler cartao');
-        return;
-      }
-      setForm((f) => ({
-        ...f,
-        contact_name: data.name || f.contact_name,
-        contact_role: data.cargo || f.contact_role,
-        contact_phone: data.phone || f.contact_phone,
-        contact_email: data.email || f.contact_email,
-        company: data.company || f.company,
-        associacao: data.associacao || f.associacao,
-      }));
-    } catch (e: any) {
-      setScanError(e.message || 'Erro ao ler cartao');
-    } finally {
+    const result = await scanBusinessCardOCR(file);
+    if (!result.success) {
+      setScanError(result.error);
       setScanLoading(false);
+      return;
     }
+    const data = result.data;
+    setForm((f) => ({
+      ...f,
+      contact_name: data.name || f.contact_name,
+      contact_role: data.cargo || f.contact_role,
+      contact_phone: data.phone || f.contact_phone,
+      contact_email: data.email || f.contact_email,
+      company: data.company || f.company,
+      associacao: data.associacao || f.associacao,
+    }));
+    setScanLoading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -5352,12 +5383,14 @@ function FollowUpTab({ eventId, event }: { eventId: string; event: FairEvent }) 
             return (
               <div key={visit.id} className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
                 <div className="flex items-start gap-3">
-                  {/* Foto da fachada ou avatar */}
+                  {/* Foto da fachada ou avatar.
+                      object-contain (era object-cover) pra nao cortar lateral
+                      do logo/letreiro do stand — vendedor reconhecia errado. */}
                   {visit.photo_facade_url ? (
                     <img
                       src={visit.photo_facade_url}
                       alt={visit.event_booths?.company_name}
-                      className="w-16 h-16 rounded-lg object-cover shrink-0 border border-purple-700/30"
+                      className="w-16 h-16 rounded-lg object-contain bg-white shrink-0 border border-purple-700/30"
                     />
                   ) : (
                     <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-purple-700/40 to-purple-900/40 flex items-center justify-center shrink-0 border border-purple-700/30">

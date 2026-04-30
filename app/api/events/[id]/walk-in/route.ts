@@ -174,12 +174,19 @@ export async function POST(
     if (phoneNorm || emailNorm) {
       step = 'dedupQuery';
       let dup: any = null;
+      // Dedup restrito ao MESMO evento. Antes buscava na org inteira — se o
+      // cliente ja tinha sido capturado em feira anterior, walk-in da feira
+      // atual reusava o contato e o vendedor desta feira nao ficava com o
+      // credito. Agora cada feira tem seu proprio contato (mesmo cliente
+      // pode aparecer em N feiras como N contatos), e dedup so detecta
+      // duplicata dentro da feira corrente.
       if (phoneNorm) {
         const { data, error: dupErr } = await admin
           .from('contacts')
           .select('id, phone, email, event_id, name')
           .eq('organization_id', profile.organization_id)
           .eq('phone_normalized', phoneNorm)
+          .eq('event_id', eventId)
           .eq('is_draft', false)
           .limit(1)
           .maybeSingle();
@@ -192,6 +199,7 @@ export async function POST(
           .select('id, phone, email, event_id, name')
           .eq('organization_id', profile.organization_id)
           .eq('email_normalized', emailNorm)
+          .eq('event_id', eventId)
           .eq('is_draft', false)
           .limit(1)
           .maybeSingle();

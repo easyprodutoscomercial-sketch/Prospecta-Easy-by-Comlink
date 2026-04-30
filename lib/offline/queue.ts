@@ -170,12 +170,20 @@ export async function processQueue(): Promise<{ processed: number; failed: numbe
           await queueRemove(item.id!);
           processed++;
         } else if (res.status >= 400 && res.status < 500) {
-          // Erro de negócio permanente — descarta após marcar erro (evita loop infinito)
+          // Erro de negocio PERMANENTE (403 feira encerrada, 422 validacao,
+          // 409 conflito) — nao vale a pena retentar 5 vezes. Loga e remove
+          // ja na primeira tentativa pra nao deixar item zumbi consumindo
+          // ciclos quando o usuario nunca vai conseguir sincronizar (ex: a
+          // feira foi encerrada entre o save offline e o sync).
           const body = await res.text().catch(() => '');
-          await queueUpdate(item.id!, { tries: (item.tries || 0) + 1, lastError: `HTTP ${res.status}: ${body.slice(0, 200)}` });
-          if ((item.tries || 0) + 1 >= MAX_TRIES) {
-            await queueRemove(item.id!);
-          }
+          console.error('[queue] item descartado por erro 4xx permanente', {
+            id: item.id,
+            endpoint: item.endpoint,
+            status: res.status,
+            body: body.slice(0, 200),
+            createdAt: item.createdAt,
+          });
+          await queueRemove(item.id!);
           failed++;
         } else {
           // 5xx — tentativas futuras
