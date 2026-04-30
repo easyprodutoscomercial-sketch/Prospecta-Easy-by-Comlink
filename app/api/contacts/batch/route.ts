@@ -130,13 +130,16 @@ export async function DELETE(request: NextRequest) {
     // Audit log: registra cada delete pra ter rastro de quem deletou em massa.
     // Sem isso, vendedor reclama "sumiu meu contato" e ninguem sabe quem foi.
     try {
+      // Schema do audit_log: entity (nao entity_type), user_name e snapshots
       const auditRows = ownedContacts!.map((c: any) => ({
         organization_id: profile.organization_id,
         user_id: user.id,
-        action: 'CONTACT_DELETE',
-        entity_type: 'contact',
+        user_name: profile.name || null,
+        entity: 'contact',
         entity_id: c.id,
-        metadata: { name: c.name, batch: true, batch_size: ids.length },
+        action: 'CONTACT_DELETE',
+        old_values: { name: c.name },
+        metadata: { batch: true, batch_size: ids.length },
       }));
       await admin.from('audit_log').insert(auditRows);
     } catch (auditErr) {
