@@ -2845,33 +2845,66 @@ function StandsTab({
                 booth.status === 'VISITADO' ? 'border-emerald-500/20' : 'border-purple-800/30'
               }`}
             >
-              {booth.logo_url ? (
-                <div className={`w-10 h-10 rounded bg-white/90 flex items-center justify-center shrink-0 overflow-hidden ring-2 ${
-                  booth.status === 'VISITADO' ? 'ring-emerald-500/60' : 'ring-transparent'
-                }`}>
-                  <img
-                    src={booth.logo_url}
-                    alt={booth.company_name}
-                    className="w-full h-full object-contain"
-                    loading="lazy"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                </div>
-              ) : (
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                  booth.status === 'VISITADO' ? 'bg-emerald-500/20' : 'bg-purple-800/30'
-                }`}>
-                  {booth.status === 'VISITADO' ? (
-                    <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4 text-purple-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  )}
-                </div>
-              )}
+              {/* Avatar 40x40: prioridade
+                  1. logo da empresa (booth.logo_url)
+                  2. foto do vendedor mais recente que visitou (booth.visitors[0].avatar_url)
+                  3. inicial do vendedor mais recente (texto)
+                  4. icone generico (visitado=check / pendente=relogio) */}
+              {(() => {
+                const topVisitor = booth.visitors?.[0];
+                if (booth.logo_url) {
+                  return (
+                    <div className={`w-10 h-10 rounded bg-white/90 flex items-center justify-center shrink-0 overflow-hidden ring-2 ${
+                      booth.status === 'VISITADO' ? 'ring-emerald-500/60' : 'ring-transparent'
+                    }`}>
+                      <img
+                        src={booth.logo_url}
+                        alt={booth.company_name}
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    </div>
+                  );
+                }
+                if (topVisitor) {
+                  return (
+                    <div
+                      className="w-10 h-10 rounded-full shrink-0 overflow-hidden ring-2 ring-emerald-500/60 bg-emerald-500/20 flex items-center justify-center"
+                      title={`Visitado por ${topVisitor.user_name}`}
+                    >
+                      {topVisitor.avatar_url ? (
+                        <img
+                          src={topVisitor.avatar_url}
+                          alt={topVisitor.user_name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <span className="text-sm font-bold text-emerald-300">
+                          {topVisitor.user_name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                  );
+                }
+                return (
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    booth.status === 'VISITADO' ? 'bg-emerald-500/20' : 'bg-purple-800/30'
+                  }`}>
+                    {booth.status === 'VISITADO' ? (
+                      <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-purple-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-white font-medium truncate">{booth.company_name}</p>
                 <div className="flex items-center gap-3 text-[10px] text-purple-300/40">
