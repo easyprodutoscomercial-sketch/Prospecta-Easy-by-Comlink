@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { getQuizContactIds } from '@/lib/utils/quiz-filter';
 
 // GET /api/events/[id]/stats — event dashboard stats with daily breakdown
 export async function GET(
@@ -50,7 +51,11 @@ export async function GET(
     // ranking de vendedores. Antes esse endpoint contava visitas/leads brutos
     // incluindo rascunhos abandonados — vendedor via 600 leads no Dashboard
     // mas 480 na aba Contatos. Agora ambos contam o mesmo conjunto.
-    const { data: eventContactsActive } = await admin
+    //
+    // Excluimos contatos do quiz feira: Dashboard reflete trabalho dos
+    // vendedores, e quiz e captacao publica via QR (regra 2026-04-30).
+    const quizContactIds = await getQuizContactIds(admin, profile.organization_id);
+    const { data: rawContactsActive } = await admin
       .from('contacts')
       .select('id, created_by_user_id, created_at')
       .eq('organization_id', profile.organization_id)
@@ -58,7 +63,11 @@ export async function GET(
       .eq('is_draft', false)
       .eq('inexistente', false);
 
-    const activeContactIds = new Set((eventContactsActive || []).map((c: any) => c.id));
+    const eventContactsActive = (rawContactsActive || []).filter(
+      (c: any) => !quizContactIds.has(c.id)
+    );
+
+    const activeContactIds = new Set(eventContactsActive.map((c: any) => c.id));
 
     // visits "ativas" = sem contact_id (visita exploratoria sem captura) OU
     // com contact_id que ainda esta ativo (nao virou rascunho/descartado).

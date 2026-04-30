@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { getQuizContactIds } from '@/lib/utils/quiz-filter';
 
 // GET /api/events/[id]/live — dados em tempo real para War Room e live presence
 // Retorna: cobertura, ranking, visitas últimas 2h, "quem está ativo agora"
@@ -55,7 +56,10 @@ export async function GET(
 
     // Filtra visitas: descarta as vinculadas a contatos draft/inexistentes pra
     // que o ranking ao vivo bata com a aba Contatos e com /sellers. Mantem
-    // visitas sem contact_id (visita exploratoria sem captura).
+    // visitas sem contact_id (visita exploratoria sem captura). Tambem
+    // descarta contatos do quiz publico — visualizacao da feira e so trabalho
+    // dos vendedores (regra do dono 2026-04-30).
+    const quizContactIds = await getQuizContactIds(admin, profile.organization_id);
     const { data: activeContactsForLive } = await admin
       .from('contacts')
       .select('id')
@@ -63,7 +67,11 @@ export async function GET(
       .eq('event_id', id)
       .eq('is_draft', false)
       .eq('inexistente', false);
-    const activeContactIdsLive = new Set((activeContactsForLive || []).map((c: any) => c.id));
+    const activeContactIdsLive = new Set(
+      (activeContactsForLive || [])
+        .map((c: any) => c.id)
+        .filter((cid: string) => !quizContactIds.has(cid))
+    );
 
     const visitsList = (visits || []).filter((v: any) =>
       !v.contact_id || activeContactIdsLive.has(v.contact_id)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { getQuizContactIds } from '@/lib/utils/quiz-filter';
 
 // GET /api/events/[id]/report-data
 // Retorna dados agregados completos para o relatório executivo do evento.
@@ -48,6 +49,9 @@ export async function GET(
       .eq('organization_id', profile.organization_id)
       .order('visited_at', { ascending: true });
 
+    // Exclui contatos do quiz publico — relatorio executivo da feira mede
+    // trabalho dos vendedores, nao captacao via QR coletivo (regra do dono).
+    const quizContactIds = await getQuizContactIds(admin, profile.organization_id);
     const { data: activeContactsForReport } = await admin
       .from('contacts')
       .select('id')
@@ -55,7 +59,11 @@ export async function GET(
       .eq('event_id', id)
       .eq('is_draft', false)
       .eq('inexistente', false);
-    const activeContactIdsReport = new Set((activeContactsForReport || []).map((c: any) => c.id));
+    const activeContactIdsReport = new Set(
+      (activeContactsForReport || [])
+        .map((c: any) => c.id)
+        .filter((cid: string) => !quizContactIds.has(cid))
+    );
 
     const visits = (visitsRaw || []).filter((v: any) =>
       !v.contact_id || activeContactIdsReport.has(v.contact_id)

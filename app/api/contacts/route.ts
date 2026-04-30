@@ -41,6 +41,7 @@ function applyContactFilters(
     proxima_acao_tipo?: string | null;
     produtos_fornecidos?: string | null;
     event_id?: string | null;
+    exclude_quiz?: boolean;
     draft_mode?: 'exclude' | 'only' | 'all';
     inexistente_mode?: 'exclude' | 'only' | 'all';
   }
@@ -229,6 +230,7 @@ export async function GET(request: NextRequest) {
       proxima_acao_tipo: searchParams.get('proxima_acao_tipo'),
       produtos_fornecidos: searchParams.get('produtos_fornecidos'),
       event_id: searchParams.get('event_id'),
+      exclude_quiz: searchParams.get('exclude_quiz') === 'true',
       draft_mode: (searchParams.get('drafts') === 'true'
         ? 'only'
         : searchParams.get('drafts') === 'all'
@@ -252,6 +254,15 @@ export async function GET(request: NextRequest) {
       return applyContactFilters(q, filters);
     };
 
+    // Se vem ?exclude_quiz=true (usado pela visualizacao da feira), busca os
+    // contact_id do quiz pra filtrar em memoria (PostgREST nao suporta NOT IN
+    // com subquery). Nao afeta a tela global /contacts — so quem opt-in.
+    let quizContactIds: Set<string> | null = null;
+    if (filters.exclude_quiz) {
+      const { getQuizContactIds } = await import('@/lib/utils/quiz-filter');
+      quizContactIds = await getQuizContactIds(admin, profile.organization_id);
+    }
+
     // Se cabe em uma unica request, buscar direto
     if (limit <= SUPABASE_MAX_ROWS) {
       const { data: contacts, error, count } = await buildQuery(true)
@@ -260,14 +271,22 @@ export async function GET(request: NextRequest) {
 
       if (error) throw error;
 
-      await attachEventsToContacts(admin, contacts || [], profile.organization_id);
+      let result = contacts || [];
+      let total = count || 0;
+      if (quizContactIds && quizContactIds.size > 0) {
+        const before = result.length;
+        result = result.filter((c: any) => !quizContactIds!.has(c.id));
+        total -= before - result.length;
+      }
+
+      await attachEventsToContacts(admin, result, profile.organization_id);
 
       return NextResponse.json({
-        contacts,
-        total: count,
+        contacts: result,
+        total,
         page,
         limit,
-        totalPages: Math.ceil((count || 0) / limit),
+        totalPages: Math.ceil(total / limit),
       });
     }
 
@@ -296,14 +315,22 @@ export async function GET(request: NextRequest) {
       currentOffset += batch.length;
     }
 
-    await attachEventsToContacts(admin, allContacts, profile.organization_id);
+    let finalContacts = allContacts;
+    let finalTotal = totalCount || 0;
+    if (quizContactIds && quizContactIds.size > 0) {
+      const before = finalContacts.length;
+      finalContacts = finalContacts.filter((c: any) => !quizContactIds!.has(c.id));
+      finalTotal -= before - finalContacts.length;
+    }
+
+    await attachEventsToContacts(admin, finalContacts, profile.organization_id);
 
     return NextResponse.json({
-      contacts: allContacts,
-      total: totalCount,
+      contacts: finalContacts,
+      total: finalTotal,
       page,
       limit,
-      totalPages: Math.ceil((totalCount || 0) / limit),
+      totalPages: Math.ceil(finalTotal / limit),
     });
 
   } catch (error: any) {

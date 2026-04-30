@@ -4898,7 +4898,9 @@ function ContatosTab({ eventId }: { eventId: string }) {
       try {
         setLoading(true);
         const [contactsRes, sellersRes] = await Promise.all([
-          fetch(`/api/contacts?event_id=${eventId}&limit=500`),
+          // exclude_quiz=true: aba Contatos da feira nao mostra contatos do
+          // quiz publico — so o que vendedores capturaram (regra do dono).
+          fetch(`/api/contacts?event_id=${eventId}&exclude_quiz=true&limit=500`),
           fetch(`/api/events/${eventId}/sellers`),
         ]);
         if (contactsRes.ok) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { getQuizContactIds } from '@/lib/utils/quiz-filter';
 import * as XLSX from 'xlsx';
 
 // GET /api/events/[id]/export-contacts
@@ -63,11 +64,18 @@ export async function GET(
       visitContacts = data || [];
     }
 
+    // Excluir contatos do quiz publico — exportacao da feira reflete trabalho
+    // dos vendedores (regra do dono 2026-04-30). Quiz fica disponivel via
+    // /api/quiz/participantes/export se precisar exportar separado.
+    const quizContactIds = await getQuizContactIds(admin, profile.organization_id);
+
     // Merge por id (evita duplicata), com map pra buscar info do visit
     const byId = new Map<string, any>();
-    (directContacts || []).forEach((c: any) => byId.set(c.id, c));
+    (directContacts || []).forEach((c: any) => {
+      if (!quizContactIds.has(c.id)) byId.set(c.id, c);
+    });
     visitContacts.forEach((c: any) => {
-      if (!byId.has(c.id)) byId.set(c.id, c);
+      if (!byId.has(c.id) && !quizContactIds.has(c.id)) byId.set(c.id, c);
     });
 
     // Info do booth_visit por contact_id (último visit)
