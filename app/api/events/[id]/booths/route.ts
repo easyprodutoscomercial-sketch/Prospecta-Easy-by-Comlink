@@ -52,15 +52,41 @@ export async function GET(
       visits = v || [];
     }
 
+    // Mapa booth_id -> visit (mantem a mais recente, comportamento legado)
     const visitsMap: Record<string, any> = {};
+    // Mapa booth_id -> Set<contact_id> (todos os contatos capturados naquele stand)
+    const contactIdsByBooth: Record<string, Set<string>> = {};
+    const allContactIds = new Set<string>();
     visits.forEach((v: any) => {
       if (!visitsMap[v.booth_id]) visitsMap[v.booth_id] = v;
+      if (v.contact_id) {
+        if (!contactIdsByBooth[v.booth_id]) contactIdsByBooth[v.booth_id] = new Set();
+        contactIdsByBooth[v.booth_id].add(v.contact_id);
+        allContactIds.add(v.contact_id);
+      }
     });
 
-    const enriched = (booths || []).map((b: any) => ({
-      ...b,
-      visit: visitsMap[b.id] || null,
-    }));
+    // Busca dados dos contatos (filtra por org pra seguranca, mesmo com admin client)
+    const contactsMap: Record<string, { id: string; name: string; role: string | null; phone: string | null }> = {};
+    if (allContactIds.size > 0) {
+      const { data: contactsData } = await admin
+        .from('contacts')
+        .select('id, name, role, phone')
+        .eq('organization_id', profile.organization_id)
+        .in('id', Array.from(allContactIds));
+      (contactsData || []).forEach((c: any) => {
+        contactsMap[c.id] = c;
+      });
+    }
+
+    const enriched = (booths || []).map((b: any) => {
+      const ids = contactIdsByBooth[b.id] ? Array.from(contactIdsByBooth[b.id]) : [];
+      return {
+        ...b,
+        visit: visitsMap[b.id] || null,
+        contacts: ids.map((cid) => contactsMap[cid]).filter(Boolean),
+      };
+    });
 
     return NextResponse.json({ booths: enriched });
   } catch (error: any) {

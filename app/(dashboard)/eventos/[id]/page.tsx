@@ -63,6 +63,7 @@ export default function EventDetailPage() {
   const [activeDraftContactId, setActiveDraftContactId] = useState<string | null>(null);
   const [walkInDrafts, setWalkInDrafts] = useState<any[]>([]);
   const [showDraftsList, setShowDraftsList] = useState(false);
+  const [showCaptureMenu, setShowCaptureMenu] = useState(false);
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [discardingDraftId, setDiscardingDraftId] = useState<string | null>(null);
 
@@ -235,31 +236,85 @@ export default function EventDetailPage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 ml-8 sm:ml-0">
-          <button
-            onClick={() => {
-              setShowWalkIn(false);
-              setTab('stands');
-              setOpenStandFormNonce((n) => n + 1);
-            }}
-            className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-emerald-500/20"
-            title="Cadastrar um novo stand neste evento"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
-            </svg>
-            Novo Stand
-          </button>
-          <button
-            onClick={openNewWalkIn}
-            disabled={event.status !== 'ATIVO' || creatingDraft}
-            className="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-cyan-500"
-            title={event.status === 'ATIVO' ? 'Contato encontrado fora de stand (corredor, café, palestra)' : 'Ative a feira em Feiras & Eventos para capturar contatos'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-            {creatingDraft ? 'Abrindo...' : 'Contato Avulso'}
-          </button>
+          {/* Botao unico de captura de lead — menu com Stand / Avulso */}
+          <div className="relative">
+            <button
+              onClick={() => setShowCaptureMenu((v) => !v)}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+              title="Capturar lead — cadastrar stand ou contato avulso"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              {creatingDraft ? 'Abrindo...' : 'Capturar Lead'}
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {showCaptureMenu && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setShowCaptureMenu(false)} />
+                <div className="absolute right-0 top-full mt-2 w-72 bg-[#1e0f35] border border-emerald-500/30 rounded-xl shadow-2xl shadow-black/40 z-40 p-1.5">
+                  <button
+                    onClick={() => {
+                      setShowCaptureMenu(false);
+                      setShowWalkIn(false);
+                      setTab('stands');
+                      setOpenStandFormNonce((n) => n + 1);
+                    }}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-emerald-500/10 text-sm text-white flex items-center gap-3"
+                  >
+                    <svg className="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21" />
+                    </svg>
+                    <div className="min-w-0">
+                      <div className="font-semibold">Visitei um stand</div>
+                      <div className="text-[11px] text-purple-300/60 mt-0.5">Cadastrar nova empresa expositora</div>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCaptureMenu(false);
+                      openNewWalkIn();
+                    }}
+                    disabled={event.status !== 'ATIVO' || creatingDraft}
+                    className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-cyan-500/10 text-sm text-white flex items-center gap-3 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={event.status === 'ATIVO' ? '' : 'Ative a feira em Feiras & Eventos para capturar contatos'}
+                  >
+                    <svg className="w-5 h-5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <div className="min-w-0">
+                      <div className="font-semibold">Conheci alguem no corredor</div>
+                      <div className="text-[11px] text-purple-300/60 mt-0.5">
+                        {event.status === 'ATIVO' ? 'Contato avulso (cafe, palestra, etc)' : 'Disponivel quando a feira estiver ativa'}
+                      </div>
+                    </div>
+                  </button>
+                  {visibleDrafts.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setShowCaptureMenu(false);
+                        setShowDraftsList(true);
+                      }}
+                      className="w-full text-left px-3 py-2.5 rounded-lg hover:bg-amber-500/10 text-sm text-white flex items-center gap-3 border-t border-purple-800/30 mt-1 pt-3"
+                    >
+                      <svg className="w-5 h-5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold">Continuar rascunho</div>
+                        <div className="text-[11px] text-purple-300/60 mt-0.5">Capturas iniciadas e nao finalizadas</div>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[11px] font-bold shrink-0">
+                        {visibleDrafts.length}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           {visibleDrafts.length > 0 && (
             <div className="relative">
               <button
@@ -2270,6 +2325,8 @@ function StandsTab({
   const [selectedBooth, setSelectedBooth] = useState<EventBooth | null>(null);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showAddMenu, setShowAddMenu] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const xlsInputRef = useRef<HTMLInputElement>(null);
 
   const handleDownloadTemplate = async () => {
@@ -2551,9 +2608,10 @@ function StandsTab({
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
+      {/* Toolbar reorganizada em 3 grupos: busca | filtros | menus de Adicionar/Acoes */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+        {/* Busca */}
+        <div className="relative flex-1 min-w-0">
           <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-400/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
@@ -2565,6 +2623,8 @@ function StandsTab({
             className={`${inputClass} pl-10`}
           />
         </div>
+
+        {/* Filtros de status */}
         <div className="flex gap-2">
           {['all', 'PENDENTE', 'VISITADO'].map((s) => (
             <button
@@ -2580,34 +2640,8 @@ function StandsTab({
             </button>
           ))}
         </div>
-        <button
-          onClick={handleExport}
-          disabled={exporting || booths.length === 0}
-          className="px-3 py-2 bg-cyan-600 text-white rounded-lg text-xs font-medium hover:bg-cyan-700 disabled:opacity-50 flex items-center gap-1.5 shrink-0"
-        >
-          {exporting ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          )}
-          Exportar
-        </button>
-        <button
-          onClick={handleCreateContacts}
-          disabled={creatingContacts || booths.length === 0}
-          className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 shrink-0"
-        >
-          {creatingContacts ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          )}
-          Criar Contatos
-        </button>
+
+        {/* Input file escondido pra import — preserva fluxo original */}
         <input
           ref={xlsInputRef}
           type="file"
@@ -2619,39 +2653,129 @@ function StandsTab({
             e.target.value = '';
           }}
         />
-        <button
-          onClick={handleDownloadTemplate}
-          className="px-3 py-2 bg-purple-800/30 text-purple-300 rounded-lg text-xs font-medium hover:bg-purple-800/50 transition-colors flex items-center gap-1.5 shrink-0"
-          title="Baixar modelo Excel"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-          Modelo
-        </button>
-        <button
-          onClick={() => xlsInputRef.current?.click()}
-          disabled={importing}
-          className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2 shrink-0"
-        >
-          {importing ? (
-            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
+
+        {/* Menu Adicionar (Novo Stand / Importar Excel / Modelo) */}
+        <div className="relative">
+          <button
+            onClick={() => { setShowAddMenu((v) => !v); setShowActionsMenu(false); }}
+            className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 shrink-0 w-full sm:w-auto justify-center"
+          >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
+            Adicionar
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showAddMenu && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setShowAddMenu(false)} />
+              <div className="absolute right-0 top-full mt-2 w-56 bg-[#1e0f35] border border-emerald-500/30 rounded-xl shadow-2xl shadow-black/40 z-40 p-1.5">
+                <button
+                  onClick={() => { setShowAdd(true); setShowAddMenu(false); }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-500/10 text-sm text-white flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <div>
+                    <div className="font-medium">Novo Stand</div>
+                    <div className="text-[10px] text-purple-300/50">Cadastrar uma empresa</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => { xlsInputRef.current?.click(); setShowAddMenu(false); }}
+                  disabled={importing}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-amber-500/10 text-sm text-white flex items-center gap-2 disabled:opacity-50"
+                >
+                  {importing ? (
+                    <div className="w-4 h-4 border-2 border-amber-400/30 border-t-amber-400 rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                  )}
+                  <div>
+                    <div className="font-medium">Importar Excel</div>
+                    <div className="text-[10px] text-purple-300/50">Cadastrar varios stands de uma vez</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => { handleDownloadTemplate(); setShowAddMenu(false); }}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-purple-500/10 text-sm text-white flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  <div>
+                    <div className="font-medium">Baixar Modelo</div>
+                    <div className="text-[10px] text-purple-300/50">Planilha base pra importar</div>
+                  </div>
+                </button>
+              </div>
+            </>
           )}
-          Importar Excel
-        </button>
-        <button
-          onClick={() => setShowAdd(true)}
-          className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-sm font-medium hover:bg-emerald-600 flex items-center gap-2 shrink-0"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Novo Stand
-        </button>
+        </div>
+
+        {/* Menu Acoes (Exportar / Criar Contatos) */}
+        <div className="relative">
+          <button
+            onClick={() => { setShowActionsMenu((v) => !v); setShowAddMenu(false); }}
+            disabled={booths.length === 0}
+            className="px-4 py-2 bg-purple-800/30 text-purple-200/80 border border-purple-700/30 rounded-lg text-sm font-medium hover:bg-purple-800/50 hover:text-white transition-colors flex items-center gap-2 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed w-full sm:w-auto justify-center"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Ações
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showActionsMenu && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setShowActionsMenu(false)} />
+              <div className="absolute right-0 top-full mt-2 w-64 bg-[#1e0f35] border border-purple-700/30 rounded-xl shadow-2xl shadow-black/40 z-40 p-1.5">
+                <button
+                  onClick={() => { handleExport(); setShowActionsMenu(false); }}
+                  disabled={exporting || booths.length === 0}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-cyan-500/10 text-sm text-white flex items-center gap-2 disabled:opacity-50"
+                >
+                  {exporting ? (
+                    <div className="w-4 h-4 border-2 border-cyan-400/30 border-t-cyan-400 rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  )}
+                  <div>
+                    <div className="font-medium">Exportar Excel</div>
+                    <div className="text-[10px] text-purple-300/50">Baixar planilha de stands</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => { handleCreateContacts(); setShowActionsMenu(false); }}
+                  disabled={creatingContacts || booths.length === 0}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-purple-500/10 text-sm text-white flex items-center gap-2 disabled:opacity-50"
+                >
+                  {creatingContacts ? (
+                    <div className="w-4 h-4 border-2 border-purple-400/30 border-t-purple-400 rounded-full animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4 text-purple-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                  )}
+                  <div>
+                    <div className="font-medium">Criar Contatos</div>
+                    <div className="text-[10px] text-purple-300/50">Gera 1 contato por stand sem visita</div>
+                  </div>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {createMsg && (
@@ -2759,6 +2883,20 @@ function StandsTab({
                     </span>
                   )}
                 </div>
+                {booth.contacts && booth.contacts.length > 0 && (
+                  <div className="flex items-center gap-1.5 mt-1 text-[11px] min-w-0">
+                    <svg className="w-3 h-3 text-cyan-400/80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="text-cyan-400/90 font-semibold shrink-0">
+                      {booth.contacts.length} {booth.contacts.length === 1 ? 'contato' : 'contatos'}:
+                    </span>
+                    <span className="text-cyan-200/70 truncate">
+                      {booth.contacts.slice(0, 2).map((c) => c.name).join(', ')}
+                      {booth.contacts.length > 2 && ` +${booth.contacts.length - 2}`}
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${BOOTH_STATUS_COLORS[booth.status]}`}>

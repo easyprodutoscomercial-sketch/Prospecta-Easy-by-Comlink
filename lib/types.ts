@@ -657,6 +657,14 @@ export interface EventBooth {
   updated_at: string;
   // joined
   visit?: BoothVisit | null;
+  contacts?: BoothContact[];
+}
+
+export interface BoothContact {
+  id: string;
+  name: string;
+  role: string | null;
+  phone: string | null;
 }
 
 export interface BoothVisit {
