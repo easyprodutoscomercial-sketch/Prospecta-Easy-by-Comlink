@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { normalizePhone, normalizeCPF, normalizeCNPJ } from '@/lib/utils/normalize';
 import * as XLSX from 'xlsx';
 
 // GET /api/contacts/export - Exportar contatos como Excel
@@ -67,16 +68,30 @@ export async function GET(request: NextRequest) {
     if (estado && estado !== 'all') {
       query = query.eq('estado', estado);
     }
+    // R5: comparar pelos campos *_normalized garante que filtro digitado com
+    // mascara bata com banco salvo sem mascara (e vice-versa). Mesma logica
+    // de /api/contacts GET — export precisa filtrar identico pra nao ficar
+    // com resultado divergente.
     const telefone = searchParams.get('telefone');
     if (telefone) {
-      query = query.ilike('phone', `%${telefone}%`);
+      const norm = normalizePhone(telefone);
+      if (norm) query = query.ilike('phone_normalized', `%${norm}%`);
     }
     const cpf = searchParams.get('cpf');
-    if (cpf) { query = query.ilike('cpf', `%${cpf}%`); }
+    if (cpf) {
+      const norm = normalizeCPF(cpf);
+      if (norm) query = query.ilike('cpf_digits', `%${norm}%`);
+    }
     const cnpj = searchParams.get('cnpj');
-    if (cnpj) { query = query.ilike('cnpj', `%${cnpj}%`); }
+    if (cnpj) {
+      const norm = normalizeCNPJ(cnpj);
+      if (norm) query = query.ilike('cnpj_digits', `%${norm}%`);
+    }
     const whatsapp = searchParams.get('whatsapp');
-    if (whatsapp) { query = query.ilike('whatsapp', `%${whatsapp}%`); }
+    if (whatsapp) {
+      const norm = normalizePhone(whatsapp);
+      if (norm) query = query.ilike('phone_normalized', `%${norm}%`);
+    }
     const empresa = searchParams.get('empresa');
     if (empresa) { query = query.ilike('company', `%${empresa}%`); }
     const referencia = searchParams.get('referencia');

@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
+import { loadSupabaseEnv } from './_lib/env.mjs';
 const supabaseUrl = 'https://edwkdrgferjbitxwlwrf.supabase.co';
-const serviceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVkd2tkcmdmZXJqYml0eHdsd3JmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDcxMjA3OSwiZXhwIjoyMDg2Mjg4MDc5fQ.KILRshoC8XLuoJyx9Xrlz_Ve8-W9LOxYtsvWndyXfdc';
+const { SB_KEY: serviceKey } = loadSupabaseEnv();
 
 const supabase = createClient(supabaseUrl, serviceKey);
 

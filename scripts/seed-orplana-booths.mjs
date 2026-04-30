@@ -4,8 +4,9 @@
 // As credenciais abaixo são lidas das variáveis de ambiente, se definidas.
 // Caso contrário caem no fallback hardcoded (mesmo usado em run-migration-cover.mjs).
 
+import { loadSupabaseManagementToken } from './_lib/env.mjs';
 const PROJECT_REF = process.env.SUPABASE_PROJECT_REF || 'edwkdrgferjbitxwlwrf';
-const PAT = process.env.SUPABASE_PAT || 'sbp_5a7afd31806772c9ba4ee83f1bea56c2f0c231c3';
+const PAT = loadSupabaseManagementToken();
 
 const EVENT_ID = 'e3587964-856e-490a-a06a-ec7da93421ff';
 const ORG_ID = '86727616-4004-4604-b21b-25e8400d271d';
