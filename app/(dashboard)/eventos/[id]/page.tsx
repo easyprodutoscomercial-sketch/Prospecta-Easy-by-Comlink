@@ -4880,14 +4880,22 @@ function WalkInForm({
 // Lista todos os contatos deste evento (stand + walk-in) inline.
 // Mostra nome, empresa, telefone/email, tipo (Stand/Avulso), vendedor, quando criado.
 // Clicar na linha abre o contato em nova aba.
+// Linha da aba Contatos — um contato vinculado a um stand visitado.
+// Vendedor vem da visita (booth_visits.user_id), nao de assigned_to.
+type StandContactRow = {
+  contact: { id: string; name: string; role: string | null; phone: string | null };
+  booth: { id: string; company_name: string; booth_number: string | null; sector: string | null; logo_url: string | null };
+  visitor: { user_id: string; user_name: string; avatar_url: string | null; visited_at: string } | null;
+};
+
 function ContatosTab({ eventId }: { eventId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [contacts, setContacts] = useState<any[]>([]);
+  const [rows, setRows] = useState<StandContactRow[]>([]);
   const [sellers, setSellers] = useState<Array<{ user_id: string; name: string; avatar_url: string | null; contacts_captured: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  // Filtro por vendedor: 'all' = todos, 'unassigned' = sem vendedor, ou UUID do user.
+  // Filtro por vendedor: 'all' = todos, ou UUID do user.
   // Pega valor inicial da URL (?vendedor=xxx) pra que a navegacao do Ranking de
   // Vendedores ja chegue com filtro aplicado.
   const [vendedorFilter, setVendedorFilter] = useState<string>(searchParams.get('vendedor') || 'all');
@@ -4897,15 +4905,36 @@ function ContatosTab({ eventId }: { eventId: string }) {
     (async () => {
       try {
         setLoading(true);
-        const [contactsRes, sellersRes] = await Promise.all([
-          // exclude_quiz=true: aba Contatos da feira nao mostra contatos do
-          // quiz publico — so o que vendedores capturaram (regra do dono).
-          fetch(`/api/contacts?event_id=${eventId}&exclude_quiz=true&limit=500`),
+        // Reflexo da aba Stands: pega booths com seus contacts ja vinculados a
+        // booth_visits. NAO usa /api/contacts pra evitar trazer walk-in avulso
+        // / quiz / outros caminhos. So o que esta amarrado a um stand.
+        const [boothsRes, sellersRes] = await Promise.all([
+          fetch(`/api/events/${eventId}/booths`),
           fetch(`/api/events/${eventId}/sellers`),
         ]);
-        if (contactsRes.ok) {
-          const data = await contactsRes.json();
-          if (!abort) setContacts(data.contacts || data || []);
+        if (boothsRes.ok) {
+          const data = await boothsRes.json();
+          const booths: any[] = data.booths || [];
+          // Achata em linhas (1 linha por contato vinculado a um stand)
+          const flat: StandContactRow[] = [];
+          for (const b of booths) {
+            if (!b.contacts || b.contacts.length === 0) continue;
+            const visitor = (b.visitors && b.visitors[0]) || null;
+            for (const c of b.contacts) {
+              flat.push({
+                contact: c,
+                booth: {
+                  id: b.id,
+                  company_name: b.company_name,
+                  booth_number: b.booth_number,
+                  sector: b.sector,
+                  logo_url: b.logo_url,
+                },
+                visitor,
+              });
+            }
+          }
+          if (!abort) setRows(flat);
         }
         if (sellersRes.ok) {
           const data = await sellersRes.json();
@@ -4934,24 +4963,21 @@ function ContatosTab({ eventId }: { eventId: string }) {
     return m;
   }, [sellers]);
 
-  const filtered = contacts.filter((c) => {
-    // Filtro por vendedor (created_by ou assigned)
+  // Filtragem: vendedor que CAPTOU vem do booth_visit, nao de assigned_to.
+  // Isso reflete a realidade — quem fez check-in no stand é o "dono real" do
+  // contato pra fim de credito de captacao.
+  const filtered = rows.filter((row) => {
     if (vendedorFilter !== 'all') {
-      const ownerId = c.created_by_user_id || c.assigned_to_user_id || null;
-      if (vendedorFilter === 'unassigned') {
-        if (ownerId) return false;
-      } else {
-        if (ownerId !== vendedorFilter) return false;
-      }
+      const visitorId = row.visitor?.user_id || null;
+      if (visitorId !== vendedorFilter) return false;
     }
-    // Filtro de busca textual
     if (!search.trim()) return true;
     const s = search.toLowerCase();
     return (
-      (c.name || '').toLowerCase().includes(s) ||
-      (c.company || '').toLowerCase().includes(s) ||
-      (c.email || '').toLowerCase().includes(s) ||
-      (c.phone || '').toLowerCase().includes(s)
+      (row.contact.name || '').toLowerCase().includes(s) ||
+      (row.booth.company_name || '').toLowerCase().includes(s) ||
+      (row.booth.booth_number || '').toLowerCase().includes(s) ||
+      (row.contact.phone || '').toLowerCase().includes(s)
     );
   });
 
@@ -4960,8 +4986,6 @@ function ContatosTab({ eventId }: { eventId: string }) {
     const d = new Date(iso);
     return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   };
-
-  const isAvulso = (c: any) => (c.notes || '').trim().startsWith('[Avulso]');
 
   if (loading) {
     return (
@@ -4977,10 +5001,15 @@ function ContatosTab({ eventId }: { eventId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-lg font-bold text-white">
-          Contatos da feira
-          <span className="ml-2 text-sm text-purple-300/60 font-normal">({filtered.length}{filtered.length !== contacts.length && ` de ${contacts.length}`})</span>
-        </h3>
+        <div>
+          <h3 className="text-lg font-bold text-white">
+            Contatos dos stands
+            <span className="ml-2 text-sm text-purple-300/60 font-normal">({filtered.length}{filtered.length !== rows.length && ` de ${rows.length}`})</span>
+          </h3>
+          <p className="text-[11px] text-purple-300/40 font-normal mt-0.5">
+            Reflexo da aba Stands — só contatos vinculados a check-in de stand. Walk-in avulso/quiz não aparecem aqui.
+          </p>
+        </div>
         <div className="flex items-center gap-2 flex-wrap flex-1 justify-end">
           <select
             value={vendedorFilter}
@@ -4988,7 +5017,6 @@ function ContatosTab({ eventId }: { eventId: string }) {
             className="px-3 py-2 text-sm bg-[#1e0f35] border border-purple-700/30 rounded-lg text-neutral-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 min-w-[180px]"
           >
             <option value="all">Todos os vendedores</option>
-            <option value="unassigned">Sem vendedor</option>
             {sellers.length > 0 && (
               <optgroup label="Por vendedor">
                 {sellers.map((s) => (
@@ -5010,23 +5038,17 @@ function ContatosTab({ eventId }: { eventId: string }) {
       </div>
 
       {/* Chip do vendedor selecionado — visualmente claro com avatar e botao limpar */}
-      {(selectedSeller || vendedorFilter === 'unassigned') && (
+      {selectedSeller && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex-wrap">
           <span className="text-xs text-emerald-300/80">Filtrando por:</span>
           <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-xs font-medium">
-            {selectedSeller ? (
-              <>
-                {selectedSeller.avatar_url ? (
-                  <img src={selectedSeller.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
-                ) : (
-                  <span className="w-5 h-5 rounded-full bg-emerald-500/40 flex items-center justify-center text-[10px] font-bold">{selectedSeller.name.charAt(0).toUpperCase()}</span>
-                )}
-                <span>{selectedSeller.name}</span>
-                <span className="text-emerald-200/60">· {selectedSeller.contacts_captured} contato{selectedSeller.contacts_captured !== 1 ? 's' : ''}</span>
-              </>
+            {selectedSeller.avatar_url ? (
+              <img src={selectedSeller.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover" />
             ) : (
-              <span>Sem vendedor atribuido</span>
+              <span className="w-5 h-5 rounded-full bg-emerald-500/40 flex items-center justify-center text-[10px] font-bold">{selectedSeller.name.charAt(0).toUpperCase()}</span>
             )}
+            <span>{selectedSeller.name}</span>
+            <span className="text-emerald-200/60">· {selectedSeller.contacts_captured} contato{selectedSeller.contacts_captured !== 1 ? 's' : ''}</span>
             <button
               type="button"
               onClick={() => setVendedorFilter('all')}
@@ -5042,8 +5064,8 @@ function ContatosTab({ eventId }: { eventId: string }) {
       {filtered.length === 0 ? (
         <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-12 text-center">
           <p className="text-purple-300/60 text-sm">
-            {contacts.length === 0
-              ? 'Ainda nao ha contatos registrados nesta feira. Faca um check-in ou walk-in.'
+            {rows.length === 0
+              ? 'Ainda nao ha contatos vinculados a stands nesta feira. Faca check-in num stand pra comecar.'
               : (vendedorFilter !== 'all' || search.trim())
                 ? 'Nenhum contato encontrado com esse filtro.'
                 : 'Nenhum contato encontrado.'}
@@ -5052,48 +5074,51 @@ function ContatosTab({ eventId }: { eventId: string }) {
       ) : (
         <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden">
           <div className="divide-y divide-purple-800/20">
-            {filtered.map((c) => {
-              const ownerId = c.created_by_user_id || c.assigned_to_user_id || null;
-              const owner = ownerId ? sellerMap[ownerId] : null;
+            {filtered.map((row, idx) => {
+              const c = row.contact;
+              const v = row.visitor;
+              const b = row.booth;
               return (
               <Link
-                key={c.id}
+                key={`${b.id}-${c.id}-${idx}`}
                 href={`/contacts/${c.id}`}
                 className="flex items-center gap-4 p-4 hover:bg-purple-800/20 transition-colors"
               >
-                <ContactAvatar name={c.name} avatarUrl={c.avatar_url} size="lg" />
+                {/* Logo da empresa (se tem) ou inicial */}
+                {b.logo_url ? (
+                  <div className="w-12 h-12 rounded bg-white/90 flex items-center justify-center shrink-0 overflow-hidden ring-2 ring-emerald-500/40">
+                    <img src={b.logo_url} alt={b.company_name} className="w-full h-full object-contain" loading="lazy" />
+                  </div>
+                ) : (
+                  <ContactAvatar name={c.name || b.company_name} avatarUrl={null} size="lg" />
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <p className="text-white font-semibold truncate">{c.name}</p>
-                    {isAvulso(c) ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
-                        AVULSO
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                        STAND
-                      </span>
-                    )}
-                    {/* Badge do vendedor responsavel — facilita identificar de batida */}
-                    {owner && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                        {owner.avatar_url ? (
-                          <img src={owner.avatar_url} alt="" className="w-3.5 h-3.5 rounded-full object-cover" />
+                    <p className="text-white font-semibold truncate">
+                      {c.name || b.company_name}
+                      {c.role && <span className="text-purple-300/60 font-normal text-xs ml-2">· {c.role}</span>}
+                    </p>
+                    {/* Vendedor que CAPTOU (do booth_visit) — destaque alto */}
+                    {v && (
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                        {v.avatar_url ? (
+                          <img src={v.avatar_url} alt="" className="w-4 h-4 rounded-full object-cover" />
                         ) : (
-                          <span className="w-3.5 h-3.5 rounded-full bg-emerald-500/30 flex items-center justify-center text-[8px] font-bold">{owner.name.charAt(0).toUpperCase()}</span>
+                          <span className="w-4 h-4 rounded-full bg-emerald-500/30 flex items-center justify-center text-[9px] font-bold">{v.user_name.charAt(0).toUpperCase()}</span>
                         )}
-                        {owner.name.split(' ')[0]}
+                        Captado por {v.user_name.split(' ')[0]}
                       </span>
                     )}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-purple-300/60">
-                    {c.company && <span>{c.company}</span>}
+                    <span className="text-purple-200/80">{b.company_name}</span>
+                    {b.booth_number && <span className="text-purple-300/50">Stand {b.booth_number}</span>}
+                    {b.sector && <span className="text-purple-300/40">{b.sector}</span>}
                     {c.phone && <span>📞 {c.phone}</span>}
-                    {c.email && <span>✉️ {c.email}</span>}
                   </div>
                 </div>
                 <div className="text-right text-[11px] text-purple-300/40 hidden sm:block">
-                  {formatDate(c.created_at)}
+                  {v && formatDate(v.visited_at)}
                 </div>
                 <svg className="w-4 h-4 text-purple-400/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
