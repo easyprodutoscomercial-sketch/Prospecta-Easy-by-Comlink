@@ -414,7 +414,8 @@ export async function POST(
         }
         if (Object.keys(patch).length > 0) {
           console.log('[check-in] Atualizando contato vinculado', existingVisit.contact_id, Object.keys(patch));
-          await admin.from('contacts').update(patch).eq('id', existingVisit.contact_id);
+          // org_id no UPDATE pra defense in depth (R1)
+          await admin.from('contacts').update(patch).eq('id', existingVisit.contact_id).eq('organization_id', profile.organization_id);
         }
       } else if (contactName) {
         // ANTES de criar novo: ja existe contato dessa EMPRESA nesse EVENTO?
@@ -453,7 +454,8 @@ export async function POST(
             patch.avatar_url = photoContactUrl;
           }
           if (Object.keys(patch).length > 0) {
-            await admin.from('contacts').update(patch).eq('id', empresaExistente.id);
+            // org_id no UPDATE pra defense in depth (R1)
+            await admin.from('contacts').update(patch).eq('id', empresaExistente.id).eq('organization_id', profile.organization_id);
           }
           // Pula o insert
           // ts: precisa de bloco vazio pra fluxo
@@ -568,7 +570,8 @@ export async function POST(
             }
             if (extra.cargo) patch.cargo = extra.cargo;
             if (Object.keys(patch).length > 0) {
-              const { error: upErr } = await admin.from('contacts').update(patch).eq('id', existingExtra.id);
+              // org_id no UPDATE pra defense in depth (R1)
+              const { error: upErr } = await admin.from('contacts').update(patch).eq('id', existingExtra.id).eq('organization_id', profile.organization_id);
               if (upErr) extraErrors.push({ name: extraName, error: upErr.message });
             }
             extraResults.push({ id: existingExtra.id, name: extraName, action: 'updated' });

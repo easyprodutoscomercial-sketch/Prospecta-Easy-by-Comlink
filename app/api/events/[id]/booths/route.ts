@@ -93,12 +93,16 @@ export async function GET(
       }
     });
 
-    // Busca avatar_url dos vendedores que visitaram pra mostrar avatar real na UI
+    // Busca avatar_url dos vendedores que visitaram pra mostrar avatar real na UI.
+    // Filtra por organization_id pra defense in depth — visitas ja sao da org,
+    // mas profiles e tabela compartilhada e service_role bypassa RLS, entao
+    // explicitar org_id e a forma certa.
     const avatarMap: Record<string, string | null> = {};
     if (visitorUserIds.size > 0) {
       const { data: profs } = await admin
         .from('profiles')
         .select('user_id, avatar_url, name')
+        .eq('organization_id', profile.organization_id)
         .in('user_id', Array.from(visitorUserIds));
       (profs || []).forEach((p: any) => {
         avatarMap[p.user_id] = p.avatar_url || null;

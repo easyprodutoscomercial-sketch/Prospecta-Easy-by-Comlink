@@ -143,6 +143,19 @@ export async function PATCH(
 
     const body = await request.json();
 
+    // Guarda explicito: rejeita campos sensiveis no body. Zod ja stripia
+    // (default strip), e dbFields filtra de novo, mas defesa em camadas e
+    // explicita nesse caso pra ficar OBVIO se alguem tentar.
+    const FORBIDDEN_FIELDS = ['created_by_user_id', 'organization_id', 'id', 'created_at', 'updated_at'];
+    for (const f of FORBIDDEN_FIELDS) {
+      if (f in body) {
+        return NextResponse.json(
+          { error: `Campo '${f}' nao pode ser alterado via PATCH` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Limpar strings vazias → null (formulario envia "" para campos opcionais)
     const cleanedBody = Object.fromEntries(
       Object.entries(body).map(([key, value]) => [
@@ -174,7 +187,15 @@ export async function PATCH(
       validated.proxima_acao_data = new Date(validated.proxima_acao_data).toISOString();
     }
 
-    // All known contact columns
+    // All known contact columns.
+    //
+    // ATENCAO: NUNCA adicionar `created_by_user_id` aqui. Coluna e historico
+    // de quem capturou o lead (usado em ranking, audit, atribuicao retroativa).
+    // PATCH publico nao deve permitir mudar isso. Quiz publico grava NULL,
+    // mas isso e setado no INSERT — nao via PATCH.
+    //
+    // Tambem NAO incluir `organization_id` (isolamento multi-tenant) nem
+    // `id`/`created_at`/`updated_at` (gerados pelo banco).
     const dbFields = new Set([
       'name', 'phone', 'email', 'cpf', 'cnpj', 'company', 'notes', 'status',
       'tipo', 'referencia', 'classe', 'produtos_fornecidos',

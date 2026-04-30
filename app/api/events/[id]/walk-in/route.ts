@@ -212,7 +212,8 @@ export async function POST(
         // Se o contato ainda nao tem evento, amarra neste
         if (!dup.event_id) patch.event_id = eventId;
         if (Object.keys(patch).length > 0) {
-          await admin.from('contacts').update(patch).eq('id', dup.id);
+          // org_id no UPDATE pra defense in depth (R1)
+          await admin.from('contacts').update(patch).eq('id', dup.id).eq('organization_id', profile.organization_id);
         }
         createdContact = { id: dup.id, name: dup.name, duplicate: true };
 

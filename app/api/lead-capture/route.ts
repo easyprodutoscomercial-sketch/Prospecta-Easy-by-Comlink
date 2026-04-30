@@ -150,26 +150,42 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (existingVisit?.contact_id) {
-        // UPDATE contato existente (NAO sobrescreve name nem company)
-        const updates: Record<string, any> = {
-          contato_nome: name.trim(),
-          phone: phone.trim(),
-          phone_normalized: phoneNormalized,
-          whatsapp: phone.trim(),
-        };
-        if (email?.trim()) {
+        // FURO #3 fechado: rota e PUBLICA (qualquer um com QR + booth_id pode chamar).
+        // Antes sobrescrevia phone/email/notes do contato real — atacante enviava
+        // dados de phishing e contato legitimo era envenenado. Agora SO preenche
+        // campos VAZIOS no contato existente. Atualizacoes legitimas devem ser
+        // feitas via UI logada.
+        const { data: existingContact } = await admin
+          .from('contacts')
+          .select('phone, phone_normalized, email, email_normalized, cargo, cidade, estado, notes, contato_nome, whatsapp')
+          .eq('id', existingVisit.contact_id)
+          .single();
+
+        const updates: Record<string, any> = {};
+        const isEmpty = (v: any) => !v || (typeof v === 'string' && !v.trim());
+
+        if (isEmpty(existingContact?.contato_nome)) updates.contato_nome = name.trim();
+        if (isEmpty(existingContact?.phone)) {
+          updates.phone = phone.trim();
+          updates.phone_normalized = phoneNormalized;
+        }
+        if (isEmpty(existingContact?.whatsapp)) updates.whatsapp = phone.trim();
+        if (email?.trim() && isEmpty(existingContact?.email)) {
           updates.email = email.trim();
           updates.email_normalized = emailNormalized;
         }
-        if (cargo?.trim()) updates.cargo = cargo.trim();
-        if (cidade?.trim()) updates.cidade = cidade.trim();
-        if (estado?.trim()) updates.estado = estado.trim();
-        if (notes?.trim()) updates.notes = notes.trim();
+        if (cargo?.trim() && isEmpty(existingContact?.cargo)) updates.cargo = cargo.trim();
+        if (cidade?.trim() && isEmpty(existingContact?.cidade)) updates.cidade = cidade.trim();
+        if (estado?.trim() && isEmpty(existingContact?.estado)) updates.estado = estado.trim();
+        if (notes?.trim() && isEmpty(existingContact?.notes)) updates.notes = notes.trim();
 
-        await admin
-          .from('contacts')
-          .update(updates)
-          .eq('id', existingVisit.contact_id);
+        if (Object.keys(updates).length > 0) {
+          await admin
+            .from('contacts')
+            .update(updates)
+            .eq('id', existingVisit.contact_id)
+            .eq('organization_id', link.organization_id); // defense in depth (R1)
+        }
 
         // Criar booth_visit de registro
         const { error: visitErr1 } = await admin
@@ -248,7 +264,7 @@ export async function POST(request: NextRequest) {
         if (notes?.trim()) updates.notes = notes.trim();
         if (event_id) updates.event_id = event_id;
 
-        await admin.from('contacts').update(updates).eq('id', duplicateContact.id);
+        await admin.from('contacts').update(updates).eq('id', duplicateContact.id).eq('organization_id', link.organization_id); // defense in depth (R1)
 
         const { error: visitErr2 } = await admin.from('booth_visits').insert({
           booth_id,

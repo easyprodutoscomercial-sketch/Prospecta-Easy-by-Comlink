@@ -102,23 +102,33 @@ export async function GET(
       .eq('is_draft', false)
       .eq('inexistente', false);
 
-    // 3b. Contatos que vieram do QUIZ FEIRA (publico) — NAO contam no
-    // ranking de vendedor individual. Quiz e captacao coletiva via QR
-    // publico, ninguem "capturou" individualmente. Antes, o quiz atribuia
-    // cada participacao ao primeiro admin da org pra contornar o NOT NULL,
-    // o que inflava artificialmente o ranking dele (220+ contatos que ele
-    // nao capturou). A migration 20260430 fez a coluna nullable e o quiz
-    // passou a gravar NULL — esse SET serve de defesa pra contatos antigos
-    // que ainda tenham o admin como criador OU pra casos em que o vendedor
-    // tenha re-atribuido manualmente um lead do quiz pra ele depois.
-    const { data: quizParticipants } = await admin
-      .from('quiz_participantes')
-      .select('contact_id')
+    // 3b. Contatos que vieram do QUIZ FEIRA (publico) DESTE EVENTO — NAO
+    // contam no ranking de vendedor individual. Quiz e captacao coletiva
+    // via QR publico, ninguem "capturou" individualmente.
+    //
+    // Filtra apenas quizzes vinculados a ESTE evento (via quiz_configuracoes.event_id).
+    // Antes pegava TODOS os quizzes da org — quando houver multiplos quizzes
+    // (1 por feira), contatos do quiz da feira X eram excluidos do ranking
+    // da feira Y, gerando subcontagem.
+    const { data: quizConfigsThisEvent } = await admin
+      .from('quiz_configuracoes')
+      .select('id')
       .eq('organization_id', profile.organization_id)
-      .not('contact_id', 'is', null);
-    const quizContactIds = new Set(
-      (quizParticipants || []).map((p: any) => p.contact_id).filter(Boolean)
-    );
+      .eq('event_id', eventId);
+    const quizConfigIds = (quizConfigsThisEvent || []).map((q: any) => q.id);
+
+    let quizContactIds = new Set<string>();
+    if (quizConfigIds.length > 0) {
+      const { data: quizParticipants } = await admin
+        .from('quiz_participantes')
+        .select('contact_id')
+        .eq('organization_id', profile.organization_id)
+        .in('quiz_config_id', quizConfigIds)
+        .not('contact_id', 'is', null);
+      quizContactIds = new Set(
+        (quizParticipants || []).map((p: any) => p.contact_id).filter(Boolean)
+      );
+    }
 
     // Set de contatos UNICOS atribuidos a cada vendedor (uniao QR + stand)
     const contactsSetByUser: Record<string, Set<string>> = {};

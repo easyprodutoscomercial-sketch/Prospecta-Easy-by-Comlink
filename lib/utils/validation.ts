@@ -58,6 +58,9 @@ export const interactionSchema = z.object({
   happened_at: z.string().datetime().optional(),
 });
 
+// Schema de atualizacao de contato. .strict() rejeita explicitamente campos
+// nao listados — protege contra alguem mandar `created_by_user_id`,
+// `organization_id`, `id` ou outros campos sensiveis no body.
 export const contactUpdateSchema = z.object({
   status: z.enum([
     'NOVO',
