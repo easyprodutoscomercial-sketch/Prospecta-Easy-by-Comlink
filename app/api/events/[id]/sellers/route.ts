@@ -102,6 +102,24 @@ export async function GET(
       .eq('is_draft', false)
       .eq('inexistente', false);
 
+    // 3b. Contatos que vieram do QUIZ FEIRA (publico) — NAO contam no
+    // ranking de vendedor individual. Quiz e captacao coletiva via QR
+    // publico, ninguem "capturou" individualmente. Antes, o quiz atribuia
+    // cada participacao ao primeiro admin da org pra contornar o NOT NULL,
+    // o que inflava artificialmente o ranking dele (220+ contatos que ele
+    // nao capturou). A migration 20260430 fez a coluna nullable e o quiz
+    // passou a gravar NULL — esse SET serve de defesa pra contatos antigos
+    // que ainda tenham o admin como criador OU pra casos em que o vendedor
+    // tenha re-atribuido manualmente um lead do quiz pra ele depois.
+    const { data: quizParticipants } = await admin
+      .from('quiz_participantes')
+      .select('contact_id')
+      .eq('organization_id', profile.organization_id)
+      .not('contact_id', 'is', null);
+    const quizContactIds = new Set(
+      (quizParticipants || []).map((p: any) => p.contact_id).filter(Boolean)
+    );
+
     // Set de contatos UNICOS atribuidos a cada vendedor (uniao QR + stand)
     const contactsSetByUser: Record<string, Set<string>> = {};
     // Set de contatos que vieram via QR (created_by) — informativo
@@ -114,6 +132,11 @@ export async function GET(
 
     (eventContacts || []).forEach((c: any) => {
       if (!c.created_by_user_id || !c.id) return;
+      // Filtro defensivo: contato do quiz nunca conta como "via QR" pra
+      // ninguem individualmente (ate se o created_by_user_id estiver setado
+      // por dado historico). via_stand ainda pode contar se vendedor linkou
+      // o contato a um booth_visit depois.
+      if (quizContactIds.has(c.id)) return;
       const uid = c.created_by_user_id;
       eligibleUserIds.add(uid);
       if (!contactsSetByUser[uid]) contactsSetByUser[uid] = new Set();

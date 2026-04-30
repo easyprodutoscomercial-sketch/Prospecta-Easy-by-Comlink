@@ -298,27 +298,12 @@ export async function POST(request: NextRequest) {
               await admin.from('contacts').update(patch).eq('id', existingContact.id);
             }
           } else {
-            // Quiz é público (sem sessão), mas contacts.created_by_user_id é NOT NULL.
-            // Creditamos o contato ao primeiro admin da org para a inserção passar.
-            let createdByUserId: string | null = null;
-            const { data: adminProfile } = await admin
-              .from('profiles')
-              .select('user_id')
-              .eq('organization_id', config.organization_id)
-              .eq('role', 'admin')
-              .limit(1)
-              .maybeSingle();
-            createdByUserId = adminProfile?.user_id || null;
-            if (!createdByUserId) {
-              const { data: anyProfile } = await admin
-                .from('profiles')
-                .select('user_id')
-                .eq('organization_id', config.organization_id)
-                .limit(1)
-                .maybeSingle();
-              createdByUserId = anyProfile?.user_id || null;
-            }
-
+            // Quiz e publico (sem sessao). created_by_user_id fica NULL —
+            // ninguem "capturou" esse contato individualmente, ele veio do
+            // QR publico do quiz. Antes atribuiamos artificialmente ao
+            // primeiro admin pra contornar NOT NULL, mas isso inflava o
+            // ranking de vendedores (admin aparecia com 200+ contatos no
+            // evento). Migration 20260430 tornou a coluna nullable.
             const contactData: Record<string, any> = {
               organization_id: config.organization_id,
               name: nome.trim(),
@@ -331,7 +316,6 @@ export async function POST(request: NextRequest) {
               stage_id: firstStage.id,
               tipo: [],
             };
-            if (createdByUserId) contactData.created_by_user_id = createdByUserId;
             if (eventId) contactData.event_id = eventId;
             if (emailTrim) {
               contactData.email = emailTrim;

@@ -147,6 +147,7 @@ export async function POST(
         .eq('id', eventId)
         .single();
 
+      // Dedup nivel 1: visita ja tem contato linkado?
       const { data: existingVisit } = await admin
         .from('booth_visits')
         .select('contact_id')
@@ -163,6 +164,26 @@ export async function POST(
           .eq('id', existingVisit.contact_id)
           .single();
         return NextResponse.json({ contact: existingContact }, { status: 200 });
+      }
+
+      // Dedup nivel 2: ja existe contato pra essa empresa nesse evento?
+      // (Bug anterior: auto_create criava placeholder vazio mesmo quando ja
+      // existia contato salvo via "Registrar Check-in" — gerava duplicatas
+      // tipo MACHPARTS/MACHPARTS-vazio criadas com 12s de diferenca.)
+      if (booth.company_name) {
+        const { data: empresaExistente } = await admin
+          .from('contacts')
+          .select('*')
+          .eq('organization_id', profile.organization_id)
+          .eq('event_id', eventId)
+          .ilike('company', booth.company_name.trim())
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (empresaExistente) {
+          console.log('[check-in auto_create] Reusando contato existente da empresa', empresaExistente.id);
+          return NextResponse.json({ contact: empresaExistente }, { status: 200 });
+        }
       }
 
       if (event?.pipeline_id) {
@@ -254,39 +275,41 @@ export async function POST(
     }
 
     if (!visit) {
-      // Fallback temporal de 60s (apenas pra clique-duplo do mesmo user
-      // sem idempotency_key). Multiplos check-ins do mesmo user em
-      // momentos diferentes sao PERMITIDOS — cada um pode capturar um
-      // contato diferente do mesmo stand.
-      const sixtySecAgo = new Date(Date.now() - 60_000).toISOString();
-      const { data: recentVisit } = await admin
+      // Reuso de visita do mesmo user/booth/event em QUALQUER momento.
+      //
+      // ANTES: janela de 60s — depois disso, novo submit do mesmo vendedor
+      // criava visita duplicada. Resultado: stands com 2-7 visitas do mesmo
+      // user (ex: HENNINGS = 3 visitas, UCA = 7) e leaderboard inflado.
+      //
+      // AGORA: visita por (user, booth, event) e UNICA. Voltar no stand
+      // pra corrigir/completar dado atualiza a visita existente. Se quiser
+      // registrar contato adicional, usa "+ Adicionar contato" no painel.
+      const { data: existingUserVisit } = await admin
         .from('booth_visits')
         .select('*')
         .eq('booth_id', boothId)
         .eq('event_id', eventId)
         .eq('user_id', user.id)
-        .is('idempotency_key', null)
-        .gte('created_at', sixtySecAgo)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (recentVisit) {
-        console.log('[check-in] Click duplo (<60s) sem key — atualizando visit existente', recentVisit.id);
+      if (existingUserVisit) {
+        console.log('[check-in] Reusando visita anterior do mesmo user/booth', existingUserVisit.id);
         const { data: updated } = await admin
           .from('booth_visits')
           .update({
-            photo_facade_url: photoFacadeUrl || recentVisit.photo_facade_url,
-            photo_contact_url: photoContactUrl || recentVisit.photo_contact_url,
-            contact_name: contactName || recentVisit.contact_name,
-            contact_role: contactRole || recentVisit.contact_role,
+            photo_facade_url: photoFacadeUrl || existingUserVisit.photo_facade_url,
+            photo_contact_url: photoContactUrl || existingUserVisit.photo_contact_url,
+            contact_name: contactName || existingUserVisit.contact_name,
+            contact_role: contactRole || existingUserVisit.contact_role,
             prospect_type: prospectType,
-            notes: packedNotes || recentVisit.notes,
-            idempotency_key: idempotencyKey,
+            notes: packedNotes || existingUserVisit.notes,
+            idempotency_key: idempotencyKey || existingUserVisit.idempotency_key,
           })
-          .eq('id', recentVisit.id)
+          .eq('id', existingUserVisit.id)
           .select()
           .single();
-        visit = updated || recentVisit;
+        visit = updated || existingUserVisit;
       }
     }
 
@@ -345,7 +368,7 @@ export async function POST(
     }
 
     // If event has pipeline, create or link contact
-    let createdContact = null;
+    let createdContact: any = null;
     const { data: event } = await admin
       .from('events')
       .select('pipeline_id, stage_id')
@@ -361,8 +384,6 @@ export async function POST(
         .not('contact_id', 'is', null)
         .limit(1)
         .maybeSingle();
-
-      const isFirstSave = !existingVisit?.contact_id;
 
       const phoneNorm = normalizePhone(contactPhone);
       const emailNorm = normalizeEmail(contactEmail);
@@ -486,19 +507,77 @@ export async function POST(
         } // fim do else (criou novo)
       }
 
-      // Create extra contacts in the pipeline too — only on the first save to avoid duplicates
-      if (isFirstSave && extraContacts.length > 0) {
+      // Cria contatos extras (pessoas adicionais do mesmo stand).
+      //
+      // ANTES: so executava no primeiro save (`isFirstSave`) pra evitar
+      // duplicar. Resultado: vendedor abria o stand, salvava com 1 contato,
+      // depois voltava pra adicionar mais 2 — esses 2 eram IGNORADOS em
+      // silencio. Causou perda de dados em booths com 2+ visitas (UCA = 7
+      // visitas, 1 contato unico).
+      //
+      // AGORA: tenta inserir em qualquer save, mas usa dedup por
+      // (event_id + phone_normalized) OU (event_id + company + contato_nome
+      // case-insensitive). Se ja existe, atualiza dados em vez de duplicar.
+      // Erros nao sao mais silenciosos — vao no `extra_errors` da resposta.
+      if (extraContacts.length > 0) {
         const tipoArr = prospectType === 'AMBOS' ? ['COMPRADOR', 'FORNECEDOR'] : [prospectType];
+        const baseNotes = userNotes ? `[Feira] ${userNotes}` : '[Feira]';
+        const empresaName = booth.company_name || '';
+        const extraErrors: any[] = [];
+        const extraResults: any[] = [];
+
         for (const extra of extraContacts) {
           const extraName = (extra.name || '').trim();
           if (!extraName) continue;
-          const baseNotes = userNotes ? `[Feira] ${userNotes}` : '[Feira]';
-          const empresaName = booth.company_name || extraName;
           const extraPhone = ((extra as any).phone || '').trim();
           const phoneN = extraPhone ? extraPhone.replace(/\D/g, '') : null;
+
+          // Dedup: phone OU (company + contato_nome) dentro do evento
+          let existingExtra: any = null;
+          if (phoneN) {
+            const { data } = await admin
+              .from('contacts')
+              .select('id, contato_nome, phone, company')
+              .eq('organization_id', profile.organization_id)
+              .eq('event_id', eventId)
+              .eq('phone_normalized', phoneN)
+              .limit(1)
+              .maybeSingle();
+            existingExtra = data;
+          }
+          if (!existingExtra && empresaName) {
+            const { data } = await admin
+              .from('contacts')
+              .select('id, contato_nome, phone, company')
+              .eq('organization_id', profile.organization_id)
+              .eq('event_id', eventId)
+              .ilike('company', empresaName.trim())
+              .ilike('contato_nome', extraName)
+              .limit(1)
+              .maybeSingle();
+            existingExtra = data;
+          }
+
+          if (existingExtra?.id) {
+            // Atualiza campos vazios sem sobrescrever dado preenchido
+            const patch: any = {};
+            if (extraPhone && !existingExtra.phone) {
+              patch.phone = extraPhone;
+              if (phoneN) patch.phone_normalized = phoneN;
+              patch.whatsapp = extraPhone;
+            }
+            if (extra.cargo) patch.cargo = extra.cargo;
+            if (Object.keys(patch).length > 0) {
+              const { error: upErr } = await admin.from('contacts').update(patch).eq('id', existingExtra.id);
+              if (upErr) extraErrors.push({ name: extraName, error: upErr.message });
+            }
+            extraResults.push({ id: existingExtra.id, name: extraName, action: 'updated' });
+            continue;
+          }
+
           const extraPayload: any = {
             organization_id: profile.organization_id,
-            name: empresaName,
+            name: empresaName || extraName,
             contato_nome: extraName,
             company: booth.company_name,
             cargo: extra.cargo || null,
@@ -510,15 +589,31 @@ export async function POST(
             notes: baseNotes,
             status: 'NOVO',
             created_by_user_id: user.id,
-            assigned_to_user_id: user.id, // vendedor que captou vira dono no CRM
-            name_normalized: empresaName.toLowerCase(),
+            assigned_to_user_id: user.id,
+            name_normalized: (empresaName || extraName).toLowerCase().trim(),
           };
           if (extraPhone) {
             extraPayload.phone = extraPhone;
             if (phoneN) extraPayload.phone_normalized = phoneN;
+            extraPayload.whatsapp = extraPhone;
           }
-          await admin.from('contacts').insert(extraPayload);
+          const { data: inserted, error: insErr } = await admin
+            .from('contacts')
+            .insert(extraPayload)
+            .select('id')
+            .single();
+          if (insErr) {
+            console.error('[check-in extras] Falha ao criar contato extra', extraName, insErr);
+            extraErrors.push({ name: extraName, error: insErr.message });
+          } else if (inserted) {
+            extraResults.push({ id: inserted.id, name: extraName, action: 'created' });
+          }
         }
+
+        // Anexa resultado dos extras na resposta pra UI poder mostrar erro/contagem
+        createdContact = createdContact
+          ? { ...createdContact, extras: extraResults, extra_errors: extraErrors }
+          : { extras: extraResults, extra_errors: extraErrors };
       }
     }
 

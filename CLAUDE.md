@@ -538,16 +538,32 @@ Em `lib/ai/rules-engine.ts`:
 - Vencedor = menor diferença do valor exato (desempate: quem participou primeiro)
 - Admin pode excluir quiz (deleta participantes, mantém contatos no CRM)
 - Admin pode duplicar quiz existente
+- **`created_by_user_id` do contato fica NULL** (quiz é público, ninguem capturou individualmente). Antes era atribuido ao primeiro admin pra contornar NOT NULL — isso inflava ranking de vendedor (admin aparecia com 220+ leads no evento que na verdade vieram do QR). Migration `20260430_created_by_user_id_nullable.sql` tornou a coluna nullable e o quiz passou a gravar NULL. O ranking em [`/api/events/[id]/sellers`](app/api/events/[id]/sellers/route.ts) tem filtro defensivo cruzando `quiz_participantes`.
 
 ### Check-in de Feira
 
-1. Vendedor em `/eventos/[id]/checkin` seleciona stand
-2. Tira 2 fotos (fachada + cartão de visita) + preenche `contact_name`, `prospect_type`
-3. Envio: POST `/api/events/[id]/check-in` multipart
-4. Backend envia foto do cartão pra OpenAI Vision → extrai dados
-5. Cria ou atualiza `contacts` + marca booth `VISITADO`
-6. Se offline: enfileira na IndexedDB e sincroniza quando voltar
-7. Contatos extras vão pra `notes` com marker `<!--EVENT:uuid-->` (legacy) até serem migrados para coluna `event_id` via backfill
+1. Vendedor em `/eventos/[id]` abre painel do stand
+2. Tira foto (fachada + cartão de visita) + preenche pessoa (`contact_name`), telefone, cargo, prospect_type, observações
+3. Pode adicionar N contatos extras pelo botão "+ Adicionar contato"
+4. **Um único botão "Registrar Check-in"** (verde) salva tudo. Se vendedor voltar pra atualizar, o mesmo botão vira "Atualizar Visita" — backend reusa visita anterior do mesmo user/booth/event ao invés de criar duplicata
+5. Envio: POST `/api/events/[id]/check-in` multipart com `mark_visited=true` sempre
+6. Backend envia foto do cartão pra OpenAI Vision → extrai dados
+7. Cria ou atualiza `contacts` (`name`=empresa do stand, `contato_nome`=pessoa) + marca booth `VISITADO` + atribui `assigned_to_user_id = user.id`
+8. Contatos extras: cada um vira contato separado no CRM, com dedup por (event_id + phone_normalized) ou (event_id + company + contato_nome). Erros voltam em `extra_errors` na resposta
+9. Se offline: enfileira na IndexedDB e sincroniza quando voltar
+
+#### Regras anti-bagunça (auditadas em 2026-04-30, AGRISHOW 2026)
+
+- **Visita por (user, booth, event) é única.** Backend procura visita anterior do mesmo vendedor pro mesmo stand a qualquer momento (não mais janela de 60s) — segundo submit atualiza ao invés de duplicar. Hot path em [`route.ts`](app/api/events/[id]/check-in/route.ts) linha 256-292.
+- **`auto_create` (chamado ao abrir painel/follow-up sem contato) faz dedup duplo:** primeiro via `booth_visits.contact_id`, depois via `contacts` por `(event_id + ilike(company))`. Antes só checava o primeiro — gerava placeholders MACHPARTS-vazio paralelos ao MACHPARTS/Angela.
+- **Contatos extras tentam inserir em todo save**, não só no primeiro (`isFirstSave` foi removido). Dedup por `phone_normalized` ou `(company + contato_nome)`. Antes: vendedor adicionava extras no segundo save → eram ignorados em silêncio.
+- **`assigned_to_user_id` setado ao criar contato.** Vendedor que captura é dono. Sem isso, contato sumia de `/contacts` quando filtrava por "Meus".
+
+#### Limpeza histórica feita em 2026-04-30
+
+- 86 `booth_visits` órfãs (contact_id null) → linkadas a contato existente da mesma empresa+evento via [`scripts/recover-orphan-visits.mjs`](scripts/recover-orphan-visits.mjs)
+- 184 contatos placeholders vazios (criados pelo auto_create antigo) → deletados via [`scripts/dedupe-empty-booth-contacts.mjs`](scripts/dedupe-empty-booth-contacts.mjs) (só os sem dependências em `booth_visits`/`interactions`/`meetings`/`attachments`)
+- Auditoria: [`scripts/audit-agrishow-checkins.mjs`](scripts/audit-agrishow-checkins.mjs) — read-only, conta órfãs, sem dono e duplicatas
 
 ---
 
