@@ -2903,52 +2903,54 @@ function StandsTab({
                 booth.status === 'VISITADO' ? 'border-emerald-500/20' : 'border-purple-800/30'
               }`}
             >
-              {/* Avatar 40x40: prioridade
-                  1. logo da empresa (booth.logo_url)
-                  2. foto do vendedor mais recente que visitou (booth.visitors[0].avatar_url)
-                  3. inicial do vendedor mais recente (texto)
-                  4. icone generico (visitado=check / pendente=relogio) */}
+              {/* Avatar 40x40 com OVERLAY do vendedor:
+                  - Base: logo da empresa (se tiver) OU foto do vendedor (se nao tiver
+                    logo mas foi visitado) OU icone generico.
+                  - Overlay (canto inferior direito): mini avatar 16x16 do vendedor
+                    mais recente — aparece SEMPRE que tem visita, mesmo com logo.
+                    Assim o usuario ve de bate "esse stand foi visitado pelo Joao".
+              */}
               {(() => {
                 const topVisitor = booth.visitors?.[0];
-                if (booth.logo_url) {
-                  return (
-                    <div className={`w-10 h-10 rounded bg-white/90 flex items-center justify-center shrink-0 overflow-hidden ring-2 ${
-                      booth.status === 'VISITADO' ? 'ring-emerald-500/60' : 'ring-transparent'
-                    }`}>
+                const hasVisit = !!topVisitor;
+                const visitorTitle = topVisitor
+                  ? `Visitado por ${topVisitor.user_name}${booth.visitors!.length > 1 ? ` +${booth.visitors!.length - 1}` : ''}`
+                  : '';
+
+                // Base 40x40 — escolhe o que mostrar
+                const base = booth.logo_url ? (
+                  <div className={`w-10 h-10 rounded bg-white/90 flex items-center justify-center overflow-hidden ring-2 ${
+                    booth.status === 'VISITADO' ? 'ring-emerald-500/60' : 'ring-transparent'
+                  }`}>
+                    <img
+                      src={booth.logo_url}
+                      alt={booth.company_name}
+                      className="w-full h-full object-contain"
+                      loading="lazy"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </div>
+                ) : topVisitor ? (
+                  <div
+                    className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-emerald-500/60 bg-emerald-500/20 flex items-center justify-center"
+                    title={visitorTitle}
+                  >
+                    {topVisitor.avatar_url ? (
                       <img
-                        src={booth.logo_url}
-                        alt={booth.company_name}
-                        className="w-full h-full object-contain"
+                        src={topVisitor.avatar_url}
+                        alt={topVisitor.user_name}
+                        className="w-full h-full object-cover"
                         loading="lazy"
                         onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                       />
-                    </div>
-                  );
-                }
-                if (topVisitor) {
-                  return (
-                    <div
-                      className="w-10 h-10 rounded-full shrink-0 overflow-hidden ring-2 ring-emerald-500/60 bg-emerald-500/20 flex items-center justify-center"
-                      title={`Visitado por ${topVisitor.user_name}`}
-                    >
-                      {topVisitor.avatar_url ? (
-                        <img
-                          src={topVisitor.avatar_url}
-                          alt={topVisitor.user_name}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                        />
-                      ) : (
-                        <span className="text-sm font-bold text-emerald-300">
-                          {topVisitor.user_name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                  );
-                }
-                return (
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    ) : (
+                      <span className="text-sm font-bold text-emerald-300">
+                        {topVisitor.user_name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                     booth.status === 'VISITADO' ? 'bg-emerald-500/20' : 'bg-purple-800/30'
                   }`}>
                     {booth.status === 'VISITADO' ? (
@@ -2959,6 +2961,32 @@ function StandsTab({
                       <svg className="w-4 h-4 text-purple-400/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
+                    )}
+                  </div>
+                );
+
+                // Overlay do vendedor — so aparece se tem logo da empresa E foi visitado
+                // (caso sem logo a base ja e o vendedor — nao precisa overlay)
+                const showOverlay = hasVisit && !!booth.logo_url;
+
+                return (
+                  <div className="relative shrink-0" title={visitorTitle}>
+                    {base}
+                    {showOverlay && (
+                      <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full ring-2 ring-[#1e0f35] overflow-hidden bg-emerald-500/30 flex items-center justify-center">
+                        {topVisitor!.avatar_url ? (
+                          <img
+                            src={topVisitor!.avatar_url}
+                            alt={topVisitor!.user_name}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span className="text-[9px] font-bold text-emerald-300">
+                            {topVisitor!.user_name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 );
