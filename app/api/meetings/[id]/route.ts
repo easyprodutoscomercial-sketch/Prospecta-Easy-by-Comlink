@@ -190,10 +190,13 @@ export async function PATCH(
       if (body[field] !== undefined) updates[field] = body[field];
     }
 
+    // Defense in depth: filtra org_id no UPDATE tambem (alem do SELECT acima),
+    // pra que se um dia o SELECT for removido por refactor, nao vire vazamento.
     const { data, error } = await admin
       .from('meetings')
       .update(updates)
       .eq('id', id)
+      .eq('organization_id', profile.organization_id)
       .select()
       .single();
 
@@ -364,11 +367,13 @@ export async function DELETE(
         .in('id', ids);
     }
 
-    // Deletar reuniao (participantes sao deletados via CASCADE)
+    // Deletar reuniao (participantes sao deletados via CASCADE).
+    // Defense in depth: filtra org_id no DELETE tambem (alem do SELECT acima).
     const { error } = await admin
       .from('meetings')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

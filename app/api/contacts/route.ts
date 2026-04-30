@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { contactSchema } from '@/lib/utils/validation';
-import { normalizeContactData } from '@/lib/utils/normalize';
+import { normalizeContactData, normalizePhone, normalizeCPF, normalizeCNPJ, normalizeEmail } from '@/lib/utils/normalize';
 import { ensureProfile } from '@/lib/ensure-profile';
 // Visibility is now handled by pipeline membership (members see all contacts in their pipelines)
 
@@ -74,10 +74,27 @@ function applyContactFilters(
   if (filters.classe && filters.classe !== 'all') query = query.eq('classe', filters.classe);
   if (filters.cidade) query = query.ilike('cidade', `%${filters.cidade}%`);
   if (filters.estado && filters.estado !== 'all') query = query.eq('estado', filters.estado);
-  if (filters.telefone) query = query.ilike('phone', `%${filters.telefone}%`);
-  if (filters.cpf) query = query.ilike('cpf', `%${filters.cpf}%`);
-  if (filters.cnpj) query = query.ilike('cnpj', `%${filters.cnpj}%`);
-  if (filters.whatsapp) query = query.ilike('whatsapp', `%${filters.whatsapp}%`);
+  // Filtros de telefone/cpf/cnpj/whatsapp/email comparam por *_normalized pra que
+  // o vendedor consiga digitar com mascara ou sem (ex: "(11) 98765-4321" ou
+  // "11987654321") e bater igual. Comparar campo cru gerava falso negativo
+  // (digitado sem mascara nao batia com banco salvo com mascara) e fazia
+  // vendedor criar duplicata achando que nao existia.
+  if (filters.telefone) {
+    const norm = normalizePhone(filters.telefone);
+    if (norm) query = query.ilike('phone_normalized', `%${norm}%`);
+  }
+  if (filters.cpf) {
+    const norm = normalizeCPF(filters.cpf);
+    if (norm) query = query.ilike('cpf_digits', `%${norm}%`);
+  }
+  if (filters.cnpj) {
+    const norm = normalizeCNPJ(filters.cnpj);
+    if (norm) query = query.ilike('cnpj_digits', `%${norm}%`);
+  }
+  if (filters.whatsapp) {
+    const norm = normalizePhone(filters.whatsapp);
+    if (norm) query = query.ilike('phone_normalized', `%${norm}%`);
+  }
   if (filters.empresa) query = query.ilike('company', `%${filters.empresa}%`);
   if (filters.referencia) query = query.ilike('referencia', `%${filters.referencia}%`);
   if (filters.contato_nome) query = query.ilike('contato_nome', `%${filters.contato_nome}%`);

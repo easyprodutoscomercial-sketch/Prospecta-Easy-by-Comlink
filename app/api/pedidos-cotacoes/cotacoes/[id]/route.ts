@@ -88,7 +88,12 @@ export async function DELETE(
       return NextResponse.json({ error: 'Cotacao nao encontrada' }, { status: 404 });
     }
 
-    const { error } = await admin.from('pc_cotacoes').delete().eq('id', id);
+    // Defense in depth: filtra org_id no DELETE tambem
+    const { error } = await admin
+      .from('pc_cotacoes')
+      .delete()
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id);
 
     if (error) throw error;
 

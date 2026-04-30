@@ -327,8 +327,15 @@ export async function DELETE(
     // Delete comments
     await admin.from('support_comments').delete().eq('ticket_id', id);
 
-    // Delete ticket
-    const { error } = await admin.from('support_tickets').delete().eq('id', id);
+    // Delete ticket. Defense in depth: filtra org_id no DELETE final tambem.
+    // Os deletes de cascata (attachments/comments) usam ticket_id = id, que ja
+    // foi validado. Mas o DELETE principal precisa do mesmo filtro pra que se
+    // o SELECT acima for removido por refactor, nao vire vazamento.
+    const { error } = await admin
+      .from('support_tickets')
+      .delete()
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id);
 
     if (error) throw error;
 

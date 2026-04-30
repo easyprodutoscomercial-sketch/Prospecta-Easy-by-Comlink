@@ -220,8 +220,14 @@ export async function POST(
 
         // Dedupe achou um contato ja existente. Se estavamos finalizando um
         // rascunho, o rascunho agora e obsoleto — deleta pra nao ficar lixo.
+        // Filtra org_id pra que se o cliente passar UUID adulterado de outra
+        // org, nao deletemos contato real alheio.
         if (finalizeContactId) {
-          await admin.from('contacts').delete().eq('id', finalizeContactId);
+          await admin
+            .from('contacts')
+            .delete()
+            .eq('id', finalizeContactId)
+            .eq('organization_id', profile.organization_id);
         }
       }
     }

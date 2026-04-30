@@ -14,11 +14,15 @@ export async function GET(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Nao autorizado' }, { status: 401 });
 
+    const profile = await ensureProfile(supabase, user);
+    if (!profile) return NextResponse.json({ error: 'Profile nao encontrado' }, { status: 404 });
+
     const admin = getAdminClient();
     const { data: rule, error } = await admin
       .from('automation_rules')
       .select('*')
       .eq('id', id)
+      .eq('organization_id', profile.organization_id)
       .single();
 
     if (error || !rule) return NextResponse.json({ error: 'Regra nao encontrada' }, { status: 404 });
@@ -70,10 +74,12 @@ export async function PATCH(
       .from('automation_rules')
       .update(updateData)
       .eq('id', id)
+      .eq('organization_id', profile.organization_id)
       .select()
       .single();
 
     if (error) throw error;
+    if (!rule) return NextResponse.json({ error: 'Regra nao encontrada' }, { status: 404 });
 
     return NextResponse.json(rule);
   } catch (error: any) {
@@ -98,8 +104,18 @@ export async function DELETE(
     }
 
     const admin = getAdminClient();
-    const { error } = await admin.from('automation_rules').delete().eq('id', id);
+    // Filtra org_id pra impedir admin de uma org deletar automation de outra
+    // sabendo o UUID. Isso ja esta protegido na pratica (sistema interno = 1 org),
+    // mas R1 pede defense in depth.
+    const { data, error } = await admin
+      .from('automation_rules')
+      .delete()
+      .eq('id', id)
+      .eq('organization_id', profile.organization_id)
+      .select()
+      .maybeSingle();
     if (error) throw error;
+    if (!data) return NextResponse.json({ error: 'Automacao nao encontrada' }, { status: 404 });
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
