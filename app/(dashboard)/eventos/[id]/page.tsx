@@ -1069,12 +1069,49 @@ function DashboardTab({ eventId, event }: { eventId: string; event: FairEvent })
         <StatCard label="Progresso" value={`${stats.progress_pct}%`} color="cyan" />
       </div>
 
-      {/* Secondary KPIs */}
+      {/* Secondary KPIs — cada card mostra a formula transparente embaixo
+          do numero (texto pequeno fonte mono) e tooltip detalhado no ⓘ. */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Visitas Stand" value={stats.total_visits} color="purple" />
-        <StatCard label="Leads Avulsos" value={stats.total_walk_ins || 0} color="cyan" />
-        <StatCard label="Total de Leads" value={stats.total_leads_event || stats.total_visits} color="emerald" />
-        <StatCard label="Media/Dia" value={stats.avg_visits_per_day} color="cyan" />
+        <StatCard
+          label="Visitas Stand"
+          value={stats.total_visits}
+          color="purple"
+          formula={
+            stats.visits_without_contact > 0
+              ? `${stats.visits_with_contact} com contato + ${stats.visits_without_contact} sem`
+              : `${stats.visits_with_contact ?? stats.total_visits} check-ins`
+          }
+          tooltip="Total de check-ins em stands (booth_visits ativas, ignorando rascunhos e descartados). Conta AÇÕES: se 2 vendedores visitam o mesmo stand, são 2 visitas. Visitas sem contato linkado = vendedor abriu o painel mas não preencheu pessoa."
+        />
+        <StatCard
+          label="Leads Avulsos"
+          value={stats.total_walk_ins || 0}
+          color="cyan"
+          formula="QR / quiz / lead-capture / walk-in"
+          tooltip="Contatos do evento que vieram SEM passar por um stand: capturados via QR Code do estande, quiz feira, formulário de lead-capture ou walk-in modal. Já filtrado por is_draft=false e inexistente=false."
+        />
+        <StatCard
+          label="Total de Leads"
+          value={stats.total_leads_event || stats.total_visits}
+          color="emerald"
+          formula={
+            stats.unique_contacts_with_visit !== undefined
+              ? `${stats.unique_contacts_with_visit} visitados + ${stats.total_walk_ins || 0} avulsos`
+              : undefined
+          }
+          tooltip={`Pessoas únicas no evento (is_draft=false, inexistente=false). Mesma pessoa visitada por 2 vendedores conta 1 lead. Fórmula: ${stats.unique_contacts_with_visit ?? '?'} contatos com booth_visit + ${stats.total_walk_ins || 0} leads avulsos = ${stats.total_leads_event || 0}.`}
+        />
+        <StatCard
+          label="Media/Dia"
+          value={stats.avg_visits_per_day}
+          color="cyan"
+          formula={
+            stats.days_with_visits > 0
+              ? `${stats.total_visits} visitas / ${stats.days_with_visits} dia${stats.days_with_visits === 1 ? '' : 's'}`
+              : 'sem visitas ainda'
+          }
+          tooltip={`Total de visitas (${stats.total_visits}) dividido pelos dias do evento que tiveram pelo menos 1 visita (${stats.days_with_visits} de ${stats.total_event_days} dias). Arredondado.`}
+        />
       </div>
 
       {/* Meta + Urgência visual — só aparece se evento está ATIVO com datas */}
@@ -1353,7 +1390,23 @@ function DashboardTab({ eventId, event }: { eventId: string; event: FairEvent })
   );
 }
 
-function StatCard({ label, value, color = 'purple', href }: { label: string; value: string | number; color?: string; href?: string }) {
+function StatCard({
+  label,
+  value,
+  color = 'purple',
+  href,
+  formula,
+  tooltip,
+}: {
+  label: string;
+  value: string | number;
+  color?: string;
+  href?: string;
+  /** Texto pequeno embaixo do numero (formula visivel sempre). Ex: "= 206 + 275" */
+  formula?: string;
+  /** Texto longo no hover (title HTML). Explica como o numero foi calculado. */
+  tooltip?: string;
+}) {
   const colorMap: Record<string, string> = {
     emerald: 'text-emerald-400',
     amber: 'text-amber-400',
@@ -1363,8 +1416,21 @@ function StatCard({ label, value, color = 'purple', href }: { label: string; val
 
   const inner = (
     <>
-      <p className="text-purple-300/50 text-xs mb-1">{label}</p>
+      <div className="flex items-center gap-1 mb-1">
+        <p className="text-purple-300/50 text-xs">{label}</p>
+        {tooltip && (
+          <span
+            className="text-purple-300/40 text-[10px] cursor-help select-none"
+            title={tooltip}
+          >
+            ⓘ
+          </span>
+        )}
+      </div>
       <p className={`text-2xl font-bold ${colorMap[color] || colorMap.purple}`}>{value}</p>
+      {formula && (
+        <p className="text-[10px] text-purple-300/40 mt-1 font-mono leading-tight">{formula}</p>
+      )}
     </>
   );
 
@@ -1373,7 +1439,7 @@ function StatCard({ label, value, color = 'purple', href }: { label: string; val
       <Link
         href={href}
         className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 block hover:border-emerald-500/60 hover:bg-[#241142] transition-colors cursor-pointer"
-        title="Ver lista de leads"
+        title={tooltip || 'Ver lista de leads'}
       >
         {inner}
       </Link>

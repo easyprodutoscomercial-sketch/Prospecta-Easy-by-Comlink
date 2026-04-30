@@ -211,6 +211,14 @@ export async function GET(
     const walkInContacts = (eventContactsActive || []).filter((c: any) => !visitContactIds.has(c.id));
     const totalWalkIns = walkInContacts.length;
 
+    // Decomposicao de "Visitas Stand" pra mostrar formula transparente no front:
+    //   visitas com contato linkado + visitas sem contato (exploratorias / orfas).
+    const visitsWithContactCount = visitsActive.filter((v: any) => v.contact_id).length;
+    const visitsWithoutContactCount = visitsActive.length - visitsWithContactCount;
+    // Contatos UNICOS com pelo menos 1 visita — esse e o numero que entra na soma
+    // do "Total de Leads" (porque mesma pessoa visitada por 2 vendedores conta 1).
+    const uniqueContactsWithVisit = visitContactIds.size;
+
     // Walk-ins por vendedor (pra futuro breakdown)
     const walkInsByUser: Record<string, number> = {};
     walkInContacts.forEach((c: any) => {
@@ -230,6 +238,11 @@ export async function GET(
       // exploratoria sem contact_id era contada e o mesmo contato podia
       // aparecer em ambos. Agora bate exato com aba Contatos e ranking.
       total_leads_event: (eventContactsActive || []).length,
+      // Decomposicao usada pelos tooltips/formulas do dashboard (transparencia
+      // pro dono ver como cada KPI e calculado).
+      visits_with_contact: visitsWithContactCount,
+      visits_without_contact: visitsWithoutContactCount,
+      unique_contacts_with_visit: uniqueContactsWithVisit,
       total_event_days: eventDays.length,
       days_with_visits: daysWithVisits,
       avg_visits_per_day: daysWithVisits > 0 ? Math.round(totalVisits / daysWithVisits) : 0,
