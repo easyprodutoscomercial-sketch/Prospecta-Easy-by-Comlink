@@ -40,14 +40,35 @@ export async function GET(
     // Get all visits with booth info
     const { data: visits } = await admin
       .from('booth_visits')
-      .select('id, user_id, user_name, visited_at, prospect_type, contact_name, booth_id, event_booths(company_name)')
+      .select('id, user_id, user_name, visited_at, prospect_type, contact_name, contact_id, booth_id, event_booths(company_name)')
       .eq('event_id', id)
       .eq('organization_id', profile.organization_id)
       .order('visited_at', { ascending: true });
 
+    // Busca contatos ATIVOS do evento (nao-draft + nao-descartados) ANTES das
+    // agregacoes pra que numeros do Dashboard batam com a aba Contatos e com o
+    // ranking de vendedores. Antes esse endpoint contava visitas/leads brutos
+    // incluindo rascunhos abandonados — vendedor via 600 leads no Dashboard
+    // mas 480 na aba Contatos. Agora ambos contam o mesmo conjunto.
+    const { data: eventContactsActive } = await admin
+      .from('contacts')
+      .select('id, created_by_user_id, created_at')
+      .eq('organization_id', profile.organization_id)
+      .eq('event_id', id)
+      .eq('is_draft', false)
+      .eq('inexistente', false);
+
+    const activeContactIds = new Set((eventContactsActive || []).map((c: any) => c.id));
+
+    // visits "ativas" = sem contact_id (visita exploratoria sem captura) OU
+    // com contact_id que ainda esta ativo (nao virou rascunho/descartado).
+    const visitsActive = (visits || []).filter((v: any) =>
+      !v.contact_id || activeContactIds.has(v.contact_id)
+    );
+
     // Per-user stats
     const userStats: Record<string, { user_name: string; count: number }> = {};
-    (visits || []).forEach((v: any) => {
+    visitsActive.forEach((v: any) => {
       if (!userStats[v.user_id]) {
         userStats[v.user_id] = { user_name: v.user_name, count: 0 };
       }
@@ -92,7 +113,7 @@ export async function GET(
       };
     });
 
-    (visits || []).forEach((v: any) => {
+    visitsActive.forEach((v: any) => {
       const day = v.visited_at.split('T')[0];
       if (!dayMap[day]) {
         dayMap[day] = {
@@ -157,7 +178,7 @@ export async function GET(
     const visitedBoothsPerDay = new Set<string>();
     const cumulativeByDay = dailyDetails.map((day) => {
       // Count new unique booths visited on this day
-      (visits || []).forEach((v: any) => {
+      visitsActive.forEach((v: any) => {
         if (v.visited_at.startsWith(day.date)) {
           visitedBoothsPerDay.add(v.booth_id);
         }
@@ -171,29 +192,23 @@ export async function GET(
 
     // By prospect type (global)
     const byType: Record<string, number> = {};
-    (visits || []).forEach((v: any) => {
+    visitsActive.forEach((v: any) => {
       byType[v.prospect_type] = (byType[v.prospect_type] || 0) + 1;
     });
 
     // Overall averages
     const daysWithVisits = dailyDetails.filter((d) => d.visits > 0).length;
-    const totalVisits = (visits || []).length;
+    const totalVisits = visitsActive.length;
 
-    // Leads avulsos = contatos com event_id deste evento MAS sem booth_visit.
-    // Fonte de verdade: contar contacts com event_id = X e excluir aqueles que
-    // ja aparecem em booth_visits.contact_id.
+    // Leads avulsos = contatos ATIVOS com event_id deste evento MAS sem booth_visit.
+    // Reusa eventContactsActive (ja filtrado por is_draft=false + inexistente=false)
+    // pra que o numero bata com a aba Contatos.
     const visitContactIds = new Set<string>();
-    (visits || []).forEach((v: any) => {
+    visitsActive.forEach((v: any) => {
       if (v.contact_id) visitContactIds.add(v.contact_id);
     });
 
-    const { data: eventContacts } = await admin
-      .from('contacts')
-      .select('id, created_by_user_id, created_at')
-      .eq('organization_id', profile.organization_id)
-      .eq('event_id', id);
-
-    const walkInContacts = (eventContacts || []).filter((c: any) => !visitContactIds.has(c.id));
+    const walkInContacts = (eventContactsActive || []).filter((c: any) => !visitContactIds.has(c.id));
     const totalWalkIns = walkInContacts.length;
 
     // Walk-ins por vendedor (pra futuro breakdown)

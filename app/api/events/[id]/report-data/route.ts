@@ -39,13 +39,27 @@ export async function GET(
       .eq('event_id', id)
       .eq('organization_id', profile.organization_id);
 
-    // Visitas
-    const { data: visits } = await admin
+    // Visitas — filtradas por contato ATIVO pra bater com /sellers e aba Contatos.
+    // Mantem visitas sem contact_id (exploratoria sem captura).
+    const { data: visitsRaw } = await admin
       .from('booth_visits')
       .select('*')
       .eq('event_id', id)
       .eq('organization_id', profile.organization_id)
       .order('visited_at', { ascending: true });
+
+    const { data: activeContactsForReport } = await admin
+      .from('contacts')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .eq('event_id', id)
+      .eq('is_draft', false)
+      .eq('inexistente', false);
+    const activeContactIdsReport = new Set((activeContactsForReport || []).map((c: any) => c.id));
+
+    const visits = (visitsRaw || []).filter((v: any) =>
+      !v.contact_id || activeContactIdsReport.has(v.contact_id)
+    );
 
     // Organização (para cabeçalho)
     const { data: org } = await admin

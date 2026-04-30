@@ -22,7 +22,7 @@ export async function DELETE(
     // Get visit to find booth_id
     const { data: visit } = await admin
       .from('booth_visits')
-      .select('id, booth_id')
+      .select('id, booth_id, user_id')
       .eq('id', visitId)
       .eq('event_id', id)
       .eq('organization_id', profile.organization_id)
@@ -30,6 +30,13 @@ export async function DELETE(
 
     if (!visit) {
       return NextResponse.json({ error: 'Visita não encontrada' }, { status: 404 });
+    }
+
+    // FURO #4 fechado: so o dono da visita ou admin pode deletar.
+    // Antes qualquer vendedor podia apagar visita de colega — sabotagem direta
+    // do ranking, ja que comissao e por contatos capturados.
+    if (visit.user_id !== user.id && profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas o vendedor da visita ou admin pode deletar' }, { status: 403 });
     }
 
     // Delete the visit

@@ -22,6 +22,14 @@ export async function PATCH(
       return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
     }
 
+    // RBAC: usuario comum so pode editar a si mesmo. Admin edita qualquer um.
+    // Sem isso, qualquer vendedor logado podia trocar a senha do admin (FURO #1).
+    const isSelf = user.id === id;
+    const isAdmin = profile.role === 'admin';
+    if (!isSelf && !isAdmin) {
+      return NextResponse.json({ error: 'Sem permissão para editar este usuário' }, { status: 403 });
+    }
+
     const admin = getAdminClient();
 
     // Verificar que o usuário alvo pertence à mesma organização
@@ -146,6 +154,12 @@ export async function DELETE(
     const profile = await ensureProfile(supabase, user);
     if (!profile) {
       return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
+    }
+
+    // RBAC: deletar usuario e operacao admin-only.
+    // Sem isso, qualquer vendedor podia deletar colega (FURO #2).
+    if (profile.role !== 'admin') {
+      return NextResponse.json({ error: 'Apenas administradores podem excluir usuários' }, { status: 403 });
     }
 
     const admin = getAdminClient();

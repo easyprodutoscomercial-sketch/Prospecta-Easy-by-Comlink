@@ -48,12 +48,26 @@ export async function GET(
     // Visitas — todas (pra ranking completo)
     const { data: visits } = await admin
       .from('booth_visits')
-      .select('id, user_id, user_name, visited_at, booth_id, prospect_type, contact_name')
+      .select('id, user_id, user_name, visited_at, booth_id, prospect_type, contact_name, contact_id')
       .eq('event_id', id)
       .eq('organization_id', profile.organization_id)
       .order('visited_at', { ascending: false });
 
-    const visitsList = visits || [];
+    // Filtra visitas: descarta as vinculadas a contatos draft/inexistentes pra
+    // que o ranking ao vivo bata com a aba Contatos e com /sellers. Mantem
+    // visitas sem contact_id (visita exploratoria sem captura).
+    const { data: activeContactsForLive } = await admin
+      .from('contacts')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .eq('event_id', id)
+      .eq('is_draft', false)
+      .eq('inexistente', false);
+    const activeContactIdsLive = new Set((activeContactsForLive || []).map((c: any) => c.id));
+
+    const visitsList = (visits || []).filter((v: any) =>
+      !v.contact_id || activeContactIdsLive.has(v.contact_id)
+    );
     const now = Date.now();
     const TWO_HOURS = 2 * 60 * 60 * 1000;
     const FIVE_MIN = 5 * 60 * 1000;
