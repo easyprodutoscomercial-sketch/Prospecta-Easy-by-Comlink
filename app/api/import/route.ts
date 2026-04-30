@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { normalizeContactData, normalizePhone, normalizeCPF, normalizeCNPJ, normalizeEmail } from '@/lib/utils/normalize';
 import { ImportResult, TelefoneAdicional } from '@/lib/types';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { processStageChangeAutomations } from '@/lib/automations/engine';
 
 const MAX_ROWS = 2000;
 
@@ -536,6 +537,27 @@ export async function POST(request: NextRequest) {
             .single();
 
           if (error) throw error;
+
+          // R6: Dispara automacoes de stage_change pra cada contato criado.
+          // Sem isso, importacao em massa joga 200 contatos pra "EM_PROSPECCAO"
+          // mas regras como "atribuir ao SDR de plantao" nao rodam — vendedor
+          // configura, testa em 1 contato, funciona, importa em massa, nao
+          // funciona, perde confianca no sistema.
+          // Wrapped em try/catch e fora do path principal pra que falha de
+          // automacao nao quebre o import inteiro.
+          if (firstStageId && newContact?.id) {
+            try {
+              await processStageChangeAutomations(
+                admin,
+                profile.organization_id,
+                newContact.id,
+                null, // oldStageId null = contato novo
+                firstStageId,
+              );
+            } catch (autoErr) {
+              console.warn('[import] processStageChangeAutomations falhou:', autoErr);
+            }
+          }
 
           // Add to batch tracking sets so next rows detect duplicates within batch
           if (normalized.email_normalized) {

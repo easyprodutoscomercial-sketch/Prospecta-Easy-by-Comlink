@@ -1,6 +1,7 @@
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
+import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -102,6 +103,14 @@ export async function GET(request: NextRequest) {
 // POST /api/quiz — Register participant (no auth, via token)
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit: bot poderia tentar inflar lista de participantes pra cheat
+    // ou poluir CRM. 30/min/IP cobre uso legitimo (sequencia de pessoas no
+    // estande no mesmo wifi compartilham IP) sem permitir abuso.
+    const ip = getClientIp(request);
+    if (!checkRateLimit('quiz-submit', ip, { windowMs: 60_000, max: 30 })) {
+      return NextResponse.json({ error: 'Muitas tentativas em pouco tempo. Aguarde 1 minuto.' }, { status: 429 });
+    }
+
     const admin = getAdminClient();
     const body = await request.json();
     const { token, nome, empresa, telefone, palpite, email, cidade, cargo } = body;

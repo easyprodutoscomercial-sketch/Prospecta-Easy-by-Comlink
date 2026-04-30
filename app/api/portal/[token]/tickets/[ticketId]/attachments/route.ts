@@ -1,5 +1,6 @@
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
@@ -39,6 +40,13 @@ export async function POST(
   { params }: { params: Promise<{ token: string; ticketId: string }> }
 ) {
   try {
+    // Rate limit: upload de 50MB e caro. 5 uploads/min/IP cobre uso normal
+    // (cliente anexando varios prints num ticket).
+    const ip = getClientIp(request);
+    if (!checkRateLimit('portal-attachment', ip, { windowMs: 60_000, max: 5 })) {
+      return NextResponse.json({ error: 'Muitas tentativas em pouco tempo. Aguarde 1 minuto.' }, { status: 429 });
+    }
+
     const { token, ticketId } = await params;
     const admin = getAdminClient();
 

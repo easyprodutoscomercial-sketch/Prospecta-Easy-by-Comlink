@@ -12,8 +12,19 @@ import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
 // Seguranca:
 //   - So aceita contatos com is_draft=true (nunca vaza/edita contato finalizado)
 //   - So aceita se o evento vinculado estiver ATIVO
+//   - **Rascunho expira em 24h** — se o vendedor criar e cliente preencher
+//     muito depois, recusa. Evita rascunhos antigos virarem buraco aberto.
 //   - O UUID do contato ja serve como "token" — e random o suficiente e so e
 //     util enquanto o rascunho existe. Nao exige token separado.
+
+const DRAFT_MAX_AGE_HOURS = 24;
+const DRAFT_MAX_AGE_MS = DRAFT_MAX_AGE_HOURS * 60 * 60 * 1000;
+
+function isDraftExpired(createdAt: string | null): boolean {
+  if (!createdAt) return false;
+  const age = Date.now() - new Date(createdAt).getTime();
+  return age > DRAFT_MAX_AGE_MS;
+}
 
 // GET — retorna os campos atuais do rascunho pra pre-preencher o form do cliente
 // (caso o vendedor ja tenha digitado algo antes).
@@ -27,7 +38,7 @@ export async function GET(
 
     const { data: contact } = await admin
       .from('contacts')
-      .select('id, organization_id, name, company, cargo, phone, email, associacao, is_draft, event_id, notes, created_by_user_id')
+      .select('id, organization_id, name, company, cargo, phone, email, associacao, is_draft, event_id, notes, created_by_user_id, created_at')
       .eq('id', contactId)
       .maybeSingle();
 
@@ -35,6 +46,13 @@ export async function GET(
       return NextResponse.json(
         { error: 'Rascunho nao encontrado ou ja finalizado' },
         { status: 404 }
+      );
+    }
+
+    if (isDraftExpired(contact.created_at)) {
+      return NextResponse.json(
+        { error: 'Este rascunho expirou (mais de 24h). Peca pro vendedor gerar um novo QR.' },
+        { status: 410 }
       );
     }
 
@@ -137,7 +155,7 @@ export async function POST(
     // Valida rascunho existe e esta em feira ATIVA (mesmo check do GET)
     const { data: contact } = await admin
       .from('contacts')
-      .select('id, is_draft, event_id')
+      .select('id, is_draft, event_id, created_at')
       .eq('id', contactId)
       .maybeSingle();
 
@@ -145,6 +163,13 @@ export async function POST(
       return NextResponse.json(
         { error: 'Rascunho nao encontrado ou ja finalizado' },
         { status: 404 }
+      );
+    }
+
+    if (isDraftExpired(contact.created_at)) {
+      return NextResponse.json(
+        { error: 'Este rascunho expirou (mais de 24h). Peca pro vendedor gerar um novo QR.' },
+        { status: 410 }
       );
     }
 

@@ -103,6 +103,31 @@ export async function middleware(request: NextRequest) {
   supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff');
   supabaseResponse.headers.set('X-Frame-Options', 'DENY');
   supabaseResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  // HSTS — em prod (Vercel) ja forca HTTPS, mas o header instrui o navegador a
+  // recusar HTTP por 1 ano mesmo se tentar acessar manualmente.
+  // includeSubDomains: cobre futuros subdominios (api.x, etc).
+  supabaseResponse.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  // CSP — limita origens de scripts/imagens/fontes pra mitigar XSS.
+  // 'unsafe-inline'/'unsafe-eval' em script-src sao infelizmente necessarios pelo
+  // Next.js (hydration inline scripts) e Tailwind dev. Em prod, idealmente
+  // migrar pra nonce-based CSP. Por agora, pelo menos restringe origens externas.
+  // Origens permitidas:
+  //   - Supabase (auth, storage, realtime)
+  //   - OpenAI (chamadas server-side, mas frontend pode tentar)
+  //   - Vercel insights (telemetria do hosting)
+  const csp = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.vercel-insights.com https://accounts.google.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://api.zapt.tech https://maps.zapt.tech https://*.tile.openstreetmap.org",
+    "font-src 'self' data:",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.zapt.tech https://api.openai.com https://*.vercel-insights.com",
+    "frame-src 'self' https://accounts.google.com",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+  ].join('; ');
+  supabaseResponse.headers.set('Content-Security-Policy', csp);
 
   // Cache headers for API routes
   if (request.nextUrl.pathname.startsWith('/api/')) {

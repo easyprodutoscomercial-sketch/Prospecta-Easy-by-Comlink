@@ -1,5 +1,6 @@
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
 
 // GET /api/portal/[token]/tickets - Listar tickets do projeto (sem auth)
 export async function GET(
@@ -48,6 +49,13 @@ export async function POST(
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
+    // Rate limit: bot pode spam abrir 1000 tickets fake. 10/min/IP cobre uso
+    // legitimo (cliente abrindo varios tickets em sequencia em incidente real).
+    const ip = getClientIp(request);
+    if (!checkRateLimit('portal-ticket-create', ip, { windowMs: 60_000, max: 10 })) {
+      return NextResponse.json({ error: 'Muitas tentativas em pouco tempo. Aguarde 1 minuto.' }, { status: 429 });
+    }
+
     const { token } = await params;
     const admin = getAdminClient();
 

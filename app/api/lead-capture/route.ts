@@ -2,6 +2,7 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
 import { processStageChangeAutomations } from '@/lib/automations/engine';
+import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
 
 // GET /api/lead-capture?token=xxx - Info publica do link (sem auth)
 export async function GET(request: NextRequest) {
@@ -76,6 +77,15 @@ export async function GET(request: NextRequest) {
 // POST /api/lead-capture - Criar lead via formulario publico (sem auth)
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit pra impedir bot que poluiria a base com leads fake.
+    // Limite generoso (30/min) — vendedor compartilha QR em estande, varias
+    // pessoas preenchem em sequencia. So bloqueia abuso real (bot disparando
+    // 100/seg).
+    const ip = getClientIp(request);
+    if (!checkRateLimit('lead-capture', ip, { windowMs: 60_000, max: 30 })) {
+      return NextResponse.json({ error: 'Muitas tentativas em pouco tempo. Aguarde 1 minuto.' }, { status: 429 });
+    }
+
     const admin = getAdminClient();
     const body = await request.json();
 

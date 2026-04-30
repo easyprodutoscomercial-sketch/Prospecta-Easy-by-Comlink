@@ -43,14 +43,19 @@ export async function PATCH(request: NextRequest) {
     if (status !== undefined) updateData.status = status;
     if (inexistente !== undefined) updateData.inexistente = inexistente;
 
-    const { error } = await admin
+    // Filtra org_id pra impedir admin de uma org alterar contatos de outra
+    // mandando UUIDs alheios. Sistema interno hoje (1 org), mas R1 pede
+    // defense in depth.
+    const { data: updated, error } = await admin
       .from('contacts')
       .update(updateData)
-      .in('id', allowedIds);
+      .in('id', allowedIds)
+      .eq('organization_id', profile.organization_id)
+      .select('id');
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, updated: allowedIds.length });
+    return NextResponse.json({ success: true, updated: updated?.length || 0 });
 
   } catch (error: any) {
     console.error('Error batch updating contacts:', error);
@@ -88,19 +93,58 @@ export async function DELETE(request: NextRequest) {
     const body = await request.json();
     const { ids } = batchDeleteSchema.parse(body);
 
-    // Delete all related records first
-    await admin.from('interactions').delete().in('contact_id', ids);
-    await admin.from('meetings').delete().in('contact_id', ids);
-    await admin.from('notifications').delete().in('contact_id', ids);
-    await admin.from('access_requests').delete().in('contact_id', ids);
-    await admin.from('contact_attachments').delete().in('contact_id', ids);
+    // Antes de deletar, valida que TODOS os ids passados pertencem a org do
+    // user. Se algum nao for, recusa o batch inteiro (atomicidade).
+    // Sem esse check, admin de uma org poderia deletar contatos de outra
+    // passando UUIDs alheios.
+    const { data: ownedContacts } = await admin
+      .from('contacts')
+      .select('id, name')
+      .in('id', ids)
+      .eq('organization_id', profile.organization_id);
 
-    // Delete contacts
-    const { error } = await admin.from('contacts').delete().in('id', ids);
+    const ownedIds = (ownedContacts || []).map((c: any) => c.id);
+    if (ownedIds.length !== ids.length) {
+      return NextResponse.json(
+        { error: 'Alguns contatos nao foram encontrados ou nao pertencem a sua organizacao' },
+        { status: 404 }
+      );
+    }
+
+    // Delete all related records first (escopados aos contatos validados)
+    await admin.from('interactions').delete().in('contact_id', ownedIds);
+    await admin.from('meetings').delete().in('contact_id', ownedIds);
+    await admin.from('notifications').delete().in('contact_id', ownedIds);
+    await admin.from('access_requests').delete().in('contact_id', ownedIds);
+    await admin.from('contact_attachments').delete().in('contact_id', ownedIds);
+
+    // Delete contacts (com filtro org_id por seguranca extra)
+    const { error } = await admin
+      .from('contacts')
+      .delete()
+      .in('id', ownedIds)
+      .eq('organization_id', profile.organization_id);
 
     if (error) throw error;
 
-    return NextResponse.json({ success: true, deleted: ids.length });
+    // Audit log: registra cada delete pra ter rastro de quem deletou em massa.
+    // Sem isso, vendedor reclama "sumiu meu contato" e ninguem sabe quem foi.
+    try {
+      const auditRows = ownedContacts!.map((c: any) => ({
+        organization_id: profile.organization_id,
+        user_id: user.id,
+        action: 'CONTACT_DELETE',
+        entity_type: 'contact',
+        entity_id: c.id,
+        metadata: { name: c.name, batch: true, batch_size: ids.length },
+      }));
+      await admin.from('audit_log').insert(auditRows);
+    } catch (auditErr) {
+      // Audit log nao pode bloquear o delete em si — so loga se falhar.
+      console.warn('[batch-delete] audit_log insert falhou:', auditErr);
+    }
+
+    return NextResponse.json({ success: true, deleted: ownedIds.length });
 
   } catch (error: any) {
     console.error('Error batch deleting contacts:', error);
