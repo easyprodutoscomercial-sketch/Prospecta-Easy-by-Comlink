@@ -35,8 +35,12 @@ export async function GET(
       .eq('organization_id', profile.organization_id);
 
     const totalBooths = (booths || []).length;
-    const visitedBooths = (booths || []).filter((b: any) => b.status === 'VISITADO').length;
-    const pendingBooths = totalBooths - visitedBooths;
+    // visitedBooths e calculado MAIS PRA FRENTE com base em visitsActive
+    // (booths com visita ativa de vendedor, ja excluindo quiz/draft/descartado).
+    // ANTES: contava booth.status='VISITADO' direto, mas o status nao era
+    // revertido quando visita era descartada — gerando 15 booths "fantasma"
+    // VISITADO sem visita valida (auditoria 2026-04-30 AGRISHOW).
+    const visitedBoothsByStatus = (booths || []).filter((b: any) => b.status === 'VISITADO').length;
 
     // Get all visits with booth info
     const { data: visits } = await admin
@@ -228,6 +232,19 @@ export async function GET(
     // do "Total de Leads" (porque mesma pessoa visitada por 2 vendedores conta 1).
     const uniqueContactsWithVisit = visitContactIds.size;
 
+    // Booths UNICOS que tem visita ativa (= booths "realmente" visitados).
+    // Substitui booth.status='VISITADO' pra evitar "booths fantasma" cujo status
+    // nao foi revertido quando visita virou rascunho/descartado.
+    const uniqueBoothsWithVisit = new Set(visitsActive.map((v: any) => v.booth_id));
+    const visitedBooths = uniqueBoothsWithVisit.size;
+    const pendingBooths = totalBooths - visitedBooths;
+    // Quantas visitas sao "extras" (alem da 1a por booth) — explica diferenca
+    // entre Visitas Stand (acoes) e Visitados (booths unicos).
+    const extraRevisits = visitsActive.length - visitedBooths;
+    // Quantos booths estao com booth.status=VISITADO mas SEM visita ativa
+    // (booths "fantasma" — visit foi descartada, status nao reverteu).
+    const ghostVisitedBooths = Math.max(0, visitedBoothsByStatus - visitedBooths);
+
     // Walk-ins por vendedor (pra futuro breakdown)
     const walkInsByUser: Record<string, number> = {};
     walkInContacts.forEach((c: any) => {
@@ -252,6 +269,10 @@ export async function GET(
       visits_with_contact: visitsWithContactCount,
       visits_without_contact: visitsWithoutContactCount,
       unique_contacts_with_visit: uniqueContactsWithVisit,
+      // Decomposicao de "Visitados" pra UI mostrar formula
+      extra_revisits: extraRevisits,
+      ghost_visited_booths: ghostVisitedBooths,
+      visited_booths_by_status: visitedBoothsByStatus,
       total_event_days: eventDays.length,
       days_with_visits: daysWithVisits,
       avg_visits_per_day: daysWithVisits > 0 ? Math.round(totalVisits / daysWithVisits) : 0,

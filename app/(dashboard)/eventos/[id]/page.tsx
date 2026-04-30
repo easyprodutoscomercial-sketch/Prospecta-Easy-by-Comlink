@@ -1061,12 +1061,38 @@ function DashboardTab({ eventId, event }: { eventId: string; event: FairEvent })
         </button>
       </div>
 
-      {/* KPI cards */}
+      {/* KPI cards primarios — cobertura de booths */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Stands" value={stats.total_booths} />
-        <StatCard label="Visitados" value={stats.visited_booths} color="emerald" />
-        <StatCard label="Pendentes" value={stats.pending_booths} color="amber" />
-        <StatCard label="Progresso" value={`${stats.progress_pct}%`} color="cyan" />
+        <StatCard
+          label="Total Stands"
+          value={stats.total_booths}
+          tooltip="Total de stands cadastrados no evento (event_booths). Não muda com visitas."
+        />
+        <StatCard
+          label="Visitados"
+          value={stats.visited_booths}
+          color="emerald"
+          formula={
+            stats.extra_revisits > 0
+              ? `${stats.visited_booths} únicos + ${stats.extra_revisits} revisitas = ${stats.total_visits} visitas`
+              : `${stats.visited_booths} únicos`
+          }
+          tooltip={`Stands UNICOS com pelo menos 1 visita ativa (excluindo quiz e contatos descartados/rascunho).${stats.ghost_visited_booths > 0 ? ` Atenção: ${stats.ghost_visited_booths} booths estão com booth.status='VISITADO' mas a visita foi feita em contato que virou rascunho/descartado/quiz — não contam aqui.` : ''} Diferença pra "Visitas Stand" (${stats.total_visits}): cada revisita do mesmo stand por outro vendedor conta 1 visita a mais, mas o booth ainda é 1.`}
+        />
+        <StatCard
+          label="Pendentes"
+          value={stats.pending_booths}
+          color="amber"
+          formula={`${stats.total_booths} − ${stats.visited_booths} visitados`}
+          tooltip="Stands que ainda não foram visitados (sem visita ativa de vendedor)."
+        />
+        <StatCard
+          label="Progresso"
+          value={`${stats.progress_pct}%`}
+          color="cyan"
+          formula={`${stats.visited_booths} / ${stats.total_booths} stands`}
+          tooltip="Cobertura: stands visitados ÷ total de stands."
+        />
       </div>
 
       {/* Secondary KPIs — cada card mostra a formula transparente embaixo
