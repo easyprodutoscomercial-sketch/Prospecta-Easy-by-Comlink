@@ -2524,13 +2524,18 @@ function StandsTab({
     }
   };
 
+  // Carrega TODOS os booths do evento de uma vez (sem filtro server-side).
+  // Filtragem (search + status) e feita CLIENT-SIDE em filteredBooths abaixo.
+  //
+  // Por que: antes a busca era server-side via ?search=X, mas isso causava
+  // inconsistencia com a aba Mapa (que filtra client-side) — busca por
+  // "BUFALO VIDROS" achava 1 stand no Mapa mas 0 no Stands. Causa raiz:
+  // re-fetch a cada keystroke + race condition + escape diferente.
+  // Solucao: 1 fetch unico, filtragem identica nas 2 abas.
   const fetchBooths = useCallback(async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (statusFilter !== 'all') params.append('status', statusFilter);
-      const res = await fetch(`/api/events/${eventId}/booths?${params}`);
+      const res = await fetch(`/api/events/${eventId}/booths`);
       if (res.ok) {
         const data = await res.json();
         setBooths(data.booths || []);
@@ -2540,9 +2545,21 @@ function StandsTab({
     } finally {
       setLoading(false);
     }
-  }, [eventId, search, statusFilter]);
+  }, [eventId]);
 
   useEffect(() => { fetchBooths(); }, [fetchBooths]);
+
+  // Filtragem client-side (mesmo padrao do MapTab) — case-insensitive,
+  // bate em company_name, booth_number ou sector. Sem refetch.
+  const normSearch = search.trim().toLowerCase();
+  const filteredBooths = booths.filter((b) => {
+    if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+    if (normSearch) {
+      const hay = `${b.company_name || ''} ${b.booth_number || ''} ${b.sector || ''}`.toLowerCase();
+      if (!hay.includes(normSearch)) return false;
+    }
+    return true;
+  });
 
   // Auto-open drawer when navigated from the map with a preselected booth
   useEffect(() => {
@@ -2856,8 +2873,10 @@ function StandsTab({
         </form>
       )}
 
-      {/* Count */}
-      <p className="text-xs text-purple-300/40">{booths.length} stand(s)</p>
+      {/* Count — mostra "X de Y stand(s)" quando ha filtro ativo */}
+      <p className="text-xs text-purple-300/40">
+        {filteredBooths.length}{filteredBooths.length !== booths.length ? ` de ${booths.length}` : ''} stand(s)
+      </p>
 
       {/* Booth list */}
       {loading ? (
@@ -2866,13 +2885,17 @@ function StandsTab({
             <div key={i} className="h-14 bg-[#1e0f35] rounded-lg animate-pulse" />
           ))}
         </div>
-      ) : booths.length === 0 ? (
+      ) : filteredBooths.length === 0 ? (
         <div className="text-center py-12 bg-[#1e0f35] rounded-xl border border-purple-800/30">
-          <p className="text-purple-300/50 text-sm">Nenhum stand cadastrado</p>
+          <p className="text-purple-300/50 text-sm">
+            {booths.length === 0
+              ? 'Nenhum stand cadastrado'
+              : 'Nenhum stand encontrado pra essa busca'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
-          {booths.map((booth) => (
+          {filteredBooths.map((booth) => (
             <div
               key={booth.id}
               onClick={() => setSelectedBooth(booth)}
