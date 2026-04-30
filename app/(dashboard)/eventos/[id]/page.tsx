@@ -2236,8 +2236,6 @@ function BoothDrawer({
             <strong className="text-purple-300/80">Salvar Dados</strong> = atualiza contato (sem novo check-in)<br/>
             <strong className="text-emerald-400/80">Registrar Check-in</strong> = cria visita nova + marca como visitado
           </div>
-          <p className="text-[9px] text-purple-300/30 text-center pt-1">v2026-04-28.1 (descartar)</p>
-
           {/* ===== Two Buttons — mobile friendly (touch area ≥ 48px) ===== */}
           <div className="flex gap-3 pb-2 pt-1 sticky bottom-0 bg-[#120826]/95 backdrop-blur-sm -mx-0 px-0 py-2">
             <button
@@ -4372,21 +4370,18 @@ function WalkInForm({
           fullBody = await result.response.json();
           if (fullBody?.error) errMsg = fullBody.error;
         } catch { /* ignora */ }
-        // DEBUG TEMPORARIO: mostra tudo do body num alert pra diagnostico.
-        // Remover apos encontrar a causa do 500.
+        // Em caso de 500, loga payload completo no console pra diagnostico
+        // (antes abria um alert() nativo na tela do vendedor — feio em prod).
         if (result.response.status === 500 && fullBody) {
-          const lines = [
-            `STATUS: ${result.response.status}`,
-            `STEP: ${fullBody.step || '-'}`,
-            `ERROR: ${fullBody.error || '-'}`,
-            `CODE: ${fullBody.code || '-'}`,
-            `NAME: ${fullBody.name || '-'}`,
-            `DETAILS: ${fullBody.details || '-'}`,
-            `HINT: ${fullBody.hint || '-'}`,
-            `STACK:`,
-            (fullBody.stack || '-'),
-          ];
-          try { alert(lines.join('\n')); } catch {}
+          console.error('[walk-in] erro 500:', {
+            status: result.response.status,
+            step: fullBody.step,
+            error: fullBody.error,
+            code: fullBody.code,
+            details: fullBody.details,
+            hint: fullBody.hint,
+            stack: fullBody.stack,
+          });
         }
         setSuccessMsg(errMsg);
         setTimeout(() => setSuccessMsg(null), 3000);
@@ -6348,18 +6343,26 @@ function BoothCardCorridor({
         {label}
       </div>
 
-      {/* Avatar do vendedor que visitou (canto inferior esquerdo, sobre rodape) */}
+      {/* Avatar do vendedor que visitou (canto superior esquerdo).
+          Antes ficava no inferior esquerdo e sobrepunha o numero do stand
+          em telas pequenas. Cor do ring acompanha o status do booth — verde
+          so quando VISITADO; roxo quando booth voltou pra PENDENTE depois
+          do contato ser descartado, mas ainda ha registro de quem visitou. */}
       {firstVisitor && (
-        <div className="absolute bottom-3.5 left-0.5 flex items-center">
+        <div className="absolute top-1 left-1 flex items-center">
           {firstVisitor.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={firstVisitor.avatar_url}
               alt={firstVisitor.user_name}
-              className="w-5 h-5 rounded-full border-2 border-white shadow ring-1 ring-emerald-500"
+              className={`w-5 h-5 rounded-full border-2 border-white shadow ring-1 ${
+                isVisited ? 'ring-emerald-500' : 'ring-purple-500/60'
+              }`}
             />
           ) : (
-            <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white shadow ring-1 ring-emerald-500">
+            <span className={`w-5 h-5 rounded-full text-white text-[8px] font-bold flex items-center justify-center border-2 border-white shadow ring-1 ${
+              isVisited ? 'bg-emerald-600 ring-emerald-500' : 'bg-purple-700 ring-purple-500/60'
+            }`}>
               {initials}
             </span>
           )}

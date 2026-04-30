@@ -654,7 +654,24 @@ export async function GET(
 
     if (error) throw error;
 
-    return NextResponse.json({ visits: visits || [] });
+    // Filtra visitas vinculadas a contatos descartados (inexistente=true) ou
+    // rascunhos (is_draft=true) — Timeline e Follow-up consomem esse endpoint
+    // e antes mostravam visitas "fantasma" que nao apareciam mais na aba
+    // Contatos. Vendedor podia mandar WhatsApp pra contato ja descartado.
+    // Mantem visitas sem contact_id (visita exploratoria sem captura).
+    const { data: activeContactsForCheckIn } = await admin
+      .from('contacts')
+      .select('id')
+      .eq('organization_id', profile.organization_id)
+      .eq('event_id', id)
+      .eq('is_draft', false)
+      .eq('inexistente', false);
+    const activeIds = new Set((activeContactsForCheckIn || []).map((c: any) => c.id));
+    const filteredVisits = (visits || []).filter((v: any) =>
+      !v.contact_id || activeIds.has(v.contact_id)
+    );
+
+    return NextResponse.json({ visits: filteredVisits });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Erro' }, { status: 500 });
   }

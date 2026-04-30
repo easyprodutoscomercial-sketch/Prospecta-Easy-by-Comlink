@@ -169,7 +169,7 @@ export async function PATCH(
     // Ownership enforcement: buscar contato atual
     const { data: existingContact } = await admin
       .from('contacts')
-      .select('assigned_to_user_id, stage_id, organization_id, is_draft')
+      .select('assigned_to_user_id, stage_id, organization_id, is_draft, event_id, inexistente')
       .eq('id', id)
       .single();
 
@@ -286,6 +286,79 @@ export async function PATCH(
           validated.stage_id,
         );
       } catch { /* non-blocking */ }
+    }
+
+    // Quando contato e descartado (inexistente: false -> true) e estava
+    // vinculado a uma feira, checar se o(s) booth(s) ainda tem outro contato
+    // ativo. Se nao tiver, voltar booth pra PENDENTE — antes ficava VISITADO
+    // pra sempre mesmo sem contato real, inflando cobertura no mapa.
+    if (
+      validated.inexistente === true &&
+      existingContact.inexistente !== true &&
+      existingContact.event_id
+    ) {
+      try {
+        // Busca todos os booth_ids que esse contato visitou
+        const { data: contactVisits } = await admin
+          .from('booth_visits')
+          .select('booth_id')
+          .eq('contact_id', id)
+          .eq('event_id', existingContact.event_id)
+          .eq('organization_id', existingContact.organization_id);
+
+        const boothIds = Array.from(
+          new Set((contactVisits || []).map((v: any) => v.booth_id).filter(Boolean))
+        );
+
+        for (const boothId of boothIds) {
+          // Pega outras visitas do mesmo booth (excluindo as desse contato)
+          const { data: otherVisits } = await admin
+            .from('booth_visits')
+            .select('contact_id')
+            .eq('booth_id', boothId)
+            .eq('organization_id', existingContact.organization_id)
+            .neq('contact_id', id);
+
+          const otherContactIds = (otherVisits || [])
+            .map((v: any) => v.contact_id)
+            .filter(Boolean);
+
+          // Se nao ha outras visitas nem outros contatos, pode voltar pra PENDENTE
+          if (otherContactIds.length === 0) {
+            // Mas pode haver visita SEM contact_id no booth (visita exploratoria)
+            // — nesse caso ainda conta como visitado.
+            const visitsNoContact = (otherVisits || []).filter((v: any) => !v.contact_id);
+            if (visitsNoContact.length === 0) {
+              await admin
+                .from('event_booths')
+                .update({ status: 'PENDENTE' })
+                .eq('id', boothId)
+                .eq('organization_id', existingContact.organization_id);
+            }
+          } else {
+            // Ha outros contatos no booth — checa se algum ainda esta ATIVO
+            const { data: activeOthers } = await admin
+              .from('contacts')
+              .select('id')
+              .in('id', otherContactIds)
+              .eq('is_draft', false)
+              .eq('inexistente', false)
+              .limit(1);
+
+            if (!activeOthers || activeOthers.length === 0) {
+              // Nenhum outro contato ativo; volta pra PENDENTE
+              await admin
+                .from('event_booths')
+                .update({ status: 'PENDENTE' })
+                .eq('id', boothId)
+                .eq('organization_id', existingContact.organization_id);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[contacts PATCH] revert booth status falhou:', e);
+        // non-blocking — nao trava o PATCH se a reversao do booth falhar
+      }
     }
 
     return NextResponse.json(contact);

@@ -225,7 +225,11 @@ export async function GET(
       progress_pct: totalBooths > 0 ? Math.round((visitedBooths / totalBooths) * 100) : 0,
       total_visits: totalVisits,
       total_walk_ins: totalWalkIns,
-      total_leads_event: totalVisits + totalWalkIns,
+      // total_leads_event = total de contatos UNICOS do evento (nao soma).
+      // Antes era totalVisits + totalWalkIns, mas isso inflava: visita
+      // exploratoria sem contact_id era contada e o mesmo contato podia
+      // aparecer em ambos. Agora bate exato com aba Contatos e ranking.
+      total_leads_event: (eventContactsActive || []).length,
       total_event_days: eventDays.length,
       days_with_visits: daysWithVisits,
       avg_visits_per_day: daysWithVisits > 0 ? Math.round(totalVisits / daysWithVisits) : 0,
