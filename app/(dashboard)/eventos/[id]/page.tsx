@@ -682,38 +682,63 @@ function MetaUrgenciaCard({ event, stats }: { event: FairEvent; stats: any }) {
 // (= quem pode gerar QR nos stands) + quem já produziu lead neste evento.
 // Pra cada um: leads capturados via QR, check-ins manuais, última atividade.
 // Clique no card navega pros contatos do evento atribuídos àquele vendedor.
+type SellerStats = {
+  user_id: string;
+  name: string;
+  avatar_url: string | null;
+  contacts_captured: number;
+  stands_visited: number;
+  coverage_pct: number;
+  total_visits: number;
+  qr_leads: number;
+  manual_checkins: number;
+  total: number;
+  last_activity: string | null;
+};
+
+function formatLastActivity(iso: string | null): string {
+  if (!iso) return 'sem atividade';
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'agora mesmo';
+  if (min < 60) return `ha ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `ha ${h}h`;
+  const d = Math.floor(h / 24);
+  return `ha ${d}d`;
+}
+
 function SellersAtEvent({ eventId }: { eventId: string }) {
   const router = useRouter();
   const [data, setData] = useState<{
-    sellers: Array<{
-      user_id: string;
-      name: string;
-      avatar_url: string | null;
-      qr_leads: number;
-      manual_checkins: number;
-      total: number;
-      last_activity: string | null;
-    }>;
+    sellers: SellerStats[];
     total_sellers: number;
     active_sellers: number;
+    total_stands: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/events/${eventId}/sellers`)
-      .then((r) => r.json())
-      .then(setData)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    const load = () => {
+      fetch(`/api/events/${eventId}/sellers`)
+        .then((r) => r.json())
+        .then(setData)
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    };
+    load();
+    // Refresh a cada 30s — feira ao vivo, dado precisa estar fresco
+    const interval = setInterval(load, 30000);
+    return () => clearInterval(interval);
   }, [eventId]);
 
   if (loading) {
     return (
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5 animate-pulse">
         <div className="h-4 bg-purple-900/40 rounded w-48 mb-4" />
-        <div className="flex gap-3 overflow-hidden">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 w-44 bg-purple-900/40 rounded-lg shrink-0" />
+            <div key={i} className="h-32 bg-purple-900/40 rounded-lg" />
           ))}
         </div>
       </div>
@@ -723,66 +748,88 @@ function SellersAtEvent({ eventId }: { eventId: string }) {
   if (!data || data.total_sellers === 0) {
     return (
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
-        <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2">Vendedores na Feira</h3>
+        <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2">Ranking de Vendedores</h3>
         <p className="text-sm text-purple-300/50">
           Nenhum vendedor com QR Code ativo neste pipeline ainda.
-          Crie um link de captura no menu <span className="text-emerald-400">QR Codes</span> pra começar.
+          Crie um link de captura no menu <span className="text-emerald-400">QR Codes</span> pra comecar.
         </p>
       </div>
     );
   }
 
-  const formatLastActivity = (iso: string | null): string => {
-    if (!iso) return 'sem atividade';
-    const diff = Date.now() - new Date(iso).getTime();
-    const min = Math.floor(diff / 60000);
-    if (min < 1) return 'agora mesmo';
-    if (min < 60) return `há ${min} min`;
-    const h = Math.floor(min / 60);
-    if (h < 24) return `há ${h}h`;
-    const d = Math.floor(h / 24);
-    return `há ${d}d`;
-  };
+  // Totais agregados pra mostrar contexto no header
+  const totalContatos = data.sellers.reduce((sum, s) => sum + s.contacts_captured, 0);
+  const totalStandsCobertos = new Set<string>();
+  // Esse Set seria por backend, aqui usamos so a soma simples por seller (best-effort)
+  const totalStandsHits = data.sellers.reduce((sum, s) => sum + s.stands_visited, 0);
+  void totalStandsCobertos; void totalStandsHits;
 
   return (
     <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">
-          Vendedores na Feira
-        </h3>
-        <span className="text-xs text-purple-300/50">
-          {data.active_sellers} ativo{data.active_sellers !== 1 ? 's' : ''} de {data.total_sellers}
-        </span>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Ranking de Vendedores</h3>
+          <p className="text-[11px] text-purple-300/50 mt-0.5">
+            {data.active_sellers} ativo{data.active_sellers !== 1 ? 's' : ''} · {totalContatos} contato{totalContatos !== 1 ? 's' : ''} · {data.total_stands} stand{data.total_stands !== 1 ? 's' : ''} no evento
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => router.push(`/contacts?event_id=${eventId}`)}
+          className="text-[11px] text-emerald-400 hover:text-emerald-300 px-2 py-1 rounded-md border border-emerald-500/30 hover:border-emerald-500/60"
+        >
+          Ver todos os contatos
+        </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {data.sellers.map((s) => {
-          const isActive = s.total > 0;
+        {data.sellers.map((s, idx) => {
+          const isActive = s.contacts_captured > 0 || s.stands_visited > 0;
+          const isLeader = idx === 0 && isActive;
+          const podiumColor = idx === 0 ? 'amber' : idx === 1 ? 'slate' : idx === 2 ? 'orange' : null;
+
           return (
             <button
               key={s.user_id}
               type="button"
               onClick={() => router.push(`/contacts?event_id=${eventId}&assigned=${s.user_id}`)}
-              className={`text-left rounded-lg border p-3 transition-all hover:scale-[1.01] ${
-                isActive
+              className={`text-left rounded-lg border p-3 transition-all hover:scale-[1.01] relative ${
+                isLeader
+                  ? 'bg-gradient-to-br from-amber-500/15 to-[#2a1245] border-amber-400/50 hover:border-amber-400/80 shadow-md shadow-amber-500/10'
+                  : isActive
                   ? 'bg-[#2a1245] border-emerald-500/30 hover:border-emerald-500/60'
                   : 'bg-[#2a1245]/50 border-purple-800/30 hover:border-purple-700/50 opacity-60'
               }`}
-              title={`Ver leads de ${s.name} neste evento`}
+              title={`Ver contatos de ${s.name} neste evento`}
             >
+              {/* Posicao no ranking */}
+              {isActive && podiumColor && (
+                <span
+                  className={`absolute -top-2 -left-2 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ring-2 ring-[#1e0f35] ${
+                    podiumColor === 'amber'
+                      ? 'bg-amber-400 text-amber-900'
+                      : podiumColor === 'slate'
+                      ? 'bg-slate-300 text-slate-800'
+                      : 'bg-orange-400 text-orange-900'
+                  }`}
+                >
+                  {idx + 1}
+                </span>
+              )}
+
               <div className="flex items-center gap-3">
                 {s.avatar_url ? (
                   <img
                     src={s.avatar_url}
                     alt={s.name}
                     className={`w-10 h-10 rounded-full object-cover shrink-0 ${
-                      isActive ? 'ring-2 ring-emerald-500/40' : ''
+                      isLeader ? 'ring-2 ring-amber-400/60' : isActive ? 'ring-2 ring-emerald-500/40' : ''
                     }`}
                   />
                 ) : (
                   <div
                     className={`w-10 h-10 rounded-full bg-purple-800/50 flex items-center justify-center text-sm font-bold text-purple-200 shrink-0 ${
-                      isActive ? 'ring-2 ring-emerald-500/40' : ''
+                      isLeader ? 'ring-2 ring-amber-400/60' : isActive ? 'ring-2 ring-emerald-500/40' : ''
                     }`}
                   >
                     {s.name.charAt(0).toUpperCase()}
@@ -790,31 +837,47 @@ function SellersAtEvent({ eventId }: { eventId: string }) {
                 )}
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold text-white truncate">{s.name}</div>
-                  <div className="text-[11px] text-purple-300/50">
-                    {formatLastActivity(s.last_activity)}
+                  <div className="text-[11px] text-purple-300/50">{formatLastActivity(s.last_activity)}</div>
+                </div>
+              </div>
+
+              {/* Stats grandes: stands + contatos */}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <div className="bg-[#1a0a2e]/70 rounded-md p-2 border border-purple-800/30">
+                  <div className="flex items-center gap-1 text-[10px] font-semibold text-purple-300/60 uppercase tracking-wider">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                    Stands
                   </div>
+                  <div className="text-xl font-extrabold text-cyan-300 leading-tight mt-1">{s.stands_visited}</div>
+                  {data.total_stands > 0 && s.stands_visited > 0 && (
+                    <div className="text-[10px] text-purple-300/50 mt-0.5">{s.coverage_pct}% do evento</div>
+                  )}
+                </div>
+                <div className="bg-[#1a0a2e]/70 rounded-md p-2 border border-purple-800/30">
+                  <div className="flex items-center gap-1 text-[10px] font-semibold text-purple-300/60 uppercase tracking-wider">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Contatos
+                  </div>
+                  <div className="text-xl font-extrabold text-emerald-300 leading-tight mt-1">{s.contacts_captured}</div>
+                  {s.qr_leads > 0 && s.manual_checkins > 0 && (
+                    <div className="text-[10px] text-purple-300/50 mt-0.5">{s.qr_leads} QR · {s.manual_checkins} manual</div>
+                  )}
                 </div>
               </div>
-              <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-1 text-purple-200/80">
-                  <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                  </svg>
-                  <span className="font-bold text-emerald-400">{s.qr_leads}</span>
-                  <span className="text-purple-300/50">QR</span>
+
+              {/* Barra de cobertura — visualmente reforça o % */}
+              {data.total_stands > 0 && s.stands_visited > 0 && (
+                <div className="mt-2 h-1 w-full bg-purple-900/40 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${isLeader ? 'bg-amber-400' : 'bg-cyan-400'}`}
+                    style={{ width: `${Math.min(s.coverage_pct, 100)}%` }}
+                  />
                 </div>
-                <div className="flex items-center gap-1 text-purple-200/80">
-                  <svg className="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span className="font-bold text-cyan-400">{s.manual_checkins}</span>
-                  <span className="text-purple-300/50">manual</span>
-                </div>
-                <div className="flex items-center gap-1 text-purple-100">
-                  <span className="font-bold">{s.total}</span>
-                  <span className="text-purple-300/50">total</span>
-                </div>
-              </div>
+              )}
             </button>
           );
         })}
