@@ -32,7 +32,7 @@ function formatEventDate(raw: string | null | undefined): string {
   return d.toLocaleDateString('pt-BR');
 }
 
-type Tab = 'dashboard' | 'stands' | 'map' | 'mapa-oficial' | 'timeline' | 'followup' | 'contatos';
+type Tab = 'dashboard' | 'stands' | 'map' | 'timeline' | 'followup' | 'contatos';
 
 export default function EventDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -188,12 +188,14 @@ export default function EventDetailPage() {
     );
   }
 
+  // Aba 'Mapa Oficial' foi removida — virou um botao 'Ver mapa oficial em
+  // nova aba' dentro da aba Mapa quando event.external_map_url existe.
+  // Mobile com 7 abas dava scroll horizontal infinito; agora sao 6.
   const tabs: { key: Tab; label: string }[] = [
     { key: 'dashboard', label: 'Dashboard' },
     { key: 'contatos', label: 'Contatos' },
     { key: 'stands', label: 'Stands' },
     { key: 'map', label: 'Mapa' },
-    ...(event.external_map_url ? [{ key: 'mapa-oficial' as Tab, label: 'Mapa Oficial' }] : []),
     { key: 'timeline', label: 'Timeline' },
     { key: 'followup', label: 'Follow-up' },
   ];
@@ -536,9 +538,6 @@ export default function EventDetailPage() {
             setTab('stands');
           }}
         />
-      )}
-      {!showWalkIn && tab === 'mapa-oficial' && event.external_map_url && (
-        <ExternalMapTab url={event.external_map_url} eventName={event.name} />
       )}
       {!showWalkIn && tab === 'timeline' && <TimelineTab eventId={id} />}
       {!showWalkIn && tab === 'followup' && <FollowUpTab eventId={id} event={event} />}
@@ -5512,42 +5511,6 @@ function FollowUpTab({ eventId, event }: { eventId: string; event: FairEvent }) 
 }
 
 // ============================================
-// Mapa Oficial (iframe externo: Zapt, MapYourShow, ExpoFP, etc)
-// ============================================
-
-function ExternalMapTab({ url, eventName }: { url: string; eventName: string }) {
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-purple-300/60">
-          Mapa oficial da feira embedado. Pra marcar visitas, use a aba "Stands".
-        </p>
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg bg-[#2a1245] text-purple-200 hover:bg-[#3a1e55] border border-purple-700/30 transition-colors shrink-0"
-        >
-          Abrir em nova aba
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-          </svg>
-        </a>
-      </div>
-      <div className="rounded-xl overflow-hidden border border-purple-800/30 bg-[#1e0f35]" style={{ height: 'calc(100vh - 240px)', minHeight: 500 }}>
-        <iframe
-          src={url}
-          title={`Mapa oficial — ${eventName}`}
-          className="w-full h-full border-0"
-          allow="geolocation; fullscreen"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      </div>
-    </div>
-  );
-}
-
-// ============================================
 // Mapa Interativo do Evento
 // ============================================
 
@@ -5820,6 +5783,24 @@ function MapTab({
 
   return (
     <div className="space-y-4">
+      {/* Atalho pro mapa oficial em nova aba (substitui a antiga aba 'Mapa
+          Oficial' que era um iframe sem interacao). So aparece se o evento
+          tem URL configurada. */}
+      {event.external_map_url && (
+        <a
+          href={event.external_map_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-purple-800/30 text-purple-200 hover:bg-purple-800/50 hover:text-white border border-purple-700/30 transition-colors"
+          title="Abre o mapa oficial da feira (Zapt, MapYourShow, etc) em nova aba"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          Ver mapa oficial em nova aba
+        </a>
+      )}
+
       {/* Stats header */}
       <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4 sm:p-5">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
