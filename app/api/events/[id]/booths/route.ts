@@ -40,14 +40,24 @@ export async function GET(
     const { data: booths, error } = await query;
     if (error) throw error;
 
-    // Get visits for these booths
-    const boothIds = (booths || []).map((b: any) => b.id);
+    // Get visits for these booths.
+    //
+    // ANTES: filtrava por .in('booth_id', boothIds) com TODOS os ids dos
+    // booths (700+). Isso gerava URL gigante que estourava o limite do
+    // PostgREST/HTTP — retorno vinha VAZIO em silencio. Sintoma: aba
+    // Contatos da feira aparecia com 0 mesmo tendo 200+ contatos linkados
+    // (auditoria 2026-04-30 AGRISHOW: visits_count=0 mesmo com 245 visits
+    // no banco).
+    //
+    // AGORA: filtra direto por event_id + organization_id (booth_visits ja
+    // tem ambas as colunas). Uma query simples sem URL longa.
     let visits: any[] = [];
-    if (boothIds.length > 0) {
+    if ((booths || []).length > 0) {
       const { data: v } = await admin
         .from('booth_visits')
         .select('*')
-        .in('booth_id', boothIds)
+        .eq('event_id', id)
+        .eq('organization_id', profile.organization_id)
         .order('visited_at', { ascending: false });
       visits = v || [];
     }
