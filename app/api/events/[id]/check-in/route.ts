@@ -3,20 +3,18 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
+import { uploadEventImage } from '@/lib/storage/upload';
 
-// Helper: upload a file to storage and return the public URL
+// Wrapper local pra manter assinatura antiga (retorna URL ou null) usando o
+// helper centralizado que valida MIME + extensao + sanitiza nome.
 async function uploadFile(admin: any, file: File, orgId: string, eventId: string, label: string): Promise<string | null> {
   if (!file || file.size === 0) return null;
-  const ext = file.name.split('.').pop() || 'jpg';
-  const safeName = `${Date.now()}-${label}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const filePath = `${orgId}/events/${eventId}/${safeName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error } = await admin.storage
-    .from('attachments')
-    .upload(filePath, buffer, { contentType: file.type || 'image/jpeg' });
-  if (error) return null;
-  const { data: urlData } = admin.storage.from('attachments').getPublicUrl(filePath);
-  return urlData.publicUrl;
+  const result = await uploadEventImage({ admin, file, orgId, eventId, label });
+  if (!result.ok) {
+    console.warn('[check-in] upload rejeitado:', result.error, 'file=', file.name, file.type);
+    return null;
+  }
+  return result.url;
 }
 
 // POST /api/events/[id]/check-in — register a booth visit

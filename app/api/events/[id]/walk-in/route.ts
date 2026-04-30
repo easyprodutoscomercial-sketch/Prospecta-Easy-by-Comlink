@@ -3,20 +3,18 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
+import { uploadEventImage } from '@/lib/storage/upload';
 
-// Upload helper — identico ao check-in, so com label diferente.
+// Wrapper local com a mesma API antiga, mas usando helper centralizado
+// (lib/storage/upload) que valida MIME + extensao + sanitiza nome.
 async function uploadFile(admin: any, file: File, orgId: string, eventId: string, label: string): Promise<string | null> {
   if (!file || file.size === 0) return null;
-  const ext = file.name.split('.').pop() || 'jpg';
-  const safeName = `${Date.now()}-${label}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-  const filePath = `${orgId}/events/${eventId}/${safeName}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const { error } = await admin.storage
-    .from('attachments')
-    .upload(filePath, buffer, { contentType: file.type || 'image/jpeg' });
-  if (error) return null;
-  const { data: urlData } = admin.storage.from('attachments').getPublicUrl(filePath);
-  return urlData.publicUrl;
+  const result = await uploadEventImage({ admin, file, orgId, eventId, label });
+  if (!result.ok) {
+    console.warn('[walk-in] upload rejeitado:', result.error, 'file=', file.name, file.type);
+    return null;
+  }
+  return result.url;
 }
 
 // POST /api/events/[id]/walk-in
