@@ -239,7 +239,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
     setContact((p) => p ? { ...p, inexistente: newValue } : p);
     try {
       const r = await fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inexistente: newValue }) });
-      if (r.ok) { const updated = await r.json(); setContact(updated); toast.success(newValue ? 'Contato marcado como inexistente' : 'Marca de inexistente removida'); }
+      if (r.ok) { const updated = await r.json(); setContact(updated); toast.success(newValue ? 'Contato descartado' : 'Contato recuperado'); }
       else { setContact((p) => p ? { ...p, inexistente: !newValue } : p); toast.error('Erro ao atualizar contato'); }
     } catch { setContact((p) => p ? { ...p, inexistente: !newValue } : p); toast.error('Erro ao atualizar contato'); }
   };

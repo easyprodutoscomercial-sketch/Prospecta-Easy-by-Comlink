@@ -63,7 +63,7 @@ export default function ContactCard({
             )}
           </Link>
           {isInexistente && (
-            <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400 whitespace-nowrap shrink-0">Inexistente</span>
+            <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400 whitespace-nowrap shrink-0">Descartado</span>
           )}
 
           {contact.event && (
@@ -98,7 +98,7 @@ export default function ContactCard({
             <button
               onClick={(e) => { e.stopPropagation(); onToggleInexistente(contact.id); }}
               className={`shrink-0 p-1 transition-colors ${isInexistente ? 'text-red-400 hover:text-neutral-400' : 'text-neutral-600 hover:text-red-400'}`}
-              title={isInexistente ? 'Remover marca de inexistente' : 'Marcar como inexistente'}
+              title={isInexistente ? 'Recuperar contato' : 'Descartar contato'}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -154,7 +154,7 @@ export default function ContactCard({
                   </span>
                 )}
                 {isInexistente && (
-                  <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Inexistente</span>
+                  <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Descartado</span>
                 )}
                 {resolveTipoDisplay(contact.tipo).map((t) => (
                   <span key={t} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
@@ -216,7 +216,7 @@ export default function ContactCard({
                   <button
                     onClick={(e) => { e.stopPropagation(); onToggleInexistente(contact.id); }}
                     className={`p-1 opacity-0 group-hover:opacity-100 transition-all ${isInexistente ? 'text-red-400 hover:text-neutral-400 !opacity-100' : 'text-neutral-600 hover:text-red-400'}`}
-                    title={isInexistente ? 'Remover marca de inexistente' : 'Marcar como inexistente'}
+                    title={isInexistente ? 'Recuperar contato' : 'Descartar contato'}
                   >
                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
@@ -299,7 +299,7 @@ export default function ContactCard({
                 </span>
               )}
               {isInexistente && (
-                <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Inexistente</span>
+                <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Descartado</span>
               )}
               {contact.tipo?.map((t) => (
                 <span key={t} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
@@ -403,7 +403,7 @@ export default function ContactCard({
                 <button
                   onClick={(e) => { e.stopPropagation(); onToggleInexistente(contact.id); }}
                   className={`p-1 opacity-0 group-hover:opacity-100 transition-all ${isInexistente ? 'text-red-400 hover:text-neutral-400 !opacity-100' : 'text-neutral-600 hover:text-red-400'}`}
-                  title={isInexistente ? 'Remover marca de inexistente' : 'Marcar como inexistente'}
+                  title={isInexistente ? 'Recuperar contato' : 'Descartar contato'}
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />

@@ -218,7 +218,7 @@ export default function ContactSidebar({
         <div className="flex items-center gap-2 flex-wrap mb-2">
           <h1 className={`text-lg font-bold ${contact.inexistente ? 'line-through text-neutral-500' : 'text-emerald-400'}`}>{contact.name}</h1>
           {contact.inexistente && (
-            <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400">Inexistente</span>
+            <span className="px-2 py-0.5 text-[10px] font-medium rounded bg-red-500/20 text-red-400">Descartado</span>
           )}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap mb-3">
@@ -650,7 +650,7 @@ export default function ContactSidebar({
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
               </svg>
-              {contact.inexistente ? 'Remover marca de Inexistente' : 'Marcar como Inexistente'}
+              {contact.inexistente ? 'Recuperar contato' : 'Descartar contato'}
             </button>
           )}
         </div>

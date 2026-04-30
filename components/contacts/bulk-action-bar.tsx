@@ -55,7 +55,7 @@ export default function BulkActionBar({
             onClick={onMarkInexistente}
             className="px-3 py-1.5 text-xs font-medium text-orange-400 border border-orange-700 rounded-lg hover:bg-orange-900/30 transition-colors"
           >
-            Marcar Inexistente
+            Descartar
           </button>
         )}
         <button

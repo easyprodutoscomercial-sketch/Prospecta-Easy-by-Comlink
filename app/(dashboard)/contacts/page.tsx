@@ -326,7 +326,7 @@ function ContactsPageContent() {
     try {
       const res = await fetch(`/api/contacts/${contactId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inexistente: newValue }) });
       if (!res.ok) throw new Error();
-      toast.success(newValue ? 'Contato marcado como inexistente' : 'Marca de inexistente removida');
+      toast.success(newValue ? 'Contato descartado' : 'Contato recuperado');
     } catch {
       setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: !newValue } : c)));
       toast.error('Erro ao atualizar contato');
@@ -336,8 +336,8 @@ function ContactsPageContent() {
   const handleBulkInexistente = async () => {
     setBulkLoading(true);
     const res = await fetch('/api/contacts/batch', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: Array.from(selectedIds), inexistente: true }) });
-    if (res.ok) { toast.success(`${selectedIds.size} contatos marcados como inexistente`); clearSelection(); loadContacts(); }
-    else toast.error('Erro ao marcar contatos como inexistente');
+    if (res.ok) { toast.success(`${selectedIds.size} contatos descartados`); clearSelection(); loadContacts(); }
+    else toast.error('Erro ao descartar contatos');
     setBulkLoading(false);
   };
 

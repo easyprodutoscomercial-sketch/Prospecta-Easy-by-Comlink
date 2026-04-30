@@ -84,16 +84,33 @@ export async function GET(
 
     // 3. Contatos do evento — busca id + created_by_user_id pra que possamos
     // depois fazer SET de contatos unicos por vendedor (sem dupla contagem).
+    //
+    // Filtros aplicados:
+    //   - is_draft=false: rascunhos nao contam (vendedor abriu form e nao
+    //     terminou, nao deveria pesar no ranking dele)
+    //   - inexistente=false: descartados nao contam (vendedor decidiu que
+    //     nao era um lead valido — nao infla a contagem do esforco dele)
+    //
+    // Isso bate com /api/contacts (que tambem exclui esses por default) e com
+    // a aba Contatos do evento. Antes o ranking mostrava 631 e a lista
+    // mostrava 556 — vendedor pensava "sumiu lead".
     const { data: eventContacts } = await admin
       .from('contacts')
       .select('id, created_by_user_id')
       .eq('organization_id', profile.organization_id)
-      .eq('event_id', eventId);
+      .eq('event_id', eventId)
+      .eq('is_draft', false)
+      .eq('inexistente', false);
 
     // Set de contatos UNICOS atribuidos a cada vendedor (uniao QR + stand)
     const contactsSetByUser: Record<string, Set<string>> = {};
     // Set de contatos que vieram via QR (created_by) — informativo
     const viaQrSetByUser: Record<string, Set<string>> = {};
+
+    // Set de contatos ATIVOS do evento — usado pra excluir descartados/rascunhos
+    // do lado do booth_visits tambem (visita pode estar linkada a contato que
+    // depois virou rascunho/descartado, nao deveria contar)
+    const activeContactIds = new Set((eventContacts || []).map((c: any) => c.id));
 
     (eventContacts || []).forEach((c: any) => {
       if (!c.created_by_user_id || !c.id) return;
@@ -128,8 +145,9 @@ export async function GET(
         standsSetByUser[v.user_id].add(v.booth_id);
       }
 
-      // Contato vinculado a esta visita conta como atribuido a esse vendedor
-      if (v.contact_id) {
+      // Contato vinculado a esta visita conta como atribuido a esse vendedor —
+      // SO se o contato ainda esta ativo (nao foi descartado nem virou rascunho).
+      if (v.contact_id && activeContactIds.has(v.contact_id)) {
         if (!contactsSetByUser[v.user_id]) contactsSetByUser[v.user_id] = new Set();
         if (!viaStandSetByUser[v.user_id]) viaStandSetByUser[v.user_id] = new Set();
         contactsSetByUser[v.user_id].add(v.contact_id);

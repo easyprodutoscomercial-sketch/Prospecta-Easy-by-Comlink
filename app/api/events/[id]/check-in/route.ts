@@ -179,6 +179,7 @@ export async function POST(
             tipo: ['COMPRADOR'],
             status: 'NOVO',
             created_by_user_id: user.id,
+            assigned_to_user_id: user.id, // vendedor que captou vira dono no CRM
             name_normalized: booth.company_name.toLowerCase().trim(),
           })
           .select()
@@ -329,12 +330,18 @@ export async function POST(
       }
     }
 
-    // Mark booth as visited only if requested
-    if (markVisited) {
+    // Mark booth as visited.
+    // - markVisited=true: vendedor explicitamente registrou check-in.
+    // - markVisited=false MAS visita existente foi reusada: o booth ja foi
+    //   visitado em algum momento, entao status DEVE ser VISITADO. Isso
+    //   auto-corrige stands que ficaram dessincronizados (ex: 11 stands em
+    //   30/04 estavam PENDENTE apesar de terem visitas).
+    if (markVisited || visit) {
       await admin
         .from('event_booths')
         .update({ status: 'VISITADO' })
-        .eq('id', boothId);
+        .eq('id', boothId)
+        .eq('event_id', eventId);
     }
 
     // If event has pipeline, create or link contact
@@ -451,6 +458,7 @@ export async function POST(
           notes: userNotes ? `[Feira] ${userNotes}` : null,
           status: 'NOVO',
           created_by_user_id: user.id,
+          assigned_to_user_id: user.id, // vendedor que captou vira dono no CRM
           name_normalized: empresaName.toLowerCase().trim(),
           avatar_url: avatarUrl,
         };
@@ -502,6 +510,7 @@ export async function POST(
             notes: baseNotes,
             status: 'NOVO',
             created_by_user_id: user.id,
+            assigned_to_user_id: user.id, // vendedor que captou vira dono no CRM
             name_normalized: empresaName.toLowerCase(),
           };
           if (extraPhone) {
