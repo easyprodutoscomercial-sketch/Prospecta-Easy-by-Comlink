@@ -52,18 +52,61 @@ export async function GET(
       visits = v || [];
     }
 
-    // Mapa booth_id -> visit (mantem a mais recente, comportamento legado)
+    // Mapa booth_id -> visit MAIS RECENTE (compat legado pra UI antiga)
     const visitsMap: Record<string, any> = {};
+    // Mapa booth_id -> array de vendedores DISTINTOS que visitaram (avatar+nome)
+    // Ordenado por visited_at desc (mais recente primeiro)
+    const visitorsByBooth: Record<string, Array<{
+      user_id: string;
+      user_name: string;
+      avatar_url: string | null;
+      visited_at: string;
+    }>> = {};
+    const seenVisitorByBooth: Record<string, Set<string>> = {};
     // Mapa booth_id -> Set<contact_id> (todos os contatos capturados naquele stand)
     const contactIdsByBooth: Record<string, Set<string>> = {};
     const allContactIds = new Set<string>();
+    const visitorUserIds = new Set<string>();
+
     visits.forEach((v: any) => {
       if (!visitsMap[v.booth_id]) visitsMap[v.booth_id] = v;
+
+      if (v.user_id) {
+        if (!seenVisitorByBooth[v.booth_id]) seenVisitorByBooth[v.booth_id] = new Set();
+        if (!seenVisitorByBooth[v.booth_id].has(v.user_id)) {
+          seenVisitorByBooth[v.booth_id].add(v.user_id);
+          if (!visitorsByBooth[v.booth_id]) visitorsByBooth[v.booth_id] = [];
+          visitorsByBooth[v.booth_id].push({
+            user_id: v.user_id,
+            user_name: v.user_name || 'Vendedor',
+            avatar_url: null, // preenchido logo abaixo via lookup
+            visited_at: v.visited_at,
+          });
+          visitorUserIds.add(v.user_id);
+        }
+      }
+
       if (v.contact_id) {
         if (!contactIdsByBooth[v.booth_id]) contactIdsByBooth[v.booth_id] = new Set();
         contactIdsByBooth[v.booth_id].add(v.contact_id);
         allContactIds.add(v.contact_id);
       }
+    });
+
+    // Busca avatar_url dos vendedores que visitaram pra mostrar avatar real na UI
+    const avatarMap: Record<string, string | null> = {};
+    if (visitorUserIds.size > 0) {
+      const { data: profs } = await admin
+        .from('profiles')
+        .select('user_id, avatar_url, name')
+        .in('user_id', Array.from(visitorUserIds));
+      (profs || []).forEach((p: any) => {
+        avatarMap[p.user_id] = p.avatar_url || null;
+      });
+    }
+    // Aplica avatar_url no array de visitors
+    Object.values(visitorsByBooth).forEach((list) => {
+      list.forEach((v) => { v.avatar_url = avatarMap[v.user_id] ?? null; });
     });
 
     // Busca dados dos contatos (filtra por org pra seguranca, mesmo com admin client)
@@ -83,7 +126,8 @@ export async function GET(
       const ids = contactIdsByBooth[b.id] ? Array.from(contactIdsByBooth[b.id]) : [];
       return {
         ...b,
-        visit: visitsMap[b.id] || null,
+        visit: visitsMap[b.id] || null, // legado — visita mais recente
+        visitors: visitorsByBooth[b.id] || [], // NOVO — todos os vendedores distintos
         contacts: ids.map((cid) => contactsMap[cid]).filter(Boolean),
       };
     });
