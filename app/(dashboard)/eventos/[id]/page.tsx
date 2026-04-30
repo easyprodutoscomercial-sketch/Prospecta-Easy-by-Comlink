@@ -6262,6 +6262,133 @@ const boothCollator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: '
 const naturalCompare = (a: string, b: string) => boothCollator.compare(a, b);
 
 // --- Corridor View (auto-grid, sem imagem) ---
+// Card individual de stand no CorridorView. Componente proprio porque precisa
+// de state local pra fallback de logo (quando img falha em carregar). Antes
+// estava inline no map e o onError so escondia a imagem deixando quadrado
+// branco — usuario via 700+ stands vazios na tela.
+function BoothCardCorridor({
+  booth,
+  isHighlighted,
+  isLive,
+  onBoothClick,
+}: {
+  booth: EventBooth & { visitors?: Array<{ user_id: string; user_name: string; avatar_url: string | null; visited_at: string }> };
+  isHighlighted: boolean;
+  isLive: boolean;
+  onBoothClick: (b: EventBooth) => void;
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const isVisited = booth.status === 'VISITADO';
+  const label = booth.booth_number || '—';
+  const logo = booth.logo_url;
+  const showLogo = logo && !imageFailed;
+  const visitors = booth.visitors || [];
+  const firstVisitor = visitors[0];
+  const extraVisitors = visitors.length - 1;
+
+  // Iniciais pra fallback de avatar
+  const initials = (firstVisitor?.user_name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase() || '')
+    .join('') || '?';
+
+  // Tooltip detalhado
+  const tooltip = `${booth.company_name}${booth.booth_number ? ` — ${booth.booth_number}` : ''}` +
+    (isLive ? ' · VISITADO AGORA' : isVisited ? ' · visitado' : ' · pendente') +
+    (visitors.length > 0
+      ? `\nVisitado por: ${visitors.map((v) => v.user_name).join(', ')}`
+      : '');
+
+  return (
+    <button
+      id={`booth-card-${booth.id}`}
+      type="button"
+      onClick={() => onBoothClick(booth)}
+      title={tooltip}
+      className={`group relative w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] md:w-[84px] md:h-[84px] rounded-lg transition-all hover:scale-110 hover:z-10 overflow-hidden flex flex-col shadow-sm ${
+        isHighlighted
+          ? 'ring-4 ring-yellow-300 scale-110 z-20 animate-pulse'
+          : isLive
+          ? 'ring-2 ring-cyan-400'
+          : isVisited
+          ? 'ring-2 ring-emerald-400 shadow-md shadow-emerald-500/25'
+          : 'ring-1 ring-purple-700/40 hover:ring-emerald-500/60'
+      }`}
+    >
+      {/* Area do logo (topo) */}
+      <div className="flex-1 bg-white flex items-center justify-center p-1.5 overflow-hidden">
+        {showLogo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logo}
+            alt={booth.company_name}
+            loading="lazy"
+            className="max-w-full max-h-full object-contain"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <span className="text-[10px] font-bold text-neutral-500 text-center line-clamp-3 leading-tight px-1">
+            {booth.company_name.slice(0, 18)}
+          </span>
+        )}
+      </div>
+
+      {/* Rodape: codigo do stand */}
+      <div className={`text-[10px] font-bold py-0.5 px-1 text-center truncate ${
+        isHighlighted
+          ? 'bg-yellow-400 text-black'
+          : isLive
+          ? 'bg-cyan-500 text-white'
+          : isVisited
+          ? 'bg-emerald-500 text-white'
+          : 'bg-[#2a1245] text-purple-200'
+      }`}>
+        {label}
+      </div>
+
+      {/* Avatar do vendedor que visitou (canto inferior esquerdo, sobre rodape) */}
+      {firstVisitor && (
+        <div className="absolute bottom-3.5 left-0.5 flex items-center">
+          {firstVisitor.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={firstVisitor.avatar_url}
+              alt={firstVisitor.user_name}
+              className="w-5 h-5 rounded-full border-2 border-white shadow ring-1 ring-emerald-500"
+            />
+          ) : (
+            <span className="w-5 h-5 rounded-full bg-emerald-600 text-white text-[8px] font-bold flex items-center justify-center border-2 border-white shadow ring-1 ring-emerald-500">
+              {initials}
+            </span>
+          )}
+          {extraVisitors > 0 && (
+            <span className="-ml-1 w-4 h-4 rounded-full bg-purple-700 text-white text-[7px] font-bold flex items-center justify-center border border-white shadow">
+              +{extraVisitors}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Check verde quando visitado (canto superior direito) */}
+      {isVisited && (
+        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center shadow-md">
+          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+        </span>
+      )}
+      {isLive && !isVisited && (
+        <span className="absolute top-1 right-1 flex h-3 w-3">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400 border border-white" />
+        </span>
+      )}
+    </button>
+  );
+}
+
 function CorridorView({
   booths,
   highlightBoothId,
@@ -6375,78 +6502,15 @@ function CorridorView({
 
               {/* Fileira horizontal de stands (wrap quando passa da linha) */}
               <div className="flex flex-wrap gap-1.5 sm:gap-2 p-2 sm:p-3">
-                {list.map((b) => {
-                  const isVisited = b.status === 'VISITADO';
-                  const isHighlighted = highlightBoothId === b.id;
-                  const isLive = recentBoothIds?.has(b.id) ?? false;
-                  const label = b.booth_number || '—';
-                  const logo = b.logo_url;
-
-                  return (
-                    <button
-                      key={b.id}
-                      id={`booth-card-${b.id}`}
-                      type="button"
-                      onClick={() => onBoothClick(b)}
-                      title={`${b.company_name}${b.booth_number ? ` — ${b.booth_number}` : ''}${isLive ? ' · VISITADO AGORA' : ''}${isVisited ? ' · visitado' : ' · pendente'}`}
-                      className={`group relative w-[64px] h-[64px] sm:w-[72px] sm:h-[72px] md:w-[84px] md:h-[84px] rounded-lg transition-all hover:scale-110 hover:z-10 overflow-hidden flex flex-col shadow-sm ${
-                        isHighlighted
-                          ? 'ring-4 ring-yellow-300 scale-110 z-20 animate-pulse'
-                          : isLive
-                          ? 'ring-2 ring-cyan-400'
-                          : isVisited
-                          ? 'ring-2 ring-emerald-400 shadow-md shadow-emerald-500/25'
-                          : 'ring-1 ring-purple-700/40 hover:ring-emerald-500/60'
-                      }`}
-                    >
-                      {/* Area do logo (topo, ~64px) */}
-                      <div className="flex-1 bg-white flex items-center justify-center p-1.5 overflow-hidden">
-                        {logo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={logo}
-                            alt={b.company_name}
-                            loading="lazy"
-                            className="max-w-full max-h-full object-contain"
-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ) : (
-                          <span className="text-[10px] font-bold text-neutral-500 text-center line-clamp-3 leading-tight px-1">
-                            {b.company_name.slice(0, 18)}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Rodape: codigo do stand */}
-                      <div className={`text-[10px] font-bold py-0.5 px-1 text-center truncate ${
-                        isHighlighted
-                          ? 'bg-yellow-400 text-black'
-                          : isLive
-                          ? 'bg-cyan-500 text-white'
-                          : isVisited
-                          ? 'bg-emerald-500 text-white'
-                          : 'bg-[#2a1245] text-purple-200'
-                      }`}>
-                        {label}
-                      </div>
-
-                      {/* Overlay verde quando visitado (sobre o logo) */}
-                      {isVisited && (
-                        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center shadow-md">
-                          <svg className="w-2.5 h-2.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        </span>
-                      )}
-                      {isLive && !isVisited && (
-                        <span className="absolute top-1 right-1 flex h-3 w-3">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                          <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-400 border border-white" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                {list.map((b) => (
+                  <BoothCardCorridor
+                    key={b.id}
+                    booth={b}
+                    isHighlighted={highlightBoothId === b.id}
+                    isLive={recentBoothIds?.has(b.id) ?? false}
+                    onBoothClick={onBoothClick}
+                  />
+                ))}
               </div>
             </div>
           );
