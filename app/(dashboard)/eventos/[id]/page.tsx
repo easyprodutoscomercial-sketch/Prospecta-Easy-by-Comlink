@@ -2877,12 +2877,45 @@ function StandsTab({
                 <div className="flex items-center gap-3 text-[10px] text-purple-300/40">
                   {booth.booth_number && <span>Stand {booth.booth_number}</span>}
                   {booth.sector && <span>{booth.sector}</span>}
-                  {booth.visit && (
+                  {booth.visit && !booth.visitors?.length && (
                     <span className="text-emerald-400/60">
-                      Visitado por {booth.visit.user_name} em {new Date(booth.visit.visited_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                      Visitado em {new Date(booth.visit.visited_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   )}
                 </div>
+                {/* Vendedores que visitaram — avatares empilhados + nome do mais recente.
+                    Antes mostravamos so o nome do ultimo em texto pequeno e meio
+                    transparente (10px text-emerald-400/60). Quando tinha 2+ vendedores
+                    visitando, so o ultimo aparecia. */}
+                {booth.visitors && booth.visitors.length > 0 && (
+                  <div className="flex items-center gap-2 mt-1.5 min-w-0">
+                    <div className="flex -space-x-1.5 shrink-0">
+                      {booth.visitors.slice(0, 3).map((v) => (
+                        <div
+                          key={v.user_id}
+                          className="relative w-5 h-5 rounded-full ring-2 ring-[#1e0f35] overflow-hidden bg-emerald-500/20 flex items-center justify-center"
+                          title={`${v.user_name} — ${new Date(v.visited_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`}
+                        >
+                          {v.avatar_url ? (
+                            <img src={v.avatar_url} alt={v.user_name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-[9px] font-bold text-emerald-300">{v.user_name.charAt(0).toUpperCase()}</span>
+                          )}
+                        </div>
+                      ))}
+                      {booth.visitors.length > 3 && (
+                        <div className="w-5 h-5 rounded-full ring-2 ring-[#1e0f35] bg-purple-700/40 flex items-center justify-center text-[9px] font-bold text-purple-200">
+                          +{booth.visitors.length - 3}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-emerald-300 font-medium truncate min-w-0">
+                      {booth.visitors.length === 1
+                        ? `Visitou: ${booth.visitors[0].user_name.split(' ')[0]}`
+                        : `${booth.visitors.length} vendedores visitaram`}
+                    </span>
+                  </div>
+                )}
                 {booth.contacts && booth.contacts.length > 0 && (
                   <div className="flex items-center gap-1.5 mt-1 text-[11px] min-w-0">
                     <svg className="w-3 h-3 text-cyan-400/80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
