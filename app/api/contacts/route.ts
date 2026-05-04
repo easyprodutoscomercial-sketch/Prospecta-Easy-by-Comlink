@@ -19,6 +19,10 @@ function applyContactFilters(
     pipeline_id?: string | null;
     stage_id?: string | null;
     assigned?: string | null;
+    // 'me' | 'unassigned' | UUID — quem CADASTROU o contato (created_by_user_id).
+    // Diferente de assigned (dono atual). Vendedor que cadastra reclamava de
+    // ver leads sumirem quando outro vendedor "apontava" pra si.
+    created_by?: string | null;
     userId?: string;
     allowedPipelineIds?: string[] | null;
     temperatura?: string | null;
@@ -69,6 +73,13 @@ function applyContactFilters(
   else if (filters.assigned && filters.assigned !== 'all' && filters.assigned.length >= 32) {
     // UUID direto (ex: vindo da lista de vendedores do evento)
     query = query.eq('assigned_to_user_id', filters.assigned);
+  }
+  // Filtro por CADASTRADOR (created_by_user_id) — quem inseriu o contato.
+  // 'unknown' = quiz/import (created_by_user_id null), pra dar visibilidade.
+  if (filters.created_by === 'me' && filters.userId) query = query.eq('created_by_user_id', filters.userId);
+  else if (filters.created_by === 'unknown') query = query.is('created_by_user_id', null);
+  else if (filters.created_by && filters.created_by !== 'all' && filters.created_by.length >= 32) {
+    query = query.eq('created_by_user_id', filters.created_by);
   }
   if (filters.temperatura && filters.temperatura !== 'all') query = query.eq('temperatura', filters.temperatura);
   if (filters.origem && filters.origem !== 'all') query = query.eq('origem', filters.origem);
@@ -208,6 +219,7 @@ export async function GET(request: NextRequest) {
       pipeline_id: searchParams.get('pipeline_id'),
       stage_id: searchParams.get('stage_id'),
       assigned: searchParams.get('assigned'),
+      created_by: searchParams.get('created_by'),
       userId: user.id,
       allowedPipelineIds,
       temperatura: searchParams.get('temperatura'),

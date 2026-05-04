@@ -73,7 +73,10 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
   });
 
   const isUnassigned = !contact.assigned_to_user_id;
-  const ownerId = contact.assigned_to_user_id || contact.created_by_user_id;
+  // Fallback pra string vazia: contatos do quiz tem created_by_user_id null,
+  // entao ownerId pode ser '' — userMap['' ] devolve undefined, getUserColor('')
+  // devolve cor neutra. Sem o fallback TS reclama de indexar com null.
+  const ownerId = contact.assigned_to_user_id || contact.created_by_user_id || '';
   const ownerColorVal = isUnassigned ? { bg: '#525252', text: '#a3a3a3' } : (userMap?.[ownerId]?.color || getUserColor(ownerId));
 
   const valueBorder = getValueBorder(contact.valor_estimado);
@@ -89,6 +92,12 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
   const days = daysInStage(contact.updated_at);
   const owner = userMap?.[ownerId];
   const ownerInitials = owner ? getUserInitials(owner.name) : '?';
+  // Cadastrador (created_by_user_id) — mostrado quando diferente do dono atual.
+  // Pra dar credito a quem captou o lead mesmo se outro vendedor virar dono depois.
+  const creatorId = contact.created_by_user_id || '';
+  const creator = creatorId && creatorId !== contact.assigned_to_user_id ? userMap?.[creatorId] : undefined;
+  const creatorColorVal = creator?.color || (creatorId ? getUserColor(creatorId) : null);
+  const creatorInitials = creator ? getUserInitials(creator.name) : '?';
   const overlayStyle = { borderLeftColor: valueBorder.color || ownerColorVal.bg, borderLeftWidth: `${valueBorder.width}px` };
 
   const canJumpForward = canFwd !== undefined ? canFwd : true;
@@ -193,12 +202,12 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
           </div>
         )}
 
-        {/* Owner avatar (vendedor responsavel — discreto) */}
-        <div className="shrink-0">
+        {/* Owner avatar (vendedor responsavel — discreto) + Cadastrador (se diferente) */}
+        <div className="shrink-0 flex items-center -space-x-1.5">
           {isUnassigned ? (
             <div className="w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold border border-dashed border-purple-500/25 text-purple-300/30">?</div>
           ) : (
-            <div className="w-6 h-6 rounded-full overflow-hidden opacity-60" title={owner?.name || ''}>
+            <div className="w-6 h-6 rounded-full overflow-hidden opacity-60" title={`Dono: ${owner?.name || ''}`}>
               {owner?.avatar_url ? (
                 <img src={owner.avatar_url} alt={owner.name} className="w-6 h-6 object-cover rounded-full" />
               ) : (
@@ -206,6 +215,19 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
                   className="w-6 h-6 flex items-center justify-center text-[8px] font-bold rounded-full"
                   style={{ backgroundColor: ownerColorVal.bg, color: ownerColorVal.text }}
                 >{ownerInitials}</div>
+              )}
+            </div>
+          )}
+          {/* Mini avatar do cadastrador (ring cyan pra diferenciar do dono) */}
+          {creator && creatorColorVal && (
+            <div className="w-4 h-4 rounded-full overflow-hidden ring-1 ring-cyan-400/60 z-10" title={`Cadastrado por ${creator.name}`}>
+              {creator.avatar_url ? (
+                <img src={creator.avatar_url} alt={creator.name} className="w-4 h-4 object-cover rounded-full" />
+              ) : (
+                <div
+                  className="w-4 h-4 flex items-center justify-center text-[7px] font-bold rounded-full"
+                  style={{ backgroundColor: creatorColorVal.bg, color: creatorColorVal.text }}
+                >{creatorInitials}</div>
               )}
             </div>
           )}

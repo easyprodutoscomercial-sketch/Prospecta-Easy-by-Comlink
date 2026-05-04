@@ -111,7 +111,9 @@ export interface Contact {
   // Status e atribuição
   status: ContactStatus;
   assigned_to_user_id: string | null;
-  created_by_user_id: string;
+  // Quem cadastrou o contato. Pode ser null pra contatos criados pelo quiz publico
+  // (migration 20260430_created_by_user_id_nullable.sql) — antes admin levava credito.
+  created_by_user_id: string | null;
   created_at: string;
   updated_at: string;
 }

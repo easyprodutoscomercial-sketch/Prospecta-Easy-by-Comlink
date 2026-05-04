@@ -33,7 +33,7 @@ export const KanbanCardCompact = memo(function KanbanCardCompact({ contact, over
     data: { contact },
   });
 
-  const ownerId = contact.assigned_to_user_id || contact.created_by_user_id;
+  const ownerId = contact.assigned_to_user_id || contact.created_by_user_id || '';
   const isUnassigned = !contact.assigned_to_user_id;
   const ownerColorVal = isUnassigned ? { bg: '#525252', text: '#a3a3a3' } : (userMap?.[ownerId]?.color || getUserColor(ownerId));
   const owner = userMap?.[ownerId];

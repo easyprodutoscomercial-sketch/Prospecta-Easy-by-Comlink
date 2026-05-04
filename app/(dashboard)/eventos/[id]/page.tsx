@@ -5007,6 +5007,34 @@ function ContatosTab({ eventId }: { eventId: string }) {
     );
   });
 
+  // Agrupa as linhas por stand pra que vendedor veja "stand X tem N contatos"
+  // numa olhada so. Antes era lista flat e ficava dificil identificar quais
+  // contatos estavam vinculados a cada empresa.
+  type BoothGroup = {
+    booth: StandContactRow['booth'];
+    visitor: StandContactRow['visitor'];
+    contacts: StandContactRow['contact'][];
+  };
+  const groupedByBooth = useMemo(() => {
+    const map = new Map<string, BoothGroup>();
+    for (const row of filtered) {
+      const existing = map.get(row.booth.id);
+      if (existing) {
+        existing.contacts.push(row.contact);
+      } else {
+        map.set(row.booth.id, {
+          booth: row.booth,
+          visitor: row.visitor,
+          contacts: [row.contact],
+        });
+      }
+    }
+    // Ordena por empresa (alfabetico) pra leitura natural
+    return Array.from(map.values()).sort((a, b) =>
+      (a.booth.company_name || '').localeCompare(b.booth.company_name || '', 'pt-BR', { sensitivity: 'base' })
+    );
+  }, [filtered]);
+
   const formatDate = (iso: string) => {
     if (!iso) return '-';
     const d = new Date(iso);
@@ -5098,61 +5126,78 @@ function ContatosTab({ eventId }: { eventId: string }) {
           </p>
         </div>
       ) : (
-        <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden">
-          <div className="divide-y divide-purple-800/20">
-            {filtered.map((row, idx) => {
-              const c = row.contact;
-              const v = row.visitor;
-              const b = row.booth;
-              return (
-              <Link
-                key={`${b.id}-${c.id}-${idx}`}
-                href={`/contacts/${c.id}`}
-                className="flex items-center gap-4 p-4 hover:bg-purple-800/20 transition-colors"
-              >
-                {/* Logo da empresa (se tem) ou inicial */}
-                {b.logo_url ? (
-                  <div className="w-12 h-12 rounded bg-white/90 flex items-center justify-center shrink-0 overflow-hidden ring-2 ring-emerald-500/40">
-                    <img src={b.logo_url} alt={b.company_name} className="w-full h-full object-contain" loading="lazy" />
-                  </div>
-                ) : (
-                  <ContactAvatar name={c.name || b.company_name} avatarUrl={null} size="lg" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <p className="text-white font-semibold truncate">
-                      {c.name || b.company_name}
-                      {c.role && <span className="text-purple-300/60 font-normal text-xs ml-2">· {c.role}</span>}
-                    </p>
-                    {/* Vendedor que CAPTOU (do booth_visit) — destaque alto */}
+        // Agrupado por stand: cabecalho da empresa visivel, contatos abaixo.
+        // Antes era lista flat de contatos misturados — vendedor reclamava de
+        // nao conseguir ver de relance "quem ta vinculado a esse stand".
+        <div className="space-y-3">
+          {groupedByBooth.map((group) => {
+            const b = group.booth;
+            const v = group.visitor;
+            return (
+              <div key={b.id} className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden">
+                {/* Cabecalho do stand */}
+                <div className="flex items-center gap-3 p-3 sm:p-4 bg-[#180a30] border-b border-purple-800/30">
+                  {b.logo_url ? (
+                    <div className="w-12 h-12 rounded bg-white/90 flex items-center justify-center shrink-0 overflow-hidden ring-2 ring-emerald-500/40">
+                      <img src={b.logo_url} alt={b.company_name} className="w-full h-full object-contain" loading="lazy" />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 rounded bg-purple-700/30 flex items-center justify-center shrink-0 text-base font-bold text-purple-200">
+                      {(b.company_name || '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-white font-bold truncate">{b.company_name}</h4>
+                      {b.booth_number && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-700/40 text-purple-200">Stand {b.booth_number}</span>
+                      )}
+                      {b.sector && (
+                        <span className="text-[10px] text-purple-300/50">{b.sector}</span>
+                      )}
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                        {group.contacts.length} {group.contacts.length === 1 ? 'contato' : 'contatos'}
+                      </span>
+                    </div>
                     {v && (
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                      <div className="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-300">
                         {v.avatar_url ? (
                           <img src={v.avatar_url} alt="" className="w-4 h-4 rounded-full object-cover" />
                         ) : (
                           <span className="w-4 h-4 rounded-full bg-emerald-500/30 flex items-center justify-center text-[9px] font-bold">{v.user_name.charAt(0).toUpperCase()}</span>
                         )}
-                        Captado por {v.user_name.split(' ')[0]}
-                      </span>
+                        <span>Captado por <span className="font-semibold">{v.user_name.split(' ')[0]}</span></span>
+                        <span className="text-purple-300/40">·</span>
+                        <span className="text-purple-300/40">{formatDate(v.visited_at)}</span>
+                      </div>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-purple-300/60">
-                    <span className="text-purple-200/80">{b.company_name}</span>
-                    {b.booth_number && <span className="text-purple-300/50">Stand {b.booth_number}</span>}
-                    {b.sector && <span className="text-purple-300/40">{b.sector}</span>}
-                    {c.phone && <span>📞 {c.phone}</span>}
-                  </div>
                 </div>
-                <div className="text-right text-[11px] text-purple-300/40 hidden sm:block">
-                  {v && formatDate(v.visited_at)}
+                {/* Contatos do stand */}
+                <div className="divide-y divide-purple-800/20">
+                  {group.contacts.map((c, ci) => (
+                    <Link
+                      key={`${b.id}-${c.id}-${ci}`}
+                      href={`/contacts/${c.id}`}
+                      className="flex items-center gap-3 px-3 sm:px-4 py-2.5 hover:bg-purple-800/20 transition-colors"
+                    >
+                      <ContactAvatar name={c.name || b.company_name} avatarUrl={null} size="sm" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-white text-sm font-semibold truncate">
+                          {c.name || <span className="text-purple-300/40 italic">Sem nome</span>}
+                          {c.role && <span className="ml-2 text-purple-300/50 text-xs font-normal">· {c.role}</span>}
+                        </p>
+                        {c.phone && <p className="text-[11px] text-purple-300/50 truncate">📞 {c.phone}</p>}
+                      </div>
+                      <svg className="w-4 h-4 text-purple-400/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Link>
+                  ))}
                 </div>
-                <svg className="w-4 h-4 text-purple-400/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

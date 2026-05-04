@@ -26,6 +26,9 @@ interface ContactCardProps {
   onDelete?: (id: string) => void;
   owner: UserInfo | undefined;
   ownerColor: { bg: string; text: string } | null;
+  // Quem cadastrou o contato. Pode ser igual ao owner — nesse caso nao mostramos
+  // pra nao poluir. Mostramos so quando criador != dono atual ou dono e nulo.
+  creator?: UserInfo | undefined;
   currentUserId: string;
   currentPipelineStages: PipelineStage[] | null;
 }
@@ -41,11 +44,18 @@ export default function ContactCard({
   onDelete,
   owner,
   ownerColor,
+  creator,
   currentUserId,
   currentPipelineStages,
 }: ContactCardProps) {
   const isUnassigned = !contact.assigned_to_user_id;
   const isInexistente = contact.inexistente === true;
+  // So mostramos o cadastrador quando ele e DIFERENTE do dono atual.
+  // Senao polui a tela com info redundante (caso comum: vendedor cadastra e fica como dono).
+  const showCreator = creator
+    && creator.user_id !== contact.assigned_to_user_id
+    && creator.user_id !== '';
+  const creatorColor = creator?.color || null;
 
   // ---------- COMPACT MODE ----------
   if (densityMode === 'compact') {
@@ -81,13 +91,26 @@ export default function ContactCard({
 
           {/* Small avatar */}
           {!isUnassigned && (
-            <div className="shrink-0 w-6 h-6 rounded-full overflow-hidden" title={owner?.name}>
+            <div className="shrink-0 w-6 h-6 rounded-full overflow-hidden" title={`Dono: ${owner?.name}`}>
               {owner?.avatar_url ? (
                 <img src={owner.avatar_url} alt={owner.name} className="w-6 h-6 object-cover rounded-full" />
               ) : (
                 <div className="w-6 h-6 flex items-center justify-center text-[9px] font-bold rounded-full"
                   style={{ backgroundColor: ownerColor?.bg || '#404040', color: ownerColor?.text || '#fff' }}>
                   {owner ? getUserInitials(owner.name) : '?'}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Cadastrador (so se diferente do dono): mini avatar com cor + tooltip */}
+          {showCreator && creator && (
+            <div className="shrink-0 w-5 h-5 rounded-full overflow-hidden ring-2 ring-cyan-500/30" title={`Cadastrado por: ${creator.name}`}>
+              {creator.avatar_url ? (
+                <img src={creator.avatar_url} alt={creator.name} className="w-5 h-5 object-cover rounded-full" />
+              ) : (
+                <div className="w-5 h-5 flex items-center justify-center text-[8px] font-bold rounded-full"
+                  style={{ backgroundColor: creatorColor?.bg || '#404040', color: creatorColor?.text || '#fff' }}>
+                  {getUserInitials(creator.name)}
                 </div>
               )}
             </div>
@@ -178,6 +201,23 @@ export default function ContactCard({
                     )}
                     <span className="truncate">{contact.event.name}</span>
                   </Link>
+                )}
+                {/* Cadastrador: so quando diferente do dono atual. Cor cyan pra diferenciar do emerald do owner. */}
+                {showCreator && creator && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 max-w-[160px]"
+                    title={`Cadastrado por ${creator.name}`}
+                  >
+                    {creator.avatar_url ? (
+                      <img src={creator.avatar_url} alt="" className="w-3 h-3 rounded-full object-cover" />
+                    ) : (
+                      <span className="w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-bold"
+                        style={{ backgroundColor: creatorColor?.bg || '#404040', color: creatorColor?.text || '#fff' }}>
+                        {getUserInitials(creator.name)}
+                      </span>
+                    )}
+                    <span className="truncate">+ {creator.name.split(' ')[0]}</span>
+                  </span>
                 )}
               </div>
 
@@ -323,6 +363,22 @@ export default function ContactCard({
                   )}
                   <span className="truncate">{contact.event.name}</span>
                 </Link>
+              )}
+              {showCreator && creator && (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 max-w-[180px]"
+                  title={`Cadastrado por ${creator.name}`}
+                >
+                  {creator.avatar_url ? (
+                    <img src={creator.avatar_url} alt="" className="w-3 h-3 rounded-full object-cover" />
+                  ) : (
+                    <span className="w-3 h-3 rounded-full flex items-center justify-center text-[7px] font-bold"
+                      style={{ backgroundColor: creatorColor?.bg || '#404040', color: creatorColor?.text || '#fff' }}>
+                      {getUserInitials(creator.name)}
+                    </span>
+                  )}
+                  <span className="truncate">+ {creator.name.split(' ')[0]}</span>
+                </span>
               )}
             </div>
 

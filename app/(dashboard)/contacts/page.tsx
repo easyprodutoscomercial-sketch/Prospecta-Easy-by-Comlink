@@ -36,6 +36,8 @@ const CONTACT_FILTER_DEFS = {
   status: { type: 'select' as const, default: 'all' },
   tipo: { type: 'select' as const, default: 'all' },
   assigned: { type: 'select' as const, default: 'all' },
+  // Quem CADASTROU o contato — diferente de 'assigned' (dono atual).
+  created_by: { type: 'select' as const, default: 'all' },
   temperatura: { type: 'select' as const, default: 'all' },
   origem: { type: 'select' as const, default: 'all' },
   classe: { type: 'select' as const, default: 'all' },
@@ -71,8 +73,10 @@ export default function ContactsPage() {
 
 function ContactsPageContent() {
   const toast = useToast();
-  const { selectedPipelineId, currentPipeline, pipelines } = usePipeline();
-  const [contactsPipelineFilter, setContactsPipelineFilter] = useState('all');
+  // Sincronizado com /kanban: mesma fonte de verdade (selectedPipelineId do contexto).
+  // Trocar pipeline numa tela troca na outra. Garante que /contacts e /kanban
+  // mostrem SEMPRE o mesmo conjunto de contatos — vendedor reclamava que nao batia.
+  const { selectedPipelineId, setSelectedPipelineId, currentPipeline, pipelines } = usePipeline();
   const { values: filters, inputValues, setFilter, setFilters, resetAll } = useUrlFilters(CONTACT_FILTER_DEFS);
   const prefs = useContactPreferences();
 
@@ -164,12 +168,12 @@ function ContactsPageContent() {
   useEffect(() => { loadFacets(); }, [loadFacets]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadContacts(); }, [JSON.stringify(filters), contactsPipelineFilter]);
+  useEffect(() => { loadContacts(); }, [JSON.stringify(filters), selectedPipelineId]);
 
   // Load all contacts for map view (no pagination)
   useEffect(() => {
     if (isMapView) loadMapContacts();
-  }, [isMapView, JSON.stringify(filters), contactsPipelineFilter]);
+  }, [isMapView, JSON.stringify(filters), selectedPipelineId]);
 
   const buildFilterParams = useCallback(() => {
     const params = new URLSearchParams();
@@ -177,6 +181,7 @@ function ContactsPageContent() {
     if (filters.status !== 'all') params.set('status', filters.status);
     if (filters.tipo !== 'all') params.set('tipo', filters.tipo);
     if (filters.assigned !== 'all') params.set('assigned', filters.assigned);
+    if (filters.created_by !== 'all') params.set('created_by', filters.created_by);
     if (filters.temperatura !== 'all') params.set('temperatura', filters.temperatura);
     if (filters.origem !== 'all') params.set('origem', filters.origem);
     if (filters.classe !== 'all') params.set('classe', filters.classe);
@@ -197,9 +202,12 @@ function ContactsPageContent() {
     if (filters.proxima_acao_tipo !== 'all') params.set('proxima_acao_tipo', filters.proxima_acao_tipo);
     if (filters.produtos_fornecidos) params.set('produtos_fornecidos', filters.produtos_fornecidos);
     if (filters.event_id !== 'all') params.set('event_id', filters.event_id);
-    if (contactsPipelineFilter && contactsPipelineFilter !== 'all') params.set('pipeline_id', contactsPipelineFilter);
+    // Sempre filtra por pipeline selecionado no contexto (mesmo do kanban).
+    // Sem isso, /contacts e /kanban divergiam: lista mostrava todos os pipelines,
+    // kanban so o atual.
+    if (selectedPipelineId) params.set('pipeline_id', selectedPipelineId);
     return params;
-  }, [filters, contactsPipelineFilter]);
+  }, [filters, selectedPipelineId]);
 
   const loadContacts = async () => {
     if (abortRef.current) abortRef.current.abort();
@@ -350,6 +358,7 @@ function ContactsPageContent() {
     if (filters.status !== 'all') count++;
     if (filters.tipo !== 'all') count++;
     if (filters.assigned !== 'all') count++;
+    if (filters.created_by !== 'all') count++;
     if (filters.temperatura !== 'all') count++;
     if (filters.origem !== 'all') count++;
     if (filters.classe !== 'all') count++;
@@ -370,13 +379,12 @@ function ContactsPageContent() {
     if (filters.produtos_fornecidos) count++;
     if (filters.proxima_acao_tipo !== 'all') count++;
     if (filters.event_id !== 'all') count++;
-    if (contactsPipelineFilter !== 'all') count++;
     return count;
-  }, [filters, contactsPipelineFilter]);
+  }, [filters]);
 
   function clearAllFilters() {
     resetAll();
-    setContactsPipelineFilter('all');
+    // Pipeline e sincronizado com kanban: nao limpa aqui (manteria zerado os 2 lados).
   }
 
   const hiddenCount = contacts.length - visibleContacts.length;
@@ -495,12 +503,26 @@ function ContactsPageContent() {
             <option value="COMPRADOR">Comprador ({facetCounts.tipoCounts['COMPRADOR'] || 0})</option>
             <option value="AMBOS">Ambos ({facetCounts.tipoCounts['AMBOS'] || 0})</option>
           </select>
-          <select value={filters.assigned} onChange={(e) => setFilter('assigned', e.target.value)} className={selectCls}>
-            <option value="all">Vendedor (todos)</option>
+          <select value={filters.assigned} onChange={(e) => setFilter('assigned', e.target.value)} className={selectCls} title="Dono atual do contato (apontou pra si)">
+            <option value="all">Dono (todos)</option>
             <option value="me">Meus contatos</option>
             <option value="unassigned">Sem responsavel</option>
             {Object.values(userMap).length > 0 && (
-              <optgroup label="Por vendedor">
+              <optgroup label="Por dono">
+                {Object.values(userMap)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((u) => (
+                    <option key={u.user_id} value={u.user_id}>{u.name}</option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
+          <select value={filters.created_by} onChange={(e) => setFilter('created_by', e.target.value)} className={selectCls} title="Quem cadastrou (criou) o contato — diferente do dono atual">
+            <option value="all">Cadastrado por (todos)</option>
+            <option value="me">Eu cadastrei</option>
+            <option value="unknown">Sem cadastrador (quiz/import)</option>
+            {Object.values(userMap).length > 0 && (
+              <optgroup label="Por cadastrador">
                 {Object.values(userMap)
                   .sort((a, b) => a.name.localeCompare(b.name))
                   .map((u) => (
@@ -515,8 +537,7 @@ function ContactsPageContent() {
               <option key={key} value={key}>{label} ({facetCounts.temperaturaCounts[key] || 0})</option>
             ))}
           </select>
-          <select value={contactsPipelineFilter} onChange={(e) => setContactsPipelineFilter(e.target.value)} className={selectCls}>
-            <option value="all">Todos Pipelines</option>
+          <select value={selectedPipelineId} onChange={(e) => setSelectedPipelineId(e.target.value)} className={selectCls} title="Pipeline (sincronizado com Kanban)">
             {pipelines.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -647,6 +668,8 @@ function ContactsPageContent() {
               const ownerId = contact.assigned_to_user_id || '';
               const owner = userMap[ownerId];
               const ownerColor = ownerId ? getUserColor(ownerId) : null;
+              const creatorId = contact.created_by_user_id || '';
+              const creator = creatorId ? userMap[creatorId] : undefined;
 
               return (
                 <ContactCard
@@ -661,6 +684,7 @@ function ContactsPageContent() {
                   onDelete={currentUserRole === 'admin' ? (id) => setSingleDeleteId(id) : undefined}
                   owner={owner}
                   ownerColor={ownerColor}
+                  creator={creator}
                   currentUserId={currentUserId}
                   currentPipelineStages={pipelineStages}
                 />

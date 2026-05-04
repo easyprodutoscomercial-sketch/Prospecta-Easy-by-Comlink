@@ -75,7 +75,7 @@ function getIconForStage(stage: PipelineStage): string {
 
 function contactMatchesFilter(contact: Contact, query: string, userMap: Record<string, UserInfo>): boolean {
   const q = normalizeSearch(query);
-  const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id];
+  const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id || ''];
   const fields = [
     contact.name,
     contact.company,

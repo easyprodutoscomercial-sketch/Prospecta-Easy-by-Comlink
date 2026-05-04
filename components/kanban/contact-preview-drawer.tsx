@@ -154,7 +154,7 @@ export default function ContactPreviewDrawer({
   }
 
   const isUnassigned = contact ? !contact.assigned_to_user_id : false;
-  const owner = contact ? userMap[contact.assigned_to_user_id || contact.created_by_user_id] : null;
+  const owner = contact ? userMap[contact.assigned_to_user_id || contact.created_by_user_id || ''] : null;
   const currentStage = contact ? stages.find(s => s.id === contact.stage_id) : null;
   const canScheduleMeeting = currentStage?.allow_meeting === true;
 

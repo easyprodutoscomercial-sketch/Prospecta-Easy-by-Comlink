@@ -126,7 +126,7 @@ export function KanbanListView({ contacts, stages, userMap, onCardClick, lastInt
         {/* Card list */}
         <div className="divide-y divide-purple-800/10">
           {sorted.map((contact) => {
-            const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id];
+            const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id || ''];
             const stage = stageMap[contact.stage_id || ''];
             const days = daysInStage(contact.updated_at);
 
@@ -209,7 +209,7 @@ export function KanbanListView({ contacts, stages, userMap, onCardClick, lastInt
         </thead>
         <tbody>
           {sorted.map((contact) => {
-            const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id];
+            const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id || ''];
             const stage = stageMap[contact.stage_id || ''];
             const days = daysInStage(contact.updated_at);
             const lastInt = lastInteractionMap?.[contact.id];
