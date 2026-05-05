@@ -1557,9 +1557,14 @@ function ValidationButtons({ contact, setContact }: { contact: any; setContact: 
       </div>
 
       {contact.inexistente === true && (
-        <p className="text-[10px] text-red-300/70 leading-tight">
-          Sumiu da pipeline. Pra voltar, clique &quot;Captavel&quot; de novo.
-        </p>
+        <div className="flex items-start gap-2 p-2 rounded-md bg-red-500/10 border border-red-500/30">
+          <svg className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-[11px] text-red-200 leading-snug font-medium">
+            Esse contato esta DESCARTADO. Pra voltar pra pipeline, clique &quot;Captavel&quot; de novo.
+          </p>
+        </div>
       )}
     </div>
   );
@@ -2107,9 +2112,37 @@ function BoothDrawer({
             </div>
           )}
 
-          {/* Contact info card */}
-          <div className="bg-[#1e0f35] rounded-xl border border-purple-800/30 p-4">
-            <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-3">Contato Vinculado</h4>
+          {/* Contact info card — fica VERMELHO quando contato esta descartado pra
+              ficar inequivoco que o lead saiu da pipeline. Vendedor reclamava
+              que clicava 'Descartar' por engano e nao percebia. */}
+          <div className={`rounded-xl border p-4 ${
+            contact?.inexistente === true
+              ? 'bg-red-950/40 border-red-500/50 ring-1 ring-red-500/30'
+              : 'bg-[#1e0f35] border-purple-800/30'
+          }`}>
+            <h4 className={`text-xs font-bold uppercase tracking-widest mb-3 flex items-center gap-2 ${
+              contact?.inexistente === true ? 'text-red-300' : 'text-emerald-400'
+            }`}>
+              Contato Vinculado
+              {contact?.inexistente === true && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold normal-case tracking-normal animate-pulse">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                  </svg>
+                  DESCARTADO
+                </span>
+              )}
+            </h4>
+            {/* Banner explicativo grande quando descartado */}
+            {contact?.inexistente === true && (
+              <div className="mb-3 p-3 rounded-lg bg-red-500/15 border-l-4 border-red-500 text-red-100 text-xs leading-relaxed">
+                <p className="font-bold mb-1">⚠️ Esse contato foi marcado como descartado.</p>
+                <p className="text-red-200/80">
+                  Sumiu da pipeline e da aba Contatos. Ainda aparece aqui no stand pra dar chance de reverter.
+                  Pra trazer de volta, clique no botao verde <strong>&quot;Captavel&quot;</strong> abaixo.
+                </p>
+              </div>
+            )}
             {loadingContact ? (
               <div className="flex items-center gap-3">
                 <div className="w-5 h-5 border-2 border-purple-800/30 border-t-emerald-500 rounded-full animate-spin" />
@@ -2118,13 +2151,17 @@ function BoothDrawer({
             ) : contact ? (
               <div className="space-y-3">
                 <div className="space-y-1">
-                  <p className="text-sm text-white font-medium">{contact.name}</p>
+                  <p className={`text-sm font-medium ${contact.inexistente === true ? 'text-red-100 line-through decoration-red-400/60' : 'text-white'}`}>
+                    {contact.name}
+                  </p>
                   {contact.contato_nome && contact.contato_nome !== contact.name && (
-                    <p className="text-xs text-emerald-300/90 font-medium">👤 {contact.contato_nome}</p>
+                    <p className={`text-xs font-medium ${contact.inexistente === true ? 'text-red-200/70' : 'text-emerald-300/90'}`}>
+                      👤 {contact.contato_nome}
+                    </p>
                   )}
-                  {contact.phone && <p className="text-xs text-purple-200/70">{contact.phone}</p>}
-                  {contact.email && <p className="text-xs text-purple-200/70">{contact.email}</p>}
-                  {contact.cargo && <p className="text-xs text-purple-300/50">Cargo: {contact.cargo}</p>}
+                  {contact.phone && <p className={`text-xs ${contact.inexistente === true ? 'text-red-200/60' : 'text-purple-200/70'}`}>{contact.phone}</p>}
+                  {contact.email && <p className={`text-xs ${contact.inexistente === true ? 'text-red-200/60' : 'text-purple-200/70'}`}>{contact.email}</p>}
+                  {contact.cargo && <p className={`text-xs ${contact.inexistente === true ? 'text-red-200/40' : 'text-purple-300/50'}`}>Cargo: {contact.cargo}</p>}
                 </div>
                 <div className="flex gap-2">
                   <a
@@ -3127,20 +3164,34 @@ function StandsTab({
                     </span>
                   </div>
                 )}
-                {booth.contacts && booth.contacts.length > 0 && (
-                  <div className="flex items-center gap-1.5 mt-1 text-[11px] min-w-0">
-                    <svg className="w-3 h-3 text-cyan-400/80 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className="text-cyan-400/90 font-semibold shrink-0">
-                      {booth.contacts.length} {booth.contacts.length === 1 ? 'contato' : 'contatos'}:
-                    </span>
-                    <span className="text-cyan-200/70 truncate">
-                      {booth.contacts.slice(0, 2).map((c) => c.name).join(', ')}
-                      {booth.contacts.length > 2 && ` +${booth.contacts.length - 2}`}
-                    </span>
-                  </div>
-                )}
+                {booth.contacts && booth.contacts.length > 0 && (() => {
+                  // Conta descartados pra avisar visualmente. Se TODOS estao
+                  // descartados, linha vira vermelha e mostra "X descartados".
+                  const discarded = booth.contacts.filter((c: any) => c.inexistente === true).length;
+                  const allDiscarded = discarded === booth.contacts.length;
+                  return (
+                    <div className={`flex items-center gap-1.5 mt-1 text-[11px] min-w-0 ${allDiscarded ? 'text-red-300' : ''}`}>
+                      <svg className={`w-3 h-3 shrink-0 ${allDiscarded ? 'text-red-400' : 'text-cyan-400/80'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span className={`font-semibold shrink-0 ${allDiscarded ? 'text-red-300' : 'text-cyan-400/90'}`}>
+                        {booth.contacts.length} {booth.contacts.length === 1 ? 'contato' : 'contatos'}:
+                      </span>
+                      <span className={`truncate ${allDiscarded ? 'text-red-200/70 line-through decoration-red-400/50' : 'text-cyan-200/70'}`}>
+                        {booth.contacts.slice(0, 2).map((c: any) => c.name).join(', ')}
+                        {booth.contacts.length > 2 && ` +${booth.contacts.length - 2}`}
+                      </span>
+                      {discarded > 0 && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0 rounded text-[9px] font-bold bg-red-500/20 text-red-300 border border-red-500/40 shrink-0" title={`${discarded} contato(s) descartado(s) — saiu da pipeline`}>
+                          <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          {discarded}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${BOOTH_STATUS_COLORS[booth.status]}`}>
@@ -4909,7 +4960,9 @@ function WalkInForm({
 // Linha da aba Contatos — um contato vinculado a um stand visitado.
 // Vendedor vem da visita (booth_visits.user_id), nao de assigned_to.
 type StandContactRow = {
-  contact: { id: string; name: string; role: string | null; phone: string | null };
+  // inexistente vem da API (booth_contact.inexistente) — usado pra frisar
+  // visualmente o contato descartado na lista.
+  contact: { id: string; name: string; role: string | null; phone: string | null; inexistente: boolean };
   booth: { id: string; company_name: string; booth_number: string | null; sector: string | null; logo_url: string | null };
   visitor: { user_id: string; user_name: string; avatar_url: string | null; visited_at: string } | null;
 };
@@ -5155,9 +5208,28 @@ function ContatosTab({ eventId }: { eventId: string }) {
                       {b.sector && (
                         <span className="text-[10px] text-purple-300/50">{b.sector}</span>
                       )}
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                        {group.contacts.length} {group.contacts.length === 1 ? 'contato' : 'contatos'}
-                      </span>
+                      {(() => {
+                        const discardedCount = group.contacts.filter((c) => c.inexistente === true).length;
+                        const activeCount = group.contacts.length - discardedCount;
+                        return (
+                          <>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                              {group.contacts.length} {group.contacts.length === 1 ? 'contato' : 'contatos'}
+                            </span>
+                            {discardedCount > 0 && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/15 text-red-300 border border-red-500/30" title={`${discardedCount} descartado(s) — saiu da pipeline`}>
+                                <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                {discardedCount} descartado{discardedCount !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {activeCount === 0 && discardedCount > 0 && (
+                              <span className="text-[10px] text-red-300/70 italic">— nenhum lead ativo</span>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                     {v && (
                       <div className="flex items-center gap-1.5 mt-1 text-[11px] text-emerald-300">
@@ -5173,27 +5245,56 @@ function ContatosTab({ eventId }: { eventId: string }) {
                     )}
                   </div>
                 </div>
-                {/* Contatos do stand */}
+                {/* Contatos do stand. Descartados ficam visualmente FRISADOS
+                    (vermelho + line-through + badge) pra vendedor nao confundir
+                    "sumiu" com "ainda esta ai". */}
                 <div className="divide-y divide-purple-800/20">
-                  {group.contacts.map((c, ci) => (
+                  {group.contacts.map((c, ci) => {
+                    const isDiscarded = c.inexistente === true;
+                    return (
                     <Link
                       key={`${b.id}-${c.id}-${ci}`}
                       href={`/contacts/${c.id}`}
-                      className="flex items-center gap-3 px-3 sm:px-4 py-2.5 hover:bg-purple-800/20 transition-colors"
+                      className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 transition-colors ${
+                        isDiscarded
+                          ? 'bg-red-950/20 hover:bg-red-950/40'
+                          : 'hover:bg-purple-800/20'
+                      }`}
                     >
                       <ContactAvatar name={c.name || b.company_name} avatarUrl={null} size="sm" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-semibold truncate">
-                          {c.name || <span className="text-purple-300/40 italic">Sem nome</span>}
-                          {c.role && <span className="ml-2 text-purple-300/50 text-xs font-normal">· {c.role}</span>}
-                        </p>
-                        {c.phone && <p className="text-[11px] text-purple-300/50 truncate">📞 {c.phone}</p>}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className={`text-sm font-semibold truncate ${
+                            isDiscarded ? 'text-red-200/70 line-through decoration-red-400/60' : 'text-white'
+                          }`}>
+                            {c.name || <span className="text-purple-300/40 italic">Sem nome</span>}
+                          </p>
+                          {c.role && (
+                            <span className={`text-xs font-normal ${isDiscarded ? 'text-red-300/40' : 'text-purple-300/50'}`}>
+                              · {c.role}
+                            </span>
+                          )}
+                          {isDiscarded && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-500 text-white text-[9px] font-bold">
+                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                              DESCARTADO
+                            </span>
+                          )}
+                        </div>
+                        {c.phone && (
+                          <p className={`text-[11px] truncate ${isDiscarded ? 'text-red-300/40' : 'text-purple-300/50'}`}>
+                            📞 {c.phone}
+                          </p>
+                        )}
                       </div>
-                      <svg className="w-4 h-4 text-purple-400/30 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 shrink-0 text-purple-400/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </Link>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );

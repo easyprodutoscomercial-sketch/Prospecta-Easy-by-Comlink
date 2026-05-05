@@ -675,6 +675,9 @@ export interface BoothContact {
   name: string;
   role: string | null;
   phone: string | null;
+  // True quando vendedor marcou "X Descartado" — frontend frisa visualmente
+  // pra que vendedor entenda por que o contato sumiu da pipeline.
+  inexistente: boolean;
 }
 
 export interface BoothVisit {

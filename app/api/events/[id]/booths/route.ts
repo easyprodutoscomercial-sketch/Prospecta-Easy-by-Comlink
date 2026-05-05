@@ -121,7 +121,9 @@ export async function GET(
             // 400 silencioso e contactsMap ficava vazio, fazendo a aba
             // "Contatos" da feira aparecer com 0 mesmo tendo 200+ contatos
             // linkados a booth_visits.
-            .select('id, name, contato_nome, cargo, phone')
+            // inexistente = contato descartado (vendedor marcou X). Frontend
+            // precisa pra frisar visualmente no painel/lista do stand.
+            .select('id, name, contato_nome, cargo, phone, inexistente')
             .eq('organization_id', profile.organization_id)
             .in('id', Array.from(allContactIds))
         : Promise.resolve({ data: [] as any[] }),
@@ -140,13 +142,14 @@ export async function GET(
     // Mostra nome da pessoa (contato_nome) se tiver — em contatos de feira o
     // campo `name` costuma ser o nome da empresa (mesmo da booth.company_name)
     // e quem o vendedor capturou esta em contato_nome.
-    const contactsMap: Record<string, { id: string; name: string; role: string | null; phone: string | null }> = {};
+    const contactsMap: Record<string, { id: string; name: string; role: string | null; phone: string | null; inexistente: boolean }> = {};
     (contactsRes.data || []).forEach((c: any) => {
       contactsMap[c.id] = {
         id: c.id,
         name: c.contato_nome || c.name,
         role: c.cargo || null,
         phone: c.phone || null,
+        inexistente: c.inexistente === true,
       };
     });
 
