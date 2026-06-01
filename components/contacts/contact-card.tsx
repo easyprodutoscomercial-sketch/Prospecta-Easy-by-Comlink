@@ -1,5 +1,6 @@
 'use client';
 
+import { memo } from 'react';
 import Link from 'next/link';
 import { Contact, PipelineStage } from '@/lib/types';
 import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS, CLASSE_LABELS, resolveTipoDisplay } from '@/lib/utils/labels';
@@ -33,7 +34,7 @@ interface ContactCardProps {
   currentPipelineStages: PipelineStage[] | null;
 }
 
-export default function ContactCard({
+function ContactCardImpl({
   contact,
   densityMode,
   isSelected,
@@ -509,3 +510,10 @@ export default function ContactCard({
     </div>
   );
 }
+
+
+// Memoizado: lista de contatos re-renderiza muito (filtros, search, claim).
+// Sem memo, digitar no filtro fazia re-render de TODOS os 20 cards visiveis.
+const ContactCard = memo(ContactCardImpl);
+export default ContactCard;
+

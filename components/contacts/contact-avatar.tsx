@@ -33,20 +33,12 @@ function getInitials(name: string): string {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
-export default function ContactAvatar({ name, avatarUrl, size = 'md', className = '' }: ContactAvatarProps) {
+export default function ContactAvatar({ name, avatarUrl: _avatarUrl, size = 'md', className = '' }: ContactAvatarProps) {
+  // avatarUrl ignorado deliberadamente — fotos de contato (do cartao escaneado)
+  // foram desligadas pra economizar egress. So avatares de VENDEDOR (profile.avatar_url)
+  // continuam aparecendo, e esses sao renderizados direto (nao via este componente).
   const { px, text } = SIZE_MAP[size];
   const base = `${px} rounded-full shrink-0 border border-purple-700/40 ${className}`;
-
-  if (avatarUrl) {
-    return (
-      <img
-        src={avatarUrl}
-        alt={name}
-        className={`${base} object-cover`}
-        loading="lazy"
-      />
-    );
-  }
 
   return (
     <div

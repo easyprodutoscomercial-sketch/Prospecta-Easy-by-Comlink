@@ -272,21 +272,9 @@ export default function KanbanPage() {
         setContactsWithMeeting(ids);
       }
 
-      // Fetch last interaction per contact
-      try {
-        const intRes = await fetch('/api/interactions?limit=5000');
-        if (intRes.ok) {
-          const intData = await intRes.json();
-          const map: Record<string, string> = {};
-          for (const i of intData.interactions || []) {
-            const existing = map[i.contact_id];
-            if (!existing || i.created_at > existing) {
-              map[i.contact_id] = i.created_at;
-            }
-          }
-          setLastInteractionMap(map);
-        }
-      } catch { /* silent */ }
+      // last_interaction_at agora vem direto na coluna do contato (trigger mantem atualizado).
+      // Antes baixavamos 5k interacoes a cada 30s pra calcular isso — virou >1GB/mes de egress.
+      // O map e' montado em fetchContacts a partir de contact.last_interaction_at.
 
       // Fetch events for feira filter dropdown (from facets — only events with contacts)
       try {
@@ -335,6 +323,14 @@ export default function KanbanPage() {
       const contactsList = data.contacts || [];
       setContacts(contactsList);
       setTotalContactsFromApi(data.total ?? contactsList.length);
+
+      // Popula lastInteractionMap a partir da coluna do contato (trigger mantem atualizado)
+      // — bem mais barato que baixar 5k interacoes a cada 30s.
+      const lastMap: Record<string, string> = {};
+      for (const c of contactsList) {
+        if (c.last_interaction_at) lastMap[c.id] = c.last_interaction_at;
+      }
+      setLastInteractionMap(lastMap);
 
       // If bugs pipeline, fetch attachment counts
       const pipeline = pipelines.find(p => p.id === pipelineId);
@@ -1081,6 +1077,15 @@ export default function KanbanPage() {
             userMap={userMap}
             onFiltersChange={handleChipFiltersChange}
           />
+        </div>
+      )}
+
+      {/* Dica pra mobile: drag desabilitado no celular, vendedor reclamava
+          que o sistema "travou". Linha discreta avisando o caminho certo. */}
+      {!loading && isMobile && viewMode !== 'list' && (
+        <div className="px-3 py-1.5 bg-cyan-500/5 border-y border-cyan-500/15 text-[11px] text-cyan-300/80 flex items-center gap-1.5">
+          <svg className="w-3 h-3 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span>No celular, <strong>toque no card</strong> pra avançar/voltar etapa (arrastar só funciona no computador).</span>
         </div>
       )}
 

@@ -2,147 +2,16 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { contactSchema } from '@/lib/utils/validation';
-import { normalizeContactData, normalizePhone, normalizeCPF, normalizeCNPJ, normalizeEmail } from '@/lib/utils/normalize';
+import { normalizeContactData, normalizeEmail } from '@/lib/utils/normalize';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { applyContactFilters } from '@/lib/contacts/filters';
 // Visibility is now handled by pipeline membership (members see all contacts in their pipelines)
 
 // Supabase limita a 1000 rows por request
 const SUPABASE_MAX_ROWS = 1000;
 
-// Aplica todos os filtros de busca a uma query de contatos
-function applyContactFilters(
-  query: any,
-  filters: {
-    search?: string;
-    status?: string | null;
-    tipo?: string | null;
-    pipeline_id?: string | null;
-    stage_id?: string | null;
-    assigned?: string | null;
-    // 'me' | 'unassigned' | UUID — quem CADASTROU o contato (created_by_user_id).
-    // Diferente de assigned (dono atual). Vendedor que cadastra reclamava de
-    // ver leads sumirem quando outro vendedor "apontava" pra si.
-    created_by?: string | null;
-    userId?: string;
-    allowedPipelineIds?: string[] | null;
-    temperatura?: string | null;
-    origem?: string | null;
-    classe?: string | null;
-    cidade?: string | null;
-    estado?: string | null;
-    telefone?: string | null;
-    cpf?: string | null;
-    cnpj?: string | null;
-    whatsapp?: string | null;
-    empresa?: string | null;
-    referencia?: string | null;
-    contato_nome?: string | null;
-    cargo?: string | null;
-    endereco?: string | null;
-    cep?: string | null;
-    website?: string | null;
-    instagram?: string | null;
-    proxima_acao_tipo?: string | null;
-    produtos_fornecidos?: string | null;
-    event_id?: string | null;
-    exclude_quiz?: boolean;
-    draft_mode?: 'exclude' | 'only' | 'all';
-    inexistente_mode?: 'exclude' | 'only' | 'all';
-  }
-) {
-  // Filtrar por pipelines permitidas (non-admin)
-  if (filters.allowedPipelineIds !== null && filters.allowedPipelineIds !== undefined && filters.allowedPipelineIds.length > 0) {
-    query = query.in('pipeline_id', filters.allowedPipelineIds);
-  }
-
-  if (filters.search) {
-    query = query.or(`name.ilike.%${filters.search}%,email.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,company.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
-  }
-  if (filters.status && filters.status !== 'all') query = query.eq('status', filters.status);
-  if (filters.tipo && filters.tipo !== 'all') {
-    if (filters.tipo === 'AMBOS') {
-      query = query.contains('tipo', ['FORNECEDOR', 'COMPRADOR']);
-    } else {
-      query = query.contains('tipo', [filters.tipo]);
-    }
-  }
-  if (filters.pipeline_id) query = query.eq('pipeline_id', filters.pipeline_id);
-  if (filters.stage_id) query = query.eq('stage_id', filters.stage_id);
-  if (filters.assigned === 'me' && filters.userId) query = query.eq('assigned_to_user_id', filters.userId);
-  else if (filters.assigned === 'unassigned') query = query.is('assigned_to_user_id', null);
-  else if (filters.assigned && filters.assigned !== 'all' && filters.assigned.length >= 32) {
-    // UUID direto (ex: vindo da lista de vendedores do evento)
-    query = query.eq('assigned_to_user_id', filters.assigned);
-  }
-  // Filtro por CADASTRADOR (created_by_user_id) — quem inseriu o contato.
-  // 'unknown' = quiz/import (created_by_user_id null), pra dar visibilidade.
-  if (filters.created_by === 'me' && filters.userId) query = query.eq('created_by_user_id', filters.userId);
-  else if (filters.created_by === 'unknown') query = query.is('created_by_user_id', null);
-  else if (filters.created_by && filters.created_by !== 'all' && filters.created_by.length >= 32) {
-    query = query.eq('created_by_user_id', filters.created_by);
-  }
-  if (filters.temperatura && filters.temperatura !== 'all') query = query.eq('temperatura', filters.temperatura);
-  if (filters.origem && filters.origem !== 'all') query = query.eq('origem', filters.origem);
-  if (filters.classe && filters.classe !== 'all') query = query.eq('classe', filters.classe);
-  if (filters.cidade) query = query.ilike('cidade', `%${filters.cidade}%`);
-  if (filters.estado && filters.estado !== 'all') query = query.eq('estado', filters.estado);
-  // Filtros de telefone/cpf/cnpj/whatsapp/email comparam por *_normalized pra que
-  // o vendedor consiga digitar com mascara ou sem (ex: "(11) 98765-4321" ou
-  // "11987654321") e bater igual. Comparar campo cru gerava falso negativo
-  // (digitado sem mascara nao batia com banco salvo com mascara) e fazia
-  // vendedor criar duplicata achando que nao existia.
-  if (filters.telefone) {
-    const norm = normalizePhone(filters.telefone);
-    if (norm) query = query.ilike('phone_normalized', `%${norm}%`);
-  }
-  if (filters.cpf) {
-    const norm = normalizeCPF(filters.cpf);
-    if (norm) query = query.ilike('cpf_digits', `%${norm}%`);
-  }
-  if (filters.cnpj) {
-    const norm = normalizeCNPJ(filters.cnpj);
-    if (norm) query = query.ilike('cnpj_digits', `%${norm}%`);
-  }
-  if (filters.whatsapp) {
-    const norm = normalizePhone(filters.whatsapp);
-    if (norm) query = query.ilike('phone_normalized', `%${norm}%`);
-  }
-  if (filters.empresa) query = query.ilike('company', `%${filters.empresa}%`);
-  if (filters.referencia) query = query.ilike('referencia', `%${filters.referencia}%`);
-  if (filters.contato_nome) query = query.ilike('contato_nome', `%${filters.contato_nome}%`);
-  if (filters.cargo) query = query.ilike('cargo', `%${filters.cargo}%`);
-  if (filters.endereco) query = query.ilike('endereco', `%${filters.endereco}%`);
-  if (filters.cep) query = query.ilike('cep', `%${filters.cep}%`);
-  if (filters.website) query = query.ilike('website', `%${filters.website}%`);
-  if (filters.instagram) query = query.ilike('instagram', `%${filters.instagram}%`);
-  if (filters.proxima_acao_tipo && filters.proxima_acao_tipo !== 'all') query = query.eq('proxima_acao_tipo', filters.proxima_acao_tipo);
-  if (filters.produtos_fornecidos) query = query.ilike('produtos_fornecidos', `%${filters.produtos_fornecidos}%`);
-  if (filters.event_id && filters.event_id !== 'all') query = query.eq('event_id', filters.event_id);
-
-  // Filtro de rascunho: exclude (default) = so contatos finalizados;
-  // only = so rascunhos; all = tudo (usado internamente).
-  if (filters.draft_mode === 'only') {
-    query = query.eq('is_draft', true);
-  } else if (filters.draft_mode === 'all') {
-    // sem filtro
-  } else {
-    query = query.eq('is_draft', false);
-  }
-
-  // Filtro de descartados (inexistente=true): exclude (default) = so ativos;
-  // only = so descartados; all = tudo.
-  // Por que default exclude: Descartar tem que TIRAR da pipeline / lista; senao
-  // o vendedor marca e o contato continua aparecendo, da impressao que nao funcionou.
-  if (filters.inexistente_mode === 'only') {
-    query = query.eq('inexistente', true);
-  } else if (filters.inexistente_mode === 'all') {
-    // sem filtro
-  } else {
-    query = query.eq('inexistente', false);
-  }
-
-  return query;
-}
+// applyContactFilters foi extraido pra lib/contacts/filters.ts — agora compartilhado
+// com /api/contacts/export pra parar de divergir entre listagem e planilha.
 
 // Enrich a list of contacts with their linked event info (id, name, cover_image_url)
 async function attachEventsToContacts(admin: any, contacts: any[], organizationId: string) {

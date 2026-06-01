@@ -51,7 +51,7 @@ export async function GET() {
     if (activeStageIds.size > 0) {
       const { data, error } = await admin
         .from('contacts')
-        .select('*')
+        .select('id, name, status, stage_id, pipeline_id, temperatura, valor_estimado, assigned_to_user_id, lead_score, updated_at, last_interaction_at, proxima_acao_tipo, proxima_acao_data')
         .eq('organization_id', orgId)
         .in('stage_id', Array.from(activeStageIds));
 

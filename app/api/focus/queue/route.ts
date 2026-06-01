@@ -63,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     // Prioridade 1 — Ação "LIGAR" pendente (vencida ou no momento)
     const { data: priority1, error: p1Error } = await baseFilter(
-      admin.from('contacts').select('*')
+      admin.from('contacts').select('id, name, company, contato_nome, cargo, phone, whatsapp, email, cidade, estado, status, temperatura, tipo, valor_estimado, proxima_acao_tipo, proxima_acao_data, stage_id, pipeline_id, event_id, assigned_to_user_id, created_by_user_id, updated_at, lead_score')
     )
       .eq('proxima_acao_tipo', 'LIGAR')
       .lte('proxima_acao_data', now)
@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     let priority2: any[] = [];
     if (remaining1 > 0) {
       const { data, error: p2Error } = await baseFilter(
-        admin.from('contacts').select('*')
+        admin.from('contacts').select('id, name, company, contato_nome, cargo, phone, whatsapp, email, cidade, estado, status, temperatura, tipo, valor_estimado, proxima_acao_tipo, proxima_acao_data, stage_id, pipeline_id, event_id, assigned_to_user_id, created_by_user_id, updated_at, lead_score')
       )
         .eq('temperatura', 'FRIO')
         .order('updated_at', { ascending: true })
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
     let priority3: any[] = [];
     if (remaining2 > 0) {
       const { data, error: p3Error } = await baseFilter(
-        admin.from('contacts').select('*')
+        admin.from('contacts').select('id, name, company, contato_nome, cargo, phone, whatsapp, email, cidade, estado, status, temperatura, tipo, valor_estimado, proxima_acao_tipo, proxima_acao_data, stage_id, pipeline_id, event_id, assigned_to_user_id, created_by_user_id, updated_at, lead_score')
       )
         .order('updated_at', { ascending: true })
         .limit(remaining2 + p1Ids.size + p2Ids.size);

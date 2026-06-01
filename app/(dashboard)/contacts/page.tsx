@@ -330,6 +330,13 @@ function ContactsPageContent() {
     const current = contacts.find((c) => c.id === contactId);
     if (!current) return;
     const newValue = !current.inexistente;
+    // Confirma antes de DESCARTAR (afeta todos os vendedores).
+    // Pra RECUPERAR (newValue=false) nao precisa confirmar — eh acao reversiva.
+    if (newValue && typeof window !== 'undefined') {
+      const nome = current.contato_nome || current.name || 'esse contato';
+      const ok = window.confirm(`Descartar "${nome}"?\n\nEle vai sumir da pipeline e da aba Contatos pra TODOS os vendedores. Voce pode recuperar depois pelo painel do stand.`);
+      if (!ok) return;
+    }
     setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: newValue } : c)));
     try {
       const res = await fetch(`/api/contacts/${contactId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inexistente: newValue }) });

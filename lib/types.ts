@@ -114,6 +114,9 @@ export interface Contact {
   // Quem cadastrou o contato. Pode ser null pra contatos criados pelo quiz publico
   // (migration 20260430_created_by_user_id_nullable.sql) — antes admin levava credito.
   created_by_user_id: string | null;
+  // Atualizado por trigger ao inserir interaction. Substitui o fetch de 5k
+  // interacoes que o kanban fazia toda meia hora.
+  last_interaction_at: string | null;
   created_at: string;
   updated_at: string;
 }

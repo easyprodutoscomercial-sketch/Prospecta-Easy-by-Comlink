@@ -2,10 +2,12 @@ import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { ensureProfile } from '@/lib/ensure-profile';
-import { normalizePhone, normalizeCPF, normalizeCNPJ } from '@/lib/utils/normalize';
+import { applyContactFilters } from '@/lib/contacts/filters';
 import * as XLSX from 'xlsx';
 
 // GET /api/contacts/export - Exportar contatos como Excel
+// Usa o mesmo applyContactFilters da listagem — antes divergia e
+// planilha trazia descartados/rascunhos que a tela escondia.
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -23,95 +25,58 @@ export async function GET(request: NextRequest) {
 
     const admin = getAdminClient();
     const searchParams = request.nextUrl.searchParams;
-    const search = searchParams.get('search') || '';
-    const status = searchParams.get('status');
-    const tipo = searchParams.get('tipo');
-    const assigned = searchParams.get('assigned');
+
+    // Para non-admin, descobre pipelines permitidas (mesma logica da listagem)
+    let allowedPipelineIds: string[] | null = null;
+    if (profile.role !== 'admin') {
+      const { data: myMemberships } = await admin
+        .from('pipeline_members')
+        .select('pipeline_id')
+        .eq('user_id', user.id);
+      allowedPipelineIds = (myMemberships || []).map((m: any) => m.pipeline_id);
+    }
 
     let query = admin
       .from('contacts')
       .select('*')
       .eq('organization_id', profile.organization_id);
 
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,phone.ilike.%${search}%,company.ilike.%${search}%`);
-    }
-    if (status && status !== 'all') {
-      query = query.eq('status', status);
-    }
-    if (tipo && tipo !== 'all') {
-      query = query.contains('tipo', [tipo]);
-    }
-    if (assigned === 'me') {
-      query = query.eq('assigned_to_user_id', user.id);
-    } else if (assigned === 'unassigned') {
-      query = query.is('assigned_to_user_id', null);
-    }
+    query = applyContactFilters(query, {
+      search: searchParams.get('search') || '',
+      status: searchParams.get('status'),
+      tipo: searchParams.get('tipo'),
+      pipeline_id: searchParams.get('pipeline_id'),
+      stage_id: searchParams.get('stage_id'),
+      assigned: searchParams.get('assigned'),
+      created_by: searchParams.get('created_by'),
+      userId: user.id,
+      allowedPipelineIds,
+      temperatura: searchParams.get('temperatura'),
+      origem: searchParams.get('origem'),
+      classe: searchParams.get('classe'),
+      cidade: searchParams.get('cidade'),
+      estado: searchParams.get('estado'),
+      telefone: searchParams.get('telefone'),
+      cpf: searchParams.get('cpf'),
+      cnpj: searchParams.get('cnpj'),
+      whatsapp: searchParams.get('whatsapp'),
+      empresa: searchParams.get('empresa'),
+      referencia: searchParams.get('referencia'),
+      contato_nome: searchParams.get('contato_nome'),
+      cargo: searchParams.get('cargo'),
+      endereco: searchParams.get('endereco'),
+      cep: searchParams.get('cep'),
+      website: searchParams.get('website'),
+      instagram: searchParams.get('instagram'),
+      proxima_acao_tipo: searchParams.get('proxima_acao_tipo'),
+      produtos_fornecidos: searchParams.get('produtos_fornecidos'),
+      event_id: searchParams.get('event_id'),
+      draft_mode: (searchParams.get('drafts') === 'true' ? 'only' : searchParams.get('drafts') === 'all' ? 'all' : 'exclude'),
+      inexistente_mode: (searchParams.get('descartados') === 'only' ? 'only' : searchParams.get('descartados') === 'all' ? 'all' : 'exclude'),
+    });
 
-    const temperatura = searchParams.get('temperatura');
-    if (temperatura && temperatura !== 'all') {
-      query = query.eq('temperatura', temperatura);
-    }
-    const origem = searchParams.get('origem');
-    if (origem && origem !== 'all') {
-      query = query.eq('origem', origem);
-    }
-    const classe = searchParams.get('classe');
-    if (classe && classe !== 'all') {
-      query = query.eq('classe', classe);
-    }
-    const cidade = searchParams.get('cidade');
-    if (cidade) {
-      query = query.ilike('cidade', `%${cidade}%`);
-    }
-    const estado = searchParams.get('estado');
-    if (estado && estado !== 'all') {
-      query = query.eq('estado', estado);
-    }
-    // R5: comparar pelos campos *_normalized garante que filtro digitado com
-    // mascara bata com banco salvo sem mascara (e vice-versa). Mesma logica
-    // de /api/contacts GET — export precisa filtrar identico pra nao ficar
-    // com resultado divergente.
-    const telefone = searchParams.get('telefone');
-    if (telefone) {
-      const norm = normalizePhone(telefone);
-      if (norm) query = query.ilike('phone_normalized', `%${norm}%`);
-    }
-    const cpf = searchParams.get('cpf');
-    if (cpf) {
-      const norm = normalizeCPF(cpf);
-      if (norm) query = query.ilike('cpf_digits', `%${norm}%`);
-    }
-    const cnpj = searchParams.get('cnpj');
-    if (cnpj) {
-      const norm = normalizeCNPJ(cnpj);
-      if (norm) query = query.ilike('cnpj_digits', `%${norm}%`);
-    }
-    const whatsapp = searchParams.get('whatsapp');
-    if (whatsapp) {
-      const norm = normalizePhone(whatsapp);
-      if (norm) query = query.ilike('phone_normalized', `%${norm}%`);
-    }
-    const empresa = searchParams.get('empresa');
-    if (empresa) { query = query.ilike('company', `%${empresa}%`); }
-    const referencia = searchParams.get('referencia');
-    if (referencia) { query = query.ilike('referencia', `%${referencia}%`); }
-    const contato_nome = searchParams.get('contato_nome');
-    if (contato_nome) { query = query.ilike('contato_nome', `%${contato_nome}%`); }
-    const cargo = searchParams.get('cargo');
-    if (cargo) { query = query.ilike('cargo', `%${cargo}%`); }
-    const endereco = searchParams.get('endereco');
-    if (endereco) { query = query.ilike('endereco', `%${endereco}%`); }
-    const cep = searchParams.get('cep');
-    if (cep) { query = query.ilike('cep', `%${cep}%`); }
-    const website = searchParams.get('website');
-    if (website) { query = query.ilike('website', `%${website}%`); }
-    const instagram = searchParams.get('instagram');
-    if (instagram) { query = query.ilike('instagram', `%${instagram}%`); }
-    const proxima_acao_tipo = searchParams.get('proxima_acao_tipo');
-    if (proxima_acao_tipo && proxima_acao_tipo !== 'all') { query = query.eq('proxima_acao_tipo', proxima_acao_tipo); }
-    const produtos_fornecidos = searchParams.get('produtos_fornecidos');
-    if (produtos_fornecidos) { query = query.ilike('produtos_fornecidos', `%${produtos_fornecidos}%`); }
+    // Filtros antigos (temperatura, origem, telefone, cpf, etc) foram removidos —
+    // todos ja estao em applyContactFilters acima. Era ~70 linhas duplicadas.
 
     const { data: contacts, error } = await query.order('created_at', { ascending: false });
 

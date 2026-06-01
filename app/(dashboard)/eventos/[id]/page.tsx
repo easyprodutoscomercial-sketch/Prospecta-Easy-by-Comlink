@@ -2025,17 +2025,7 @@ function BoothDrawer({
 
         {/* Header */}
         <div className="p-4 border-b border-purple-800/20 flex items-center gap-3 shrink-0">
-          {booth.logo_url && (
-            <div className="w-14 h-14 rounded-lg bg-white/95 flex items-center justify-center shrink-0 overflow-hidden">
-              <img
-                src={booth.logo_url}
-                alt={booth.company_name}
-                className="w-full h-full object-contain"
-                loading="lazy"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).parentElement!.style.display = 'none'; }}
-              />
-            </div>
-          )}
+          {/* logo_url removido — economia de egress. */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-white truncate">{booth.company_name}</h2>
@@ -3046,20 +3036,9 @@ function StandsTab({
                   ? `Visitado por ${topVisitor.user_name}${booth.visitors!.length > 1 ? ` +${booth.visitors!.length - 1}` : ''}`
                   : '';
 
-                // Base 40x40 — escolhe o que mostrar
-                const base = booth.logo_url ? (
-                  <div className={`w-10 h-10 rounded bg-white/90 flex items-center justify-center overflow-hidden ring-2 ${
-                    booth.status === 'VISITADO' ? 'ring-emerald-500/60' : 'ring-transparent'
-                  }`}>
-                    <img
-                      src={booth.logo_url}
-                      alt={booth.company_name}
-                      className="w-full h-full object-contain"
-                      loading="lazy"
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  </div>
-                ) : topVisitor ? (
+                // Base 40x40 — logo da empresa removido (egress).
+                // Caiu no fallback do vendedor que visitou OU icone de status.
+                const base = topVisitor ? (
                   <div
                     className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-emerald-500/60 bg-emerald-500/20 flex items-center justify-center"
                     title={visitorTitle}
@@ -3094,9 +3073,8 @@ function StandsTab({
                   </div>
                 );
 
-                // Overlay do vendedor — so aparece se tem logo da empresa E foi visitado
-                // (caso sem logo a base ja e o vendedor — nao precisa overlay)
-                const showOverlay = hasVisit && !!booth.logo_url;
+                // Overlay desabilitado — logo_url nao eh mais renderizado.
+                const showOverlay = false;
 
                 return (
                   <div className="relative shrink-0" title={visitorTitle}>
@@ -4194,8 +4172,17 @@ function CheckInForm({
           </div>
 
           {scanError && (
-            <div className="p-2 rounded-lg bg-red-500/15 text-red-400 text-xs border border-red-500/20">
-              {scanError}
+            <div className="p-3 rounded-lg bg-red-500/15 text-red-200 text-xs border-l-4 border-red-500 flex items-start gap-2">
+              <svg className="w-4 h-4 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div className="flex-1">
+                <strong className="block mb-0.5">Não consegui ler o cartão</strong>
+                <span className="text-red-300/80">{scanError}. Preencha os dados manualmente abaixo.</span>
+              </div>
+              <button type="button" onClick={() => setScanError(null)} className="text-red-400 hover:text-red-200 shrink-0" aria-label="Fechar aviso">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
             </div>
           )}
 
@@ -4321,6 +4308,9 @@ function WalkInForm({
   const [scanError, setScanError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // errorMsg eh persistente (sem timeout). Antes erros caiam no successMsg e
+  // sumiam em 3s — vendedor perdia avisos de OCR falhando.
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const cardInputRef = useRef<HTMLInputElement>(null);
   const personInputRef = useRef<HTMLInputElement>(null);
 
@@ -4607,12 +4597,10 @@ function WalkInForm({
             stack: fullBody.stack,
           });
         }
-        setSuccessMsg(errMsg);
-        setTimeout(() => setSuccessMsg(null), 3000);
+        setErrorMsg(errMsg);
       }
     } catch {
-      setSuccessMsg('Erro inesperado');
-      setTimeout(() => setSuccessMsg(null), 3000);
+      setErrorMsg('Erro inesperado ao salvar. Tenta de novo — se persistir, abra suporte.');
     } finally {
       setLoading(false);
     }
@@ -4707,10 +4695,23 @@ function WalkInForm({
         </div>
       )}
 
-      {/* Status banner (sucesso/erro) */}
+      {/* Status banner — sucesso (cyan) some em 3s. Erros agora usam errorMsg
+          em banner vermelho persistente (sem auto-dismiss) — vendedor reclamava
+          de perder mensagem de OCR falhando no meio da feira. */}
       {successMsg && (
         <div className="p-3 rounded-lg bg-cyan-500/15 text-cyan-300 text-sm font-medium border border-cyan-500/20 text-center">
           {successMsg}
+        </div>
+      )}
+      {errorMsg && (
+        <div className="p-3 rounded-lg bg-red-500/15 text-red-200 text-sm font-medium border-l-4 border-red-500 flex items-start gap-2">
+          <svg className="w-5 h-5 text-red-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <div className="flex-1">{errorMsg}</div>
+          <button type="button" onClick={() => setErrorMsg(null)} className="text-red-400 hover:text-red-200 shrink-0" aria-label="Fechar aviso">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
       )}
 
@@ -5190,15 +5191,10 @@ function ContatosTab({ eventId }: { eventId: string }) {
               <div key={b.id} className="bg-[#1e0f35] rounded-xl border border-purple-800/30 overflow-hidden">
                 {/* Cabecalho do stand */}
                 <div className="flex items-center gap-3 p-3 sm:p-4 bg-[#180a30] border-b border-purple-800/30">
-                  {b.logo_url ? (
-                    <div className="w-12 h-12 rounded bg-white/90 flex items-center justify-center shrink-0 overflow-hidden ring-2 ring-emerald-500/40">
-                      <img src={b.logo_url} alt={b.company_name} className="w-full h-full object-contain" loading="lazy" />
-                    </div>
-                  ) : (
-                    <div className="w-12 h-12 rounded bg-purple-700/30 flex items-center justify-center shrink-0 text-base font-bold text-purple-200">
-                      {(b.company_name || '?').charAt(0).toUpperCase()}
-                    </div>
-                  )}
+                  {/* Logo removida pra economizar egress — vai sempre o fallback. */}
+                  <div className="w-12 h-12 rounded bg-purple-700/30 flex items-center justify-center shrink-0 text-base font-bold text-purple-200">
+                    {(b.company_name || '?').charAt(0).toUpperCase()}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="text-white font-bold truncate">{b.company_name}</h4>
@@ -5406,21 +5402,9 @@ function TimelineTab({ eventId }: { eventId: string }) {
             <p className="text-sm text-purple-300/50 mb-3">{visit.notes}</p>
           )}
 
-          {/* Photos */}
-          {(visit.photo_facade_url || visit.photo_contact_url) && (
-            <div className="flex gap-3 mt-2">
-              {visit.photo_facade_url && (
-                <a href={visit.photo_facade_url} target="_blank" rel="noopener noreferrer" className="block w-24 h-18 rounded-lg overflow-hidden border border-purple-700/30 hover:border-emerald-500/30 transition-colors">
-                  <img src={visit.photo_facade_url} alt="Fachada" className="w-full h-full object-cover" />
-                </a>
-              )}
-              {visit.photo_contact_url && (
-                <a href={visit.photo_contact_url} target="_blank" rel="noopener noreferrer" className="block w-24 h-18 rounded-lg overflow-hidden border border-purple-700/30 hover:border-emerald-500/30 transition-colors">
-                  <img src={visit.photo_contact_url} alt="Contato" className="w-full h-full object-cover" />
-                </a>
-              )}
-            </div>
-          )}
+          {/* Fotos de check-in (fachada/cartao) foram removidas do render —
+              consumiam muito egress e o dono decidiu que so vale o avatar
+              do vendedor. URLs continuam no banco caso precisem ser exportadas. */}
         </div>
       ))}
     </div>
