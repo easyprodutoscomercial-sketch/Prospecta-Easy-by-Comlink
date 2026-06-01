@@ -3,10 +3,12 @@
 import { memo } from 'react';
 import Link from 'next/link';
 import { Contact, PipelineStage } from '@/lib/types';
-import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS, CLASSE_LABELS, resolveTipoDisplay } from '@/lib/utils/labels';
-import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
+import { formatStatus, getStatusColor, ORIGEM_LABELS, CLASSE_LABELS, resolveTipoDisplay } from '@/lib/utils/labels';
+import { getUserInitials } from '@/lib/utils/user-colors';
 import ContactMiniPipeline from '@/components/contacts/contact-mini-pipeline';
 import ContactAvatar from '@/components/contacts/contact-avatar';
+import { TemperaturaBadge, TipoBadge, DescartadoBadge, EventBadge } from '@/components/ui/badges';
+import { fieldLabel } from '@/lib/utils/ui-classes';
 import type { DensityMode } from '@/lib/hooks/use-contact-preferences';
 
 interface UserInfo {
@@ -73,9 +75,7 @@ function ContactCardImpl({
               <span className="ml-1.5 text-[10px] font-normal text-emerald-300/90">· {contact.contato_nome}</span>
             )}
           </Link>
-          {isInexistente && (
-            <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400 whitespace-nowrap shrink-0">Descartado</span>
-          )}
+          {isInexistente && <DescartadoBadge />}
 
           {contact.event && (
             <span className="flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/20 whitespace-nowrap shrink-0 max-w-[120px]" title={`Feira: ${contact.event.name}`}>
@@ -177,32 +177,10 @@ function ContactCardImpl({
                     {contact.contato_nome}
                   </span>
                 )}
-                {isInexistente && (
-                  <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Descartado</span>
-                )}
-                {resolveTipoDisplay(contact.tipo).map((t) => (
-                  <span key={t} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
-                    {CONTACT_TYPE_LABELS[t] || t}
-                  </span>
-                ))}
-                {contact.temperatura && (
-                  <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}>
-                    {TEMPERATURA_LABELS[contact.temperatura] || contact.temperatura}
-                  </span>
-                )}
-                {contact.event && (
-                  <Link
-                    href={`/eventos/${contact.event.id}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/20 hover:bg-amber-500/25 max-w-[160px]"
-                    title={`Feira: ${contact.event.name}`}
-                  >
-                    {contact.event.cover_image_url && (
-                      <img src={contact.event.cover_image_url} alt="" className="w-3.5 h-3.5 rounded object-cover" />
-                    )}
-                    <span className="truncate">{contact.event.name}</span>
-                  </Link>
-                )}
+                {isInexistente && <DescartadoBadge />}
+                {resolveTipoDisplay(contact.tipo).map((t) => <TipoBadge key={t} tipo={t} />)}
+                <TemperaturaBadge temperatura={contact.temperatura} />
+                <EventBadge event={contact.event} />
                 {/* Cadastrador: so quando diferente do dono atual. Cor cyan pra diferenciar do emerald do owner. */}
                 {showCreator && creator && (
                   <span
@@ -339,32 +317,10 @@ function ContactCardImpl({
                   {contact.contato_nome}
                 </span>
               )}
-              {isInexistente && (
-                <span className="px-1.5 py-0.5 text-[9px] font-medium rounded bg-red-500/20 text-red-400">Descartado</span>
-              )}
-              {contact.tipo?.map((t) => (
-                <span key={t} className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${CONTACT_TYPE_COLORS[t] || 'bg-[#2a1245] text-neutral-400'}`}>
-                  {CONTACT_TYPE_LABELS[t] || t}
-                </span>
-              ))}
-              {contact.temperatura && (
-                <span className={`px-1.5 py-0.5 text-[10px] font-medium rounded ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}>
-                  {TEMPERATURA_LABELS[contact.temperatura] || contact.temperatura}
-                </span>
-              )}
-              {contact.event && (
-                <Link
-                  href={`/eventos/${contact.event.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-500/15 text-amber-300 border border-amber-500/20 hover:bg-amber-500/25 max-w-[180px]"
-                  title={`Feira: ${contact.event.name}`}
-                >
-                  {contact.event.cover_image_url && (
-                    <img src={contact.event.cover_image_url} alt="" className="w-3.5 h-3.5 rounded object-cover" />
-                  )}
-                  <span className="truncate">{contact.event.name}</span>
-                </Link>
-              )}
+              {isInexistente && <DescartadoBadge />}
+              {(contact.tipo || []).map((t) => <TipoBadge key={t} tipo={t} />)}
+              <TemperaturaBadge temperatura={contact.temperatura} />
+              <EventBadge event={contact.event} />
               {showCreator && creator && (
                 <span
                   className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 max-w-[180px]"

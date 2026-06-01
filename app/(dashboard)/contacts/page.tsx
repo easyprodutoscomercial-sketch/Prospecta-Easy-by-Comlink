@@ -18,6 +18,7 @@ import { useContactPreferences } from '@/lib/hooks/use-contact-preferences';
 import ContactCard from '@/components/contacts/contact-card';
 import ContactsToolbar from '@/components/contacts/contacts-toolbar';
 import EmptyState from '@/components/ui/empty-state';
+import { selectBase, inputBase, btnPrimary, btnSecondary, btnDanger } from '@/lib/utils/ui-classes';
 
 // Views pesadas (Leaflet, XLSX, etc) carregam so quando o usuario muda
 // pra essas views — ContactsImportView importa xlsx (~800KB!).
@@ -392,7 +393,8 @@ function ContactsPageContent() {
     setBulkLoading(false);
   };
 
-  const selectCls = 'px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500';
+  // Alias local pra nao ter que mudar 15+ usages de selectCls — agora aponta pro util compartilhado.
+  const selectCls = selectBase;
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
@@ -453,14 +455,14 @@ function ContactsPageContent() {
               </svg>
               <span className="hidden sm:inline">Rascunhos</span>
             </Link>
-            <Link href="/contacts/new" className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-600/20">
+            <Link href="/contacts/new" className={btnPrimary}>
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
               <span className="hidden sm:inline">Novo Contato</span>
             </Link>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={handleExport} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-neutral-300 bg-[#2a1245] border border-purple-700/30 rounded-lg hover:bg-purple-800/30 hover:text-white transition-all">
+          <button onClick={handleExport} className={btnSecondary}>
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             Exportar
           </button>
@@ -515,10 +517,7 @@ function ContactsPageContent() {
                 </span>
               )}
             </span>
-            <button
-              onClick={clearAllFilters}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/30 transition-all"
-            >
+            <button onClick={clearAllFilters} className={btnDanger}>
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
@@ -526,10 +525,11 @@ function ContactsPageContent() {
             </button>
           </div>
         )}
+        {/* Filtros PRIMARIOS — sempre visiveis. Os mais usados no dia-a-dia. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
           <div className="relative col-span-1 sm:col-span-2 lg:col-span-1">
             <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            <input type="text" placeholder="Buscar..." value={inputValues.search} onChange={(e) => setFilter('search', e.target.value)} className="w-full pl-9 pr-3 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <input type="text" placeholder="Buscar..." value={inputValues.search} onChange={(e) => setFilter('search', e.target.value)} className={`${inputBase} pl-9 pr-3`} />
           </div>
           <select value={filters.status} onChange={(e) => setFilter('status', e.target.value)} className={selectCls}>
             <option value="all">Status</option>
@@ -539,12 +539,6 @@ function ContactsPageContent() {
             <option value="REUNIAO_MARCADA">Reuniao Marcada ({facetCounts.statusCounts['REUNIAO_MARCADA'] || 0})</option>
             <option value="CONVERTIDO">Convertido ({facetCounts.statusCounts['CONVERTIDO'] || 0})</option>
             <option value="PERDIDO">Perdido ({facetCounts.statusCounts['PERDIDO'] || 0})</option>
-          </select>
-          <select value={filters.tipo} onChange={(e) => setFilter('tipo', e.target.value)} className={selectCls}>
-            <option value="all">Tipo</option>
-            <option value="FORNECEDOR">Fornecedor ({facetCounts.tipoCounts['FORNECEDOR'] || 0})</option>
-            <option value="COMPRADOR">Comprador ({facetCounts.tipoCounts['COMPRADOR'] || 0})</option>
-            <option value="AMBOS">Ambos ({facetCounts.tipoCounts['AMBOS'] || 0})</option>
           </select>
           <select value={filters.assigned} onChange={(e) => setFilter('assigned', e.target.value)} className={selectCls} title="Dono atual do contato (apontou pra si)">
             <option value="all">Dono (todos)</option>
@@ -560,85 +554,112 @@ function ContactsPageContent() {
               </optgroup>
             )}
           </select>
-          <select value={filters.created_by} onChange={(e) => setFilter('created_by', e.target.value)} className={selectCls} title="Quem cadastrou (criou) o contato — diferente do dono atual">
-            <option value="all">Cadastrado por (todos)</option>
-            <option value="me">Eu cadastrei</option>
-            <option value="unknown">Sem cadastrador (quiz/import)</option>
-            {Object.values(userMap).length > 0 && (
-              <optgroup label="Por cadastrador">
-                {Object.values(userMap)
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((u) => (
-                    <option key={u.user_id} value={u.user_id}>{u.name}</option>
-                  ))}
-              </optgroup>
-            )}
-          </select>
           <select value={filters.temperatura} onChange={(e) => setFilter('temperatura', e.target.value)} className={selectCls}>
             <option value="all">Temperatura</option>
-            {Object.entries(TEMPERATURA_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label} ({facetCounts.temperaturaCounts[key] || 0})</option>
-            ))}
+            <option value="QUENTE">Quente ({facetCounts.temperaturaCounts['QUENTE'] || 0})</option>
+            <option value="MORNO">Morno ({facetCounts.temperaturaCounts['MORNO'] || 0})</option>
+            <option value="FRIO">Frio ({facetCounts.temperaturaCounts['FRIO'] || 0})</option>
           </select>
           <select value={selectedPipelineId} onChange={(e) => setSelectedPipelineId(e.target.value)} className={selectCls} title="Pipeline (sincronizado com Kanban)">
             {pipelines.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
-          {facetCounts.events.length > 0 && (
-            <select value={filters.event_id} onChange={(e) => setFilter('event_id', e.target.value)} className={selectCls}>
-              <option value="all">Feira / Evento</option>
-              {facetCounts.events.map((ev) => (
-                <option key={ev.id} value={ev.id}>{ev.name} ({facetCounts.eventCounts[ev.id] || 0})</option>
-              ))}
-            </select>
-          )}
-          <select value={filters.origem} onChange={(e) => setFilter('origem', e.target.value)} className={selectCls}>
-            <option value="all">Origem</option>
-            {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>{label} ({facetCounts.origemCounts[key] || 0})</option>
-            ))}
-          </select>
-          <select value={filters.classe} onChange={(e) => setFilter('classe', e.target.value)} className={selectCls}>
-            <option value="all">Classe</option>
-            <option value="A">Classe A ({facetCounts.classeCounts['A'] || 0})</option>
-            <option value="B">Classe B ({facetCounts.classeCounts['B'] || 0})</option>
-            <option value="C">Classe C ({facetCounts.classeCounts['C'] || 0})</option>
-            <option value="D">Classe D ({facetCounts.classeCounts['D'] || 0})</option>
-          </select>
-          <input type="text" placeholder="Telefone..." value={inputValues.telefone} onChange={(e) => setFilter('telefone', e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          <input type="text" placeholder="Cidade..." value={inputValues.cidade} onChange={(e) => setFilter('cidade', e.target.value)} className="px-2 py-2 text-sm border border-purple-700/30 rounded-lg bg-[#2a1245] text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-          <select value={filters.estado} onChange={(e) => setFilter('estado', e.target.value)} className={selectCls}>
-            <option value="all">Estado</option>
-            {ESTADOS_BRASIL.map((uf) => (
-              <option key={uf} value={uf}>{uf}</option>
-            ))}
-          </select>
         </div>
-        <button onClick={() => setShowAdvanced((p) => !p)} className="mt-2 text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors">
-          {showAdvanced ? 'Ocultar filtros avancados' : 'Mostrar filtros avancados'}
+
+        {/* Botao pra mostrar SECUNDARIOS (antes era "Mostrar filtros avancados").
+            Filtros secundarios sao usados menos vezes — escondidos por default
+            pra nao poluir a tela em mobile. */}
+        <button
+          onClick={() => setShowAdvanced((p) => !p)}
+          className="mt-3 flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 font-medium transition-colors"
+        >
+          <svg className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          {showAdvanced ? 'Ocultar mais filtros' : 'Mais filtros'}
         </button>
+
         {showAdvanced && (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3 mt-3 pt-3 border-t border-purple-800/20">
-            <input type="text" placeholder="CPF..." value={inputValues.cpf} onChange={(e) => setFilter('cpf', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="CNPJ..." value={inputValues.cnpj} onChange={(e) => setFilter('cnpj', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="WhatsApp..." value={inputValues.whatsapp} onChange={(e) => setFilter('whatsapp', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="Empresa..." value={inputValues.empresa} onChange={(e) => setFilter('empresa', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="Referencia..." value={inputValues.referencia} onChange={(e) => setFilter('referencia', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="Nome Contato..." value={inputValues.contato_nome} onChange={(e) => setFilter('contato_nome', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="Cargo..." value={inputValues.cargo} onChange={(e) => setFilter('cargo', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="Endereco..." value={inputValues.endereco} onChange={(e) => setFilter('endereco', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="CEP..." value={inputValues.cep} onChange={(e) => setFilter('cep', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="Website..." value={inputValues.website} onChange={(e) => setFilter('website', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="Instagram..." value={inputValues.instagram} onChange={(e) => setFilter('instagram', e.target.value)} className={selectCls} />
-            <input type="text" placeholder="Produtos Fornecidos..." value={inputValues.produtos_fornecidos} onChange={(e) => setFilter('produtos_fornecidos', e.target.value)} className={selectCls} />
-            <select value={filters.proxima_acao_tipo} onChange={(e) => setFilter('proxima_acao_tipo', e.target.value)} className={selectCls}>
-              <option value="all">Proxima Acao</option>
-              {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
+            <select value={filters.tipo} onChange={(e) => setFilter('tipo', e.target.value)} className={selectCls}>
+              <option value="all">Tipo</option>
+              <option value="FORNECEDOR">Fornecedor ({facetCounts.tipoCounts['FORNECEDOR'] || 0})</option>
+              <option value="COMPRADOR">Comprador ({facetCounts.tipoCounts['COMPRADOR'] || 0})</option>
+              <option value="AMBOS">Ambos ({facetCounts.tipoCounts['AMBOS'] || 0})</option>
+            </select>
+            <select value={filters.created_by} onChange={(e) => setFilter('created_by', e.target.value)} className={selectCls} title="Quem cadastrou (criou) o contato — diferente do dono atual">
+              <option value="all">Cadastrado por (todos)</option>
+              <option value="me">Eu cadastrei</option>
+              <option value="unknown">Sem cadastrador (quiz/import)</option>
+              {Object.values(userMap).length > 0 && (
+                <optgroup label="Por cadastrador">
+                  {Object.values(userMap)
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((u) => (
+                      <option key={u.user_id} value={u.user_id}>{u.name}</option>
+                    ))}
+                </optgroup>
+              )}
+            </select>
+            {facetCounts.events.length > 0 && (
+              <select value={filters.event_id} onChange={(e) => setFilter('event_id', e.target.value)} className={selectCls}>
+                <option value="all">Feira / Evento</option>
+                {facetCounts.events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>{ev.name} ({facetCounts.eventCounts[ev.id] || 0})</option>
+                ))}
+              </select>
+            )}
+            <select value={filters.origem} onChange={(e) => setFilter('origem', e.target.value)} className={selectCls}>
+              <option value="all">Origem</option>
+              {Object.entries(ORIGEM_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>{label} ({facetCounts.origemCounts[key] || 0})</option>
+              ))}
+            </select>
+            <select value={filters.classe} onChange={(e) => setFilter('classe', e.target.value)} className={selectCls}>
+              <option value="all">Classe</option>
+              <option value="A">Classe A ({facetCounts.classeCounts['A'] || 0})</option>
+              <option value="B">Classe B ({facetCounts.classeCounts['B'] || 0})</option>
+              <option value="C">Classe C ({facetCounts.classeCounts['C'] || 0})</option>
+              <option value="D">Classe D ({facetCounts.classeCounts['D'] || 0})</option>
+            </select>
+            <input type="text" placeholder="Telefone..." value={inputValues.telefone} onChange={(e) => setFilter('telefone', e.target.value)} className={inputBase} />
+            <input type="text" placeholder="Cidade..." value={inputValues.cidade} onChange={(e) => setFilter('cidade', e.target.value)} className={inputBase} />
+            <select value={filters.estado} onChange={(e) => setFilter('estado', e.target.value)} className={selectCls}>
+              <option value="all">Estado</option>
+              {ESTADOS_BRASIL.map((uf) => (
+                <option key={uf} value={uf}>{uf}</option>
               ))}
             </select>
           </div>
+        )}
+
+        {/* Filtros raros — terceiro nivel (campos texto especificos: CPF, CNPJ, etc).
+            So abrem junto com "Mais filtros" mas tem separador visual + label. */}
+        {showAdvanced && (
+          <>
+            <div className="mt-4 pt-3 border-t border-purple-800/20">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-300/40 mb-2">Filtros raros (busca por campo)</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
+                <input type="text" placeholder="CPF..." value={inputValues.cpf} onChange={(e) => setFilter('cpf', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="CNPJ..." value={inputValues.cnpj} onChange={(e) => setFilter('cnpj', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="WhatsApp..." value={inputValues.whatsapp} onChange={(e) => setFilter('whatsapp', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="Empresa..." value={inputValues.empresa} onChange={(e) => setFilter('empresa', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="Referencia..." value={inputValues.referencia} onChange={(e) => setFilter('referencia', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="Nome Contato..." value={inputValues.contato_nome} onChange={(e) => setFilter('contato_nome', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="Cargo..." value={inputValues.cargo} onChange={(e) => setFilter('cargo', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="Endereco..." value={inputValues.endereco} onChange={(e) => setFilter('endereco', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="CEP..." value={inputValues.cep} onChange={(e) => setFilter('cep', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="Website..." value={inputValues.website} onChange={(e) => setFilter('website', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="Instagram..." value={inputValues.instagram} onChange={(e) => setFilter('instagram', e.target.value)} className={selectCls} />
+                <input type="text" placeholder="Produtos Fornecidos..." value={inputValues.produtos_fornecidos} onChange={(e) => setFilter('produtos_fornecidos', e.target.value)} className={selectCls} />
+                <select value={filters.proxima_acao_tipo} onChange={(e) => setFilter('proxima_acao_tipo', e.target.value)} className={selectCls}>
+                  <option value="all">Proxima Acao</option>
+                  {Object.entries(PROXIMA_ACAO_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
