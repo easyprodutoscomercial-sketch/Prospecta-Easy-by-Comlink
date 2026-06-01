@@ -81,12 +81,23 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
 
   const valueBorder = getValueBorder(contact.valor_estimado);
 
+  // Cor da borda lateral: temperatura > valor > dono.
+  // Antes a borda era so cor do dono — todos os cards do mesmo vendedor pareciam iguais.
+  // Temperatura QUENTE/MORNO/FRIO da identidade visual imediata.
+  const tempBorderColor =
+    contact.temperatura === 'QUENTE' ? '#ef4444' :
+    contact.temperatura === 'MORNO'  ? '#f59e0b' :
+    contact.temperatura === 'FRIO'   ? '#3b82f6' : null;
+
+  const leftBorderColor = tempBorderColor || valueBorder.color || ownerColorVal.bg;
+  const leftBorderWidth = tempBorderColor ? 4 : valueBorder.width;
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.4 : 1,
-    borderLeftColor: valueBorder.color || ownerColorVal.bg,
-    borderLeftWidth: `${valueBorder.width}px`,
+    borderLeftColor: leftBorderColor,
+    borderLeftWidth: `${leftBorderWidth}px`,
   };
 
   const days = daysInStage(contact.updated_at);
@@ -98,7 +109,7 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
   const creator = creatorId && creatorId !== contact.assigned_to_user_id ? userMap?.[creatorId] : undefined;
   const creatorColorVal = creator?.color || (creatorId ? getUserColor(creatorId) : null);
   const creatorInitials = creator ? getUserInitials(creator.name) : '?';
-  const overlayStyle = { borderLeftColor: valueBorder.color || ownerColorVal.bg, borderLeftWidth: `${valueBorder.width}px` };
+  const overlayStyle = { borderLeftColor: leftBorderColor, borderLeftWidth: `${leftBorderWidth}px` };
 
   const canJumpForward = canFwd !== undefined ? canFwd : true;
   const canJumpBackward = canBwd !== undefined ? canBwd : true;
@@ -236,34 +247,102 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
         {/* Contact avatar (foto da pessoa/cartao) */}
         <ContactAvatar name={contact.name} avatarUrl={contact.avatar_url} size="sm" />
 
-        {/* Name + company */}
+        {/* Name + company + info densa (telefone, dias, alertas) */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-white truncate leading-tight drop-shadow-[0_0_6px_rgba(255,255,255,0.15)]">{contact.name}</p>
-          {contact.company && <p className="text-[10px] text-purple-300/50 truncate">{contact.company}</p>}
+          <p className="text-sm font-bold text-white truncate leading-tight">{contact.name}</p>
+          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-purple-300/50 truncate">
+            {contact.company && <span className="truncate">{contact.company}</span>}
+            {contact.company && (contact.phone || days > 0) && <span className="text-purple-700/50">·</span>}
+            {contact.phone && (
+              <span className="text-purple-300/40 truncate">
+                {contact.phone}
+              </span>
+            )}
+            {days > 14 && (
+              <>
+                <span className="text-purple-700/50">·</span>
+                <span className={days > 30 ? 'text-red-400 font-semibold' : 'text-amber-400'} title={`Parado há ${days} dias`}>
+                  {days}d parado
+                </span>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Compact badges — fonte 11px (antes 9px ilegivel em celular de feira) */}
-        <div className="flex items-center gap-1 shrink-0">
-          {contact.temperatura && (
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}
-              title={TEMPERATURA_LABELS[contact.temperatura] || ''}
-            >
-              {TEMPERATURA_LABELS[contact.temperatura] || ''}
-            </span>
-          )}
-          {isOverdue && (
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Atrasado" />
-          )}
+        {/* Compact badges — sempre visiveis (nao so no hover). */}
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <div className="flex items-center gap-1">
+            {contact.temperatura && (
+              <span
+                className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}
+                title={TEMPERATURA_LABELS[contact.temperatura] || ''}
+              >
+                {TEMPERATURA_LABELS[contact.temperatura] || ''}
+              </span>
+            )}
+            {isOverdue && (
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Acao vencida" />
+            )}
+          </div>
           {contact.valor_estimado != null && contact.valor_estimado > 0 && (
             <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-emerald-500/15 text-emerald-400">
               {contact.valor_estimado >= 1000
-                ? `${(contact.valor_estimado / 1000).toFixed(contact.valor_estimado >= 10000 ? 0 : 1)}k`
+                ? `R$ ${(contact.valor_estimado / 1000).toFixed(contact.valor_estimado >= 10000 ? 0 : 1)}k`
                 : contact.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+            </span>
+          )}
+          {isUnassigned && (
+            <span className="text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30 animate-pulse">
+              Sem dono
             </span>
           )}
         </div>
       </div>
+
+      {/* Mini quick actions (sempre visiveis, nao so no hover).
+          Antes vendedor tinha que abrir o drawer pra ligar — agora 1 clique. */}
+      {(contact.phone || contact.whatsapp || contact.email) && !overlay && (
+        <div className="flex items-center gap-1 mt-1.5 px-1">
+          {(contact.whatsapp || contact.phone) && (
+            <a
+              href={`https://wa.me/55${(contact.whatsapp || contact.phone || '').replace(/\D/g, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/10 text-green-400 hover:bg-green-500/20 transition-colors"
+              title="WhatsApp"
+              aria-label="Abrir WhatsApp"
+            >
+              <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.946C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.413c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.687-1.448L.057 24z"/></svg>
+              Zap
+            </a>
+          )}
+          {contact.phone && (
+            <a
+              href={`tel:${contact.phone.replace(/\D/g, '')}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-colors"
+              title="Ligar"
+              aria-label="Ligar"
+            >
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+              Ligar
+            </a>
+          )}
+          {contact.email && (
+            <a
+              href={`mailto:${contact.email}`}
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/10 text-purple-300 hover:bg-purple-500/20 transition-colors"
+              title="Email"
+              aria-label="Enviar email"
+            >
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+              Email
+            </a>
+          )}
+        </div>
+      )}
 
       {/* === EXPANDED VIEW (on hover or non-compact) === */}
       {showExpanded && (
