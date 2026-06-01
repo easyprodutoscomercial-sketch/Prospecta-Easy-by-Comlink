@@ -242,11 +242,14 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
           {contact.company && <p className="text-[10px] text-purple-300/50 truncate">{contact.company}</p>}
         </div>
 
-        {/* Compact badges */}
+        {/* Compact badges — fonte 11px (antes 9px ilegivel em celular de feira) */}
         <div className="flex items-center gap-1 shrink-0">
           {contact.temperatura && (
-            <span className={`text-[9px] px-1 py-0.5 rounded font-medium ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}>
-              {TEMPERATURA_LABELS[contact.temperatura]?.[0] || ''}
+            <span
+              className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${TEMPERATURA_COLORS[contact.temperatura] || ''}`}
+              title={TEMPERATURA_LABELS[contact.temperatura] || ''}
+            >
+              {TEMPERATURA_LABELS[contact.temperatura] || ''}
             </span>
           )}
           {isOverdue && (
@@ -452,14 +455,15 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
 
           {/* Jump buttons */}
           {!overlay && (onJumpForward || onJumpBackward) && (
-            <div className="flex items-center justify-between mt-2 pt-2 border-t border-purple-800/15">
+            <div className="flex items-center justify-between mt-2 pt-2 border-t border-purple-800/15 gap-2">
               {canJumpBackward && onJumpBackward ? (
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); onJumpBackward(contact.id); }}
-                  className="flex items-center gap-1 text-[10px] font-bold text-red-400/60 hover:text-red-400 hover:bg-red-500/10 px-3 py-2 sm:px-2 sm:py-1 rounded-md transition-colors"
-                  title="Voltar etapa"
+                  className="flex items-center gap-1 text-[11px] font-bold text-red-400/70 hover:text-red-400 hover:bg-red-500/10 px-3 py-2.5 sm:px-2 sm:py-1 rounded-md transition-colors min-h-[44px] sm:min-h-0"
+                  aria-label="Voltar etapa"
                 >
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
                   </svg>
                   Voltar
@@ -467,12 +471,13 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
               ) : <span />}
               {canJumpForward && onJumpForward ? (
                 <button
+                  type="button"
                   onClick={(e) => { e.stopPropagation(); onJumpForward(contact.id); }}
-                  className="flex items-center gap-1 text-[10px] font-bold text-emerald-400/60 hover:text-emerald-400 hover:bg-emerald-500/10 px-3 py-2 sm:px-2 sm:py-1 rounded-md transition-colors"
-                  title="Avancar etapa"
+                  className="flex items-center gap-1 text-[11px] font-bold text-emerald-400/80 hover:text-emerald-400 hover:bg-emerald-500/10 px-3 py-2.5 sm:px-2 sm:py-1 rounded-md transition-colors min-h-[44px] sm:min-h-0"
+                  aria-label="Avancar etapa"
                 >
                   Avancar
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 sm:w-3.5 sm:h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
                   </svg>
                 </button>

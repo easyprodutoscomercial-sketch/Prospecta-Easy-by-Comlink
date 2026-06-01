@@ -17,19 +17,24 @@ import type { Contact, ContactStatus, ContactType, PipelineSettings, PipelineSta
 import { TEMPERATURA_LABELS, ORIGEM_LABELS, PROXIMA_ACAO_LABELS, ESTADOS_BRASIL } from '@/lib/utils/labels';
 import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
+import dynamic from 'next/dynamic';
 import { KanbanBoard } from '@/components/kanban/kanban-board';
 import { KanbanSkeleton } from '@/components/kanban/kanban-skeleton';
+import EmptyState from '@/components/ui/empty-state';
 import type { UserInfo } from '@/components/kanban/kanban-card';
 import { KanbanFilterBar } from '@/components/kanban/kanban-filter-bar';
 import { KanbanKpiBar } from '@/components/kanban/kanban-kpi-bar';
 import { KanbanFilterPopover, FilterChips } from '@/components/kanban/kanban-filter-popover';
 import { KanbanListView } from '@/components/kanban/kanban-list-view';
 import KanbanViewToggle from '@/components/kanban/kanban-view-toggle';
-import ContactPreviewDrawer from '@/components/kanban/contact-preview-drawer';
 import { getUserColor } from '@/lib/utils/user-colors';
 import MotivoModal from '@/components/ui/motivo-modal';
-import MeetingModal from '@/components/meetings/meeting-modal';
-import AiChatPanel from '@/components/ai-chat-panel';
+// Modais e drawer carregam dinamicamente — so quando precisa.
+// AiChatPanel + ContactPreviewDrawer + MeetingModal pesavam no bundle inicial
+// do kanban sem necessidade (vendedor abre tela e nao usa imediatamente).
+const ContactPreviewDrawer = dynamic(() => import('@/components/kanban/contact-preview-drawer'), { ssr: false });
+const MeetingModal = dynamic(() => import('@/components/meetings/meeting-modal'), { ssr: false });
+const AiChatPanel = dynamic(() => import('@/components/ai-chat-panel'), { ssr: false });
 import { normalizeSearch } from '@/lib/utils/normalize';
 import { useSessionState } from '@/lib/hooks/use-session-state';
 import { useIsMobile } from '@/lib/hooks/use-is-mobile';
@@ -165,6 +170,10 @@ export default function KanbanPage() {
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
+  // Pendente: selects guardam aqui antes do botao Aplicar. Antes onChange
+  // disparava direto e vendedor mexia no select por engano e movia 50 contatos.
+  const [bulkPendingStage, setBulkPendingStage] = useState('');
+  const [bulkPendingAssign, setBulkPendingAssign] = useState('');
 
   // Open chat if ?chat=1 in URL
   useEffect(() => {
@@ -357,9 +366,13 @@ export default function KanbanPage() {
     }
   }, [selectedPipelineId, fetchContacts]);
 
-  // Auto-refresh a cada 30s
+  // Auto-refresh a cada 30s — SO se a aba estiver visivel.
+  // Antes rodava com aba em background tambem: 16 vendedores * 3 fetches *
+  // 2880 disparos/dia = ~138k requests/dia desnecessarios (parte do egress).
+  // Quando aba volta ao foco, visibilitychange (abaixo) ja faz refresh fresco.
   useEffect(() => {
     const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       fetchData();
       refetchPipelines();
       if (selectedPipelineId) fetchContacts(selectedPipelineId);
@@ -798,14 +811,19 @@ export default function KanbanPage() {
     });
   };
 
+  // Bulk move/assign agora vao em 1 chamada (endpoint /batch).
+  // Antes mandavam N PATCHes em paralelo — 50 selecionados = 50 requests
+  // ao Supabase. Esse e' parte do que comeu a cota de egress.
   const handleBulkMoveToStage = async (stageId: string) => {
     if (bulkSelectedIds.size === 0) return;
     setBulkLoading(true);
     try {
-      const promises = Array.from(bulkSelectedIds).map(id =>
-        fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ stage_id: stageId }) })
-      );
-      await Promise.all(promises);
+      const res = await fetch('/api/contacts/batch', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(bulkSelectedIds), stage_id: stageId }),
+      });
+      if (!res.ok) throw new Error();
       toast.success(`${bulkSelectedIds.size} contatos movidos`);
       setBulkSelectedIds(new Set());
       setBulkMode(false);
@@ -821,10 +839,12 @@ export default function KanbanPage() {
     if (bulkSelectedIds.size === 0) return;
     setBulkLoading(true);
     try {
-      const promises = Array.from(bulkSelectedIds).map(id =>
-        fetch(`/api/contacts/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assigned_to_user_id: userId || null }) })
-      );
-      await Promise.all(promises);
+      const res = await fetch('/api/contacts/batch', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: Array.from(bulkSelectedIds), assigned_to_user_id: userId || null }),
+      });
+      if (!res.ok) throw new Error();
       toast.success(`${bulkSelectedIds.size} contatos atribuidos`);
       setBulkSelectedIds(new Set());
       setBulkMode(false);
@@ -869,32 +889,41 @@ export default function KanbanPage() {
       <div className="bg-[#120826]/80 backdrop-blur-sm border-b border-purple-500/10 px-3 sm:px-4 lg:px-6 py-2">
         {/* Row 1: Title + Search */}
         <div className="flex items-center gap-2">
-          {/* Title */}
-          <div className="flex items-center gap-1.5 min-w-0">
-            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-gradient-to-br from-emerald-500/20 to-purple-600/20 border border-emerald-500/20 flex items-center justify-center shrink-0">
-              <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          {/* Title — antes h1 era text-sm e badge era 9px (hierarquia invertida).
+              Agora h1 vence visualmente, padronizado com /contacts. */}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500/20 to-purple-600/20 border border-emerald-500/20 flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2m0 10V7m6 10V7" />
               </svg>
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-sm font-bold text-white leading-tight">Pipeline</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-bold text-emerald-400 leading-tight">Pipeline</h1>
                 {currentPipeline && (
-                  <span className="text-[9px] font-semibold text-emerald-400/70 bg-emerald-500/10 border border-emerald-500/20 rounded px-1.5 py-0.5 truncate max-w-[80px] sm:max-w-[140px]">
+                  <span className="text-[10px] font-semibold text-emerald-300/80 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5 truncate max-w-[140px] sm:max-w-[200px]">
                     {currentPipeline.name}
                   </span>
                 )}
               </div>
-              <p className="text-[9px] text-purple-300/40 leading-none mt-0.5">
-                {totalInColumns} de {totalContactsFromApi}
-                {hasTruncation && <span className="text-amber-400 ml-1">(limite)</span>}
+              <p className="text-xs text-purple-300/60 leading-tight mt-0.5">
+                <span className="font-semibold text-purple-200/80">{totalInColumns}</span>
+                {totalContactsFromApi !== totalInColumns && (
+                  <span className="text-purple-300/40"> de {totalContactsFromApi}</span>
+                )}
+                <span className="text-purple-300/40"> contatos</span>
+                {hasTruncation && (
+                  <span className="ml-2 text-amber-400" title="Pipeline tem mais de 10.000 contatos. Use filtros pra ver os outros.">
+                    · limite 10k
+                  </span>
+                )}
               </p>
             </div>
           </div>
 
           {/* Search - grows to fill space */}
-          <div className="relative flex-1 max-w-[200px] sm:max-w-[240px] ml-auto">
-            <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-purple-300/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="relative flex-1 max-w-[200px] sm:max-w-[280px] ml-auto">
+            <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-300/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
@@ -902,7 +931,7 @@ export default function KanbanPage() {
               placeholder="Buscar..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-7 pr-3 py-1.5 text-xs bg-[#1e0f35] border border-purple-700/20 rounded-lg text-neutral-200 placeholder:text-purple-300/30 focus:outline-none focus:ring-1 focus:ring-emerald-500/50 focus:border-emerald-500/50"
+              className="w-full pl-9 pr-3 py-2 text-sm bg-[#2a1245] border border-purple-700/30 rounded-lg text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
         </div>
@@ -1093,6 +1122,19 @@ export default function KanbanPage() {
       <div className="flex-1 overflow-hidden px-2 sm:px-4 lg:px-6 py-2 sm:py-4" data-tour="kanban-board">
         {loading ? (
           <KanbanSkeleton />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={activeFilterCount > 0 || search ? 'search' : 'contacts'}
+            title={activeFilterCount > 0 || search ? 'Nenhum contato com esses filtros' : 'Pipeline vazia'}
+            description={activeFilterCount > 0 || search
+              ? 'Ajuste os filtros pra ver os contatos do pipeline.'
+              : 'Comece criando um contato ou capturando leads via QR Code na feira.'}
+            actions={[
+              activeFilterCount > 0 || search
+                ? { label: 'Limpar filtros', onClick: clearAllFilters, variant: 'primary' as const, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> }
+                : { label: 'Novo Contato', href: '/contacts/new', variant: 'primary' as const, icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg> },
+            ]}
+          />
         ) : viewMode === 'list' ? (
           <KanbanListView
             contacts={chipFiltered}
@@ -1191,15 +1233,20 @@ export default function KanbanPage() {
       />
 
       {/* Motivo modal */}
-      {(pendingDrag || pendingJump) && (
-        <MotivoModal
-          isOpen={showMotivoModal}
-          onClose={() => { setShowMotivoModal(false); setPendingDrag(null); setPendingJump(null); }}
-          onConfirm={handleMotivoConfirm}
-          tipo={motivoTipo}
-          loading={motivoLoading}
-        />
-      )}
+      {(pendingDrag || pendingJump) && (() => {
+        const pendingContactId = (pendingDrag || pendingJump)?.contactId;
+        const pendingContact = pendingContactId ? contacts.find((c) => c.id === pendingContactId) : null;
+        return (
+          <MotivoModal
+            isOpen={showMotivoModal}
+            onClose={() => { setShowMotivoModal(false); setPendingDrag(null); setPendingJump(null); }}
+            onConfirm={handleMotivoConfirm}
+            tipo={motivoTipo}
+            loading={motivoLoading}
+            contactName={pendingContact?.name || undefined}
+          />
+        );
+      })()}
 
       {/* Meeting modal */}
       {meetingContact && (
@@ -1213,37 +1260,57 @@ export default function KanbanPage() {
         />
       )}
 
-      {/* Kanban Bulk Action Bar */}
-      {bulkMode && bulkSelectedIds.size > 0 && (
-        <div className="fixed bottom-16 sm:bottom-20 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-40 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 animate-fade-in">
-          <span className="text-xs font-bold text-amber-400">{bulkSelectedIds.size} selecionados</span>
-          <div className="w-px h-5 bg-purple-800/30" />
-          <select
-            onChange={(e) => { if (e.target.value) handleBulkMoveToStage(e.target.value); e.target.value = ''; }}
-            disabled={bulkLoading}
-            className="text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 focus:outline-none disabled:opacity-40"
-          >
-            <option value="">Mover para...</option>
-            {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <select
-            onChange={(e) => { if (e.target.value) handleBulkAssign(e.target.value === '_none' ? '' : e.target.value); e.target.value = ''; }}
-            disabled={bulkLoading}
-            className="text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 focus:outline-none disabled:opacity-40"
-          >
-            <option value="">Atribuir a...</option>
-            <option value="_none">Sem responsavel</option>
-            {Object.entries(userMap).map(([id, u]) => <option key={id} value={id}>{u.name}</option>)}
-          </select>
-          <button
-            onClick={() => { setBulkSelectedIds(new Set()); setBulkMode(false); }}
-            className="text-xs text-red-400/70 hover:text-red-400 font-medium"
-          >
-            Cancelar
-          </button>
-          {bulkLoading && <div className="w-4 h-4 border-2 border-purple-800/30 border-t-emerald-500 rounded-full animate-spin" />}
-        </div>
-      )}
+      {/* Kanban Bulk Action Bar — selects guardam valor local + botao confirma.
+          Antes onChange disparava direto, risco de mover 50 contatos sem querer. */}
+      {bulkMode && bulkSelectedIds.size > 0 && (() => {
+        const [pendingStage, pendingAssign] = [bulkPendingStage, bulkPendingAssign];
+        const canApply = !!pendingStage || pendingAssign !== '';
+        return (
+          <div className="fixed bottom-16 sm:bottom-20 left-2 right-2 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 z-40 bg-[#1e0f35] border border-purple-800/30 rounded-xl shadow-2xl shadow-purple-900/40 px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-3 animate-fade-in flex-wrap">
+            <span className="text-xs font-bold text-amber-400">{bulkSelectedIds.size} selecionados</span>
+            <div className="w-px h-5 bg-purple-800/30" />
+            <select
+              value={pendingStage}
+              onChange={(e) => setBulkPendingStage(e.target.value)}
+              disabled={bulkLoading}
+              className="text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-40"
+            >
+              <option value="">Mover para...</option>
+              {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <select
+              value={pendingAssign}
+              onChange={(e) => setBulkPendingAssign(e.target.value)}
+              disabled={bulkLoading}
+              className="text-xs bg-[#2a1245] border border-purple-700/30 rounded-lg px-2 py-1.5 text-neutral-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-40"
+            >
+              <option value="">Atribuir a...</option>
+              <option value="_none">Sem responsavel</option>
+              {Object.entries(userMap).map(([id, u]) => <option key={id} value={id}>{u.name}</option>)}
+            </select>
+            <button
+              type="button"
+              disabled={!canApply || bulkLoading}
+              onClick={async () => {
+                if (pendingStage) await handleBulkMoveToStage(pendingStage);
+                if (pendingAssign) await handleBulkAssign(pendingAssign === '_none' ? '' : pendingAssign);
+                setBulkPendingStage('');
+                setBulkPendingAssign('');
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white hover:bg-emerald-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              Aplicar
+            </button>
+            <button
+              onClick={() => { setBulkSelectedIds(new Set()); setBulkMode(false); setBulkPendingStage(''); setBulkPendingAssign(''); }}
+              className="text-xs text-red-400/70 hover:text-red-400 font-medium px-2"
+            >
+              Cancelar
+            </button>
+            {bulkLoading && <div className="w-4 h-4 border-2 border-purple-800/30 border-t-emerald-500 rounded-full animate-spin" />}
+          </div>
+        );
+      })()}
 
       {/* AI Chat FAB */}
       <button

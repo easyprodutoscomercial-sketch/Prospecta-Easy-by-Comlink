@@ -10,9 +10,12 @@ const batchUpdateSchema = z.object({
     'NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO',
   ]).optional(),
   inexistente: z.boolean().optional(),
-}).refine((data) => data.status !== undefined || data.inexistente !== undefined, {
-  message: 'Pelo menos status ou inexistente deve ser informado',
-});
+  stage_id: z.string().uuid().nullable().optional(),
+  assigned_to_user_id: z.string().uuid().nullable().optional(),
+}).refine(
+  (data) => data.status !== undefined || data.inexistente !== undefined || data.stage_id !== undefined || data.assigned_to_user_id !== undefined,
+  { message: 'Pelo menos um campo (status/inexistente/stage_id/assigned_to_user_id) deve ser informado' }
+);
 
 const batchDeleteSchema = z.object({
   ids: z.array(z.string().uuid()).min(1),
@@ -35,13 +38,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { ids, status, inexistente } = batchUpdateSchema.parse(body);
+    const { ids, status, inexistente, stage_id, assigned_to_user_id } = batchUpdateSchema.parse(body);
 
     const allowedIds = ids;
 
     const updateData: Record<string, any> = {};
     if (status !== undefined) updateData.status = status;
     if (inexistente !== undefined) updateData.inexistente = inexistente;
+    if (stage_id !== undefined) updateData.stage_id = stage_id;
+    if (assigned_to_user_id !== undefined) updateData.assigned_to_user_id = assigned_to_user_id;
 
     // Filtra org_id pra impedir admin de uma org alterar contatos de outra
     // mandando UUIDs alheios. Sistema interno hoje (1 org), mas R1 pede

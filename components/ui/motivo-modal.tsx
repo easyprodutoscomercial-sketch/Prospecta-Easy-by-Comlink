@@ -9,6 +9,9 @@ interface MotivoModalProps {
   onConfirm: (motivo: string) => void;
   tipo: 'CONVERTIDO' | 'PERDIDO';
   loading?: boolean;
+  // Nome do contato sendo movido — sem isso vendedor no mobile nao sabe
+  // se arrastou o card certo (touch impreciso na feira).
+  contactName?: string;
 }
 
 export default function MotivoModal({
@@ -17,12 +20,16 @@ export default function MotivoModal({
   onConfirm,
   tipo,
   loading = false,
+  contactName,
 }: MotivoModalProps) {
   const [motivo, setMotivo] = useState('');
   const modalRef = useRef<HTMLDivElement>(null);
 
   const labels = tipo === 'CONVERTIDO' ? MOTIVO_GANHO_LABELS : MOTIVO_PERDIDO_LABELS;
-  const title = tipo === 'CONVERTIDO' ? 'Motivo do Ganho' : 'Motivo da Perda';
+  const acao = tipo === 'CONVERTIDO' ? 'Convertido' : 'Perdido';
+  const title = contactName
+    ? `Movendo "${contactName}" para ${acao}`
+    : `Motivo do ${tipo === 'CONVERTIDO' ? 'Ganho' : 'Perda'}`;
   const subtitle = tipo === 'CONVERTIDO'
     ? 'Por que este contato foi convertido?'
     : 'Por que este contato foi perdido?';

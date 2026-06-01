@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { memo, useState, useMemo } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Contact, PipelineStage, PipelineType } from '@/lib/types';
@@ -106,7 +106,7 @@ function abbreviateValue(value: number): string {
   return value.toString();
 }
 
-export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsed, onToggleCollapse, swimlaneBy }: KanbanColumnProps) {
+function KanbanColumnImpl({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsed, onToggleCollapse, swimlaneBy }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const [filter, setFilter] = useState('');
   const color = stage.color || '#a3a3a3';
@@ -480,3 +480,8 @@ export function KanbanColumn({ stage, contacts, userMap, currentUserId, onClaimC
     </div>
   );
 }
+
+
+// Memoizada — antes cada drag re-renderizava todas as colunas.
+export const KanbanColumn = memo(KanbanColumnImpl);
+

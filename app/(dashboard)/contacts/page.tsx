@@ -1,11 +1,12 @@
 'use client';
 
 import { Suspense, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Contact } from '@/lib/types';
 import { formatStatus, getStatusColor, CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATURA_COLORS, ORIGEM_LABELS, ESTADOS_BRASIL, PROXIMA_ACAO_LABELS } from '@/lib/utils/labels';
 import Pagination from '@/components/ui/pagination';
-import { SkeletonTable } from '@/components/ui/skeleton';
+import { SkeletonCard } from '@/components/ui/skeleton';
 import BulkActionBar from '@/components/contacts/bulk-action-bar';
 import ConfirmModal from '@/components/ui/confirm-modal';
 import SavedViews from '@/components/saved-views';
@@ -16,10 +17,22 @@ import { useUrlFilters } from '@/lib/hooks/use-url-filters';
 import { useContactPreferences } from '@/lib/hooks/use-contact-preferences';
 import ContactCard from '@/components/contacts/contact-card';
 import ContactsToolbar from '@/components/contacts/contacts-toolbar';
-import ContactsMapView from '@/components/contacts/contacts-map-view';
-import ContactsImportView from '@/components/contacts/contacts-import-view';
-import ContactsFeirasView from '@/components/contacts/contacts-feiras-view';
 import EmptyState from '@/components/ui/empty-state';
+
+// Views pesadas (Leaflet, XLSX, etc) carregam so quando o usuario muda
+// pra essas views — ContactsImportView importa xlsx (~800KB!).
+const ContactsMapView = dynamic(() => import('@/components/contacts/contacts-map-view'), {
+  loading: () => <div className="text-center py-12 text-purple-300/40 text-sm">Carregando mapa...</div>,
+  ssr: false,
+});
+const ContactsImportView = dynamic(() => import('@/components/contacts/contacts-import-view'), {
+  loading: () => <div className="text-center py-12 text-purple-300/40 text-sm">Carregando importação...</div>,
+  ssr: false,
+});
+const ContactsFeirasView = dynamic(() => import('@/components/contacts/contacts-feiras-view'), {
+  loading: () => <div className="text-center py-12 text-purple-300/40 text-sm">Carregando feiras...</div>,
+  ssr: false,
+});
 
 interface UserInfo {
   user_id: string;
@@ -65,7 +78,7 @@ const CONTACT_FILTER_DEFS = {
 
 export default function ContactsPage() {
   return (
-    <Suspense fallback={<SkeletonTable rows={6} cols={4} />}>
+    <Suspense fallback={<div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div>}>
       <ContactsPageContent />
     </Suspense>
   );
@@ -119,6 +132,10 @@ function ContactsPageContent() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [singleDeleteId, setSingleDeleteId] = useState<string | null>(null);
   const [singleDeleteLoading, setSingleDeleteLoading] = useState(false);
+  // Descartar usa ConfirmModal (mesmo padrao do delete) em vez de window.confirm —
+  // confirm nativo aparecia com texto "O site diz:" agressivo no mobile.
+  const [pendingDiscardId, setPendingDiscardId] = useState<string | null>(null);
+  const [discardLoading, setDiscardLoading] = useState(false);
 
   const isMapView = prefs.activeView === 'map';
   const isImportView = prefs.activeView === 'import';
@@ -330,23 +347,42 @@ function ContactsPageContent() {
     const current = contacts.find((c) => c.id === contactId);
     if (!current) return;
     const newValue = !current.inexistente;
-    // Confirma antes de DESCARTAR (afeta todos os vendedores).
-    // Pra RECUPERAR (newValue=false) nao precisa confirmar — eh acao reversiva.
-    if (newValue && typeof window !== 'undefined') {
-      const nome = current.contato_nome || current.name || 'esse contato';
-      const ok = window.confirm(`Descartar "${nome}"?\n\nEle vai sumir da pipeline e da aba Contatos pra TODOS os vendedores. Voce pode recuperar depois pelo painel do stand.`);
-      if (!ok) return;
+    // Descartar (newValue=true) abre ConfirmModal estilizado.
+    // Recuperar eh acao reversiva, pode ser direto.
+    if (newValue) {
+      setPendingDiscardId(contactId);
+      return;
     }
-    setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: newValue } : c)));
+    // Recuperar — direto, sem confirm.
+    setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: false } : c)));
     try {
-      const res = await fetch(`/api/contacts/${contactId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inexistente: newValue }) });
+      const res = await fetch(`/api/contacts/${contactId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inexistente: false }) });
       if (!res.ok) throw new Error();
-      toast.success(newValue ? 'Contato descartado' : 'Contato recuperado');
+      toast.success('Contato recuperado');
     } catch {
-      setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: !newValue } : c)));
+      setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: true } : c)));
       toast.error('Erro ao atualizar contato');
     }
   }, [contacts, toast]);
+
+  // Confirma e executa o descarte (chamado pelo ConfirmModal).
+  const handleConfirmDiscard = async () => {
+    if (!pendingDiscardId) return;
+    setDiscardLoading(true);
+    const contactId = pendingDiscardId;
+    setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: true } : c)));
+    try {
+      const res = await fetch(`/api/contacts/${contactId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ inexistente: true }) });
+      if (!res.ok) throw new Error();
+      toast.success('Contato descartado');
+      setPendingDiscardId(null);
+    } catch {
+      setContacts((p) => p.map((c) => (c.id === contactId ? { ...c, inexistente: false } : c)));
+      toast.error('Erro ao descartar contato');
+    } finally {
+      setDiscardLoading(false);
+    }
+  };
 
   const handleBulkInexistente = async () => {
     setBulkLoading(true);
@@ -628,7 +664,7 @@ function ContactsPageContent() {
         /* ========== MAP VIEW ========== */
         <ContactsMapView contacts={mapContacts} onEnrichComplete={loadMapContacts} />
       ) : loading ? (
-        <SkeletonTable rows={6} cols={4} />
+        <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}</div>
       ) : contacts.length === 0 ? (
         activeFilterCount > 0 ? (
           <EmptyState
@@ -708,6 +744,16 @@ function ContactsPageContent() {
         title="Deletar contatos" message={`Tem certeza que deseja deletar ${selectedIds.size} contato${selectedIds.size > 1 ? 's' : ''}?`} variant="danger" confirmLabel="Deletar" loading={bulkLoading} />
       <ConfirmModal isOpen={!!singleDeleteId} onClose={() => setSingleDeleteId(null)} onConfirm={handleSingleDelete}
         title="Deletar contato" message={`Deletar "${contacts.find(c => c.id === singleDeleteId)?.name || ''}"? Esta acao e irreversivel e remove de todos os usuarios.`} variant="danger" confirmLabel="Deletar" loading={singleDeleteLoading} />
+      <ConfirmModal
+        isOpen={!!pendingDiscardId}
+        onClose={() => setPendingDiscardId(null)}
+        onConfirm={handleConfirmDiscard}
+        title="Descartar contato"
+        message={`Descartar "${contacts.find(c => c.id === pendingDiscardId)?.contato_nome || contacts.find(c => c.id === pendingDiscardId)?.name || ''}"? Ele vai sumir da pipeline e da aba Contatos para TODOS os vendedores. Voce pode recuperar depois pelo painel do stand.`}
+        variant="danger"
+        confirmLabel="Descartar"
+        loading={discardLoading}
+      />
     </div>
   );
 }
