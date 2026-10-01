@@ -165,14 +165,29 @@ export async function GET(request: NextRequest) {
     for (const org of orgs) {
       const orgId = org.id;
 
-      // Buscar contatos ativos
-      const { data: contacts } = await admin
-        .from('contacts')
-        .select('id, name, company, status, valor_estimado, proxima_acao_tipo, proxima_acao_data, updated_at, temperatura, assigned_to_user_id')
-        .eq('organization_id', orgId)
-        .in('status', ACTIVE_STATUSES);
+      // Buscar contatos ativos — PAGINADO.
+      // O Supabase corta em 1000 linhas por consulta; sem isso, uma base de 3,7 mil
+      // contatos tinha 2/3 invisivel pra cobranca. Ordena do mais parado pro mais
+      // recente, pra que o atraso maior seja sempre o primeiro a ser cobrado.
+      const PAGINA = 1000;
+      const contacts: NonNullable<Awaited<ReturnType<typeof buscarPagina>>> = [];
+      async function buscarPagina(de: number) {
+        const { data } = await admin
+          .from('contacts')
+          .select('id, name, company, status, valor_estimado, proxima_acao_tipo, proxima_acao_data, updated_at, temperatura, assigned_to_user_id')
+          .eq('organization_id', orgId)
+          .in('status', ACTIVE_STATUSES)
+          .order('updated_at', { ascending: true })
+          .range(de, de + PAGINA - 1);
+        return data || [];
+      }
+      for (let de = 0; ; de += PAGINA) {
+        const pagina = await buscarPagina(de);
+        contacts.push(...pagina);
+        if (pagina.length < PAGINA) break;
+      }
 
-      if (!contacts || contacts.length === 0) continue;
+      if (contacts.length === 0) continue;
 
       // Buscar profiles
       const { data: profiles } = await admin
