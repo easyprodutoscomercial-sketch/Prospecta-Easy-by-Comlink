@@ -8,6 +8,7 @@ import CommandPalette from '@/components/command-palette';
 import { ProductTour } from '@/components/onboarding/product-tour';
 import OfflineIndicator from '@/components/offline/offline-indicator';
 import CobrancaZumbido from '@/components/notifications/cobranca-zumbido';
+import PushObrigatorio from '@/components/notifications/push-obrigatorio';
 
 export default async function DashboardLayout({
   children,
@@ -50,6 +51,7 @@ export default async function DashboardLayout({
       <CommandPalette />
       <OfflineIndicator />
       <CobrancaZumbido />
+      <PushObrigatorio />
     </div>
   );
 }
