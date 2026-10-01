@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { Contact } from '@/lib/types';
+import ContactReceita from './contact-receita';
 import {
   CONTACT_TYPE_LABELS,
   CONTACT_TYPE_COLORS,
@@ -80,6 +81,13 @@ export default function ContactDetails({ contact }: ContactDetailsProps) {
           <div><Label>Referencia</Label><FieldValue value={contact.referencia} /></div>
         </div>
       </Section>
+
+      <ContactReceita
+        contactId={contact.id}
+        temCnpj={Boolean(contact.cnpj || (contact as any).cnpj_digits)}
+        empresa={contact.company}
+        nome={contact.name}
+      />
 
       <Section title="Tipo e Classificacao">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
