@@ -111,6 +111,16 @@ export const KanbanCardCompact = memo(function KanbanCardCompact({ contact, over
         {/* Name */}
         <span className="text-[11px] font-bold text-white truncate flex-1">{contact.name}</span>
 
+        {/* No modo compacto o espaco e curto: marca so que tem CNPJ, com o numero no tooltip */}
+        {contact.cnpj && (
+          <span
+            className="text-[8px] px-1 py-0.5 rounded font-bold bg-sky-500/15 text-sky-300 border border-sky-500/25 shrink-0"
+            title={`CNPJ ${contact.cnpj}`}
+          >
+            CNPJ
+          </span>
+        )}
+
         {/* Value badge */}
         {contact.valor_estimado != null && contact.valor_estimado > 0 && (
           <span className="text-[9px] px-1 py-0.5 rounded font-bold bg-emerald-500/15 text-emerald-400 shrink-0">

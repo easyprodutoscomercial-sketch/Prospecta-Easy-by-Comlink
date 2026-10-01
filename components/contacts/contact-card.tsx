@@ -9,6 +9,7 @@ import ContactMiniPipeline from '@/components/contacts/contact-mini-pipeline';
 import ContactAvatar from '@/components/contacts/contact-avatar';
 import { TemperaturaBadge, TipoBadge, DescartadoBadge, EventBadge } from '@/components/ui/badges';
 import { fieldLabel } from '@/lib/utils/ui-classes';
+import { formatarCnpj, limparCnpj } from '@/lib/receita/cnpj';
 import type { DensityMode } from '@/lib/hooks/use-contact-preferences';
 
 interface UserInfo {
@@ -200,10 +201,18 @@ function ContactCardImpl({
                 )}
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1.5 mt-2 text-xs">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-1.5 mt-2 text-xs">
                 <div>
                   <span className="text-purple-300 text-[10px] font-bold uppercase tracking-wider">Empresa</span>
                   <p className="text-neutral-200 truncate">{contact.company || <span className="text-neutral-600">-</span>}</p>
+                </div>
+                <div>
+                  <span className="text-sky-300 text-[10px] font-bold uppercase tracking-wider">CNPJ</span>
+                  <p className="text-neutral-200 truncate">
+                    {contact.cnpj
+                      ? (formatarCnpj(limparCnpj(contact.cnpj) || '') || contact.cnpj)
+                      : <span className="text-neutral-600">-</span>}
+                  </p>
                 </div>
                 <div>
                   <span className="text-emerald-400 text-[10px] font-bold uppercase tracking-wider">Email</span>

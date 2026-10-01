@@ -9,6 +9,7 @@ import { CONTACT_TYPE_LABELS, CONTACT_TYPE_COLORS, TEMPERATURA_LABELS, TEMPERATU
 import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
 import { computeLeadScore, getScoreColor } from '@/lib/utils/lead-score';
 import ContactAvatar from '@/components/contacts/contact-avatar';
+import { formatarCnpj, limparCnpj } from '@/lib/receita/cnpj';
 
 export interface UserInfo {
   name: string;
@@ -267,6 +268,15 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
               </>
             )}
           </div>
+          {/* CNPJ visivel no cartao: marca a empresa formalizada e habilita a consulta a Receita */}
+          {contact.cnpj && (
+            <span
+              className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-sky-500/15 text-sky-300 border border-sky-500/25 whitespace-nowrap"
+              title={`CNPJ ${formatarCnpj(limparCnpj(contact.cnpj) || '') || contact.cnpj}`}
+            >
+              CNPJ {formatarCnpj(limparCnpj(contact.cnpj) || '') || contact.cnpj}
+            </span>
+          )}
         </div>
 
         {/* Compact badges — sempre visiveis (nao so no hover). */}
