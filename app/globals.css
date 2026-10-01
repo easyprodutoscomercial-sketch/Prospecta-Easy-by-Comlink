@@ -705,3 +705,26 @@ input[type="range"].density-slider:disabled {
   border: 4px solid transparent;
   border-left-color: #8b5cf6;
 }
+
+/* Zumbido estilo MSN: sacode a tela inteira quando chega cobranca nova.
+   Respeita quem pediu menos animacao no sistema (acessibilidade). */
+@keyframes zumbido-tremor {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  10% { transform: translate(-9px, -5px) rotate(-0.6deg); }
+  20% { transform: translate(8px, 5px) rotate(0.6deg); }
+  30% { transform: translate(-8px, 4px) rotate(-0.5deg); }
+  40% { transform: translate(7px, -4px) rotate(0.5deg); }
+  50% { transform: translate(-6px, -3px) rotate(-0.4deg); }
+  60% { transform: translate(5px, 3px) rotate(0.3deg); }
+  70% { transform: translate(-4px, 2px) rotate(-0.2deg); }
+  80% { transform: translate(3px, -2px) rotate(0.2deg); }
+  90% { transform: translate(-2px, 1px) rotate(-0.1deg); }
+}
+
+body.zumbido-tremor {
+  animation: zumbido-tremor 0.9s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.zumbido-tremor { animation: none; }
+}
