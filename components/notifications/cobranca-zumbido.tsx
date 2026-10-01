@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 // toca um som curto e o titulo da aba fica piscando ate a pessoa voltar.
 // O piscar da aba e o que pega quem deixou o CRM em segundo plano.
 
-const INTERVALO_MS = 60_000; // de quanto em quanto tempo olha se chegou cobranca
+const INTERVALO_MS = 30_000; // de quanto em quanto tempo olha se chegou cobranca
 const DURACAO_TREMOR_MS = 900;
 
 export default function CobrancaZumbido() {
@@ -60,7 +60,10 @@ export default function CobrancaZumbido() {
         const { count } = await r.json();
         if (!vivo) return;
         setPendentes(count || 0);
-        if (ultimoRef.current !== null && count > ultimoRef.current) zumbir();
+        // Treme quando o numero sobe E tambem na primeira carga, se ja houver
+        // cobranca pendente. Quem abre o CRM devendo leva o zumbido na cara.
+        const primeiraVez = ultimoRef.current === null;
+        if ((primeiraVez && count > 0) || (!primeiraVez && count > ultimoRef.current!)) zumbir();
         ultimoRef.current = count || 0;
       } catch {
         /* sem rede: tenta de novo no proximo ciclo */
