@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 // O piscar da aba e o que pega quem deixou o CRM em segundo plano.
 
 const INTERVALO_MS = 30_000; // de quanto em quanto tempo olha se chegou cobranca
-const DURACAO_TREMOR_MS = 900;
+const DURACAO_TREMOR_MS = 20_000; // 20s de tremor: a ideia e incomodar ate a pessoa agir
 
 export default function CobrancaZumbido() {
   const router = useRouter();
@@ -44,9 +44,18 @@ export default function CobrancaZumbido() {
 
   function zumbir() {
     setTremendo(true);
+    // Som e vibracao acompanham as rajadas de tremor (uma a cada 1,5s),
+    // em vez de bipar uma vez so e deixar 20s de tremor mudo.
     tocar();
-    if (navigator.vibrate) navigator.vibrate([200, 100, 200]); // celular
-    setTimeout(() => setTremendo(false), DURACAO_TREMOR_MS);
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    const rajada = setInterval(() => {
+      tocar();
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    }, 3000);
+    setTimeout(() => {
+      clearInterval(rajada);
+      setTremendo(false);
+    }, DURACAO_TREMOR_MS);
   }
 
   // --- verifica periodicamente se o numero de cobrancas subiu ---
