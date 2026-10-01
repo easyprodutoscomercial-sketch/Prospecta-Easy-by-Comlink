@@ -181,10 +181,11 @@ export async function GET(request: NextRequest) {
         .eq('organization_id', orgId);
 
       const profileMap = new Map<string, string>();
-      const adminIds: string[] = [];
+      // Contato sem dono e do balcao: todo mundo e cobrado, nao so o admin
+      const todosIds: string[] = [];
       for (const p of profiles || []) {
         profileMap.set(p.user_id, p.name);
-        if (p.role === 'admin') adminIds.push(p.user_id);
+        todosIds.push(p.user_id);
       }
 
       // Buscar ultima interacao de cada contato
@@ -205,8 +206,9 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Anti-duplicata: ultimas 6h
-      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString();
+      // Anti-duplicata: 25 min. Tem que ser MENOR que o intervalo do cron (30 min),
+      // senao a rodada seguinte cai toda na trava e ninguem e cobrado de novo.
+      const sixHoursAgo = new Date(now.getTime() - 25 * 60 * 1000).toISOString();
       const { data: recentNotifs } = await admin
         .from('notifications')
         .select('contact_id, user_id, type')
@@ -230,8 +232,8 @@ export async function GET(request: NextRequest) {
 
         const base = { ...contact, daysSinceUpdate, lastInteraction };
 
-        // Contato parado 5+ dias (com dono)
-        if (daysSinceUpdate >= 5 && hasOwner) {
+        // Contato parado 2+ dias (com dono). Antes eram 5 — dois dias parado ja e cobranca.
+        if (daysSinceUpdate >= 2 && hasOwner) {
           const userId = contact.assigned_to_user_id!;
           const key = `${contact.id}:${userId}:STALE_DEAL`;
           if (!recentKeys.has(key)) {
@@ -268,9 +270,10 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        // Sem responsavel 3+ dias (notificar admins)
-        if (!hasOwner && daysSinceUpdate >= 3) {
-          for (const adminId of adminIds) {
+        // Sem responsavel 1+ dia: cobra TODO MUNDO, porque o contato esta no balcao
+        // e qualquer um pode apontar pra si. Com dono, so o dono e cobrado (acima).
+        if (!hasOwner && daysSinceUpdate >= 1) {
+          for (const adminId of todosIds) {
             const key = `${contact.id}:${adminId}:NO_OWNER`;
             if (!recentKeys.has(key)) {
               const existing = pendingByUser.get(adminId) || [];
@@ -303,8 +306,8 @@ export async function GET(request: NextRequest) {
               organization_id: orgId,
               user_id: userId,
               type: 'NO_OWNER',
-              title: `⚠️ Sem responsável: ${contact.name}`,
-              body: `${contact.name}${contact.company ? ` (${contact.company})` : ''} está em "${STATUS_LABELS[contact.status] || contact.status}" há ${contact.daysSinceUpdate} dias sem responsável.${contact.valor_estimado ? ` Valor: R$ ${contact.valor_estimado.toLocaleString('pt-BR')}.` : ''}\n\n💡 Dica IA: ${tip}`,
+              title: `🟡 Livre: ${contact.name}`,
+              body: `${contact.name}${contact.company ? ` (${contact.company})` : ''} está em "${STATUS_LABELS[contact.status] || contact.status}" há ${contact.daysSinceUpdate} dias e ninguém assumiu.${contact.valor_estimado ? ` Valor: R$ ${contact.valor_estimado.toLocaleString('pt-BR')}.` : ''} Aponte para você e trabalhe — quem assumir primeiro fica com ele.\n\n💡 Dica IA: ${tip}`,
               contact_id: contact.id,
               metadata: { source: 'cron_ai', days_stale: contact.daysSinceUpdate, ai_tip: tip },
             });

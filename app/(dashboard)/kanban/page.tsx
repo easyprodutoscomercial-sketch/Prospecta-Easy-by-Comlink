@@ -560,17 +560,15 @@ export default function KanbanPage() {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact || contact.stage_id === targetStageId) return;
 
-    // Ownership check
-    if (currentUserRole !== 'admin') {
-      if (!contact.assigned_to_user_id) {
-        toast.error('Este contato nao tem responsavel. Aponte para voce primeiro.');
-        return;
-      }
-      if (contact.assigned_to_user_id !== currentUserId) {
-        const ownerName = userMap[contact.assigned_to_user_id]?.name || 'outro usuario';
-        toast.error(`Contato atribuido a ${ownerName}. Aponte para voce primeiro.`);
-        return;
-      }
+    // Ownership check — obrigatorio pra todo mundo, admin incluso
+    if (!contact.assigned_to_user_id) {
+      toast.error('Este contato nao tem responsavel. Aponte para voce primeiro.');
+      return;
+    }
+    if (contact.assigned_to_user_id !== currentUserId) {
+      const ownerName = userMap[contact.assigned_to_user_id]?.name || 'outro usuario';
+      toast.error(`Contato atribuido a ${ownerName}. Aponte para voce primeiro.`);
+      return;
     }
 
     const targetStage = stageMap[targetStageId];
@@ -594,8 +592,9 @@ export default function KanbanPage() {
     setPendingJump(null);
   }
 
+  // Regra unica pra qualquer movimentacao de card: so mexe quem e o responsavel.
+  // Vale inclusive pro admin — sem apontamento, ninguem move.
   function canMoveContact(contact: Contact): boolean {
-    if (currentUserRole === 'admin') return true;
     return !!contact.assigned_to_user_id && contact.assigned_to_user_id === currentUserId;
   }
 
