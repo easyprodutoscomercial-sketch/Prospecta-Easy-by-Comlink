@@ -174,7 +174,7 @@ export async function GET(request: NextRequest) {
       async function buscarPagina(de: number) {
         const { data } = await admin
           .from('contacts')
-          .select('id, name, company, status, valor_estimado, proxima_acao_tipo, proxima_acao_data, updated_at, temperatura, assigned_to_user_id')
+          .select('id, name, company, status, valor_estimado, proxima_acao_tipo, proxima_acao_data, updated_at, created_at, last_interaction_at, temperatura, assigned_to_user_id')
           .eq('organization_id', orgId)
           .in('status', ACTIVE_STATUSES)
           .order('updated_at', { ascending: true })
@@ -239,11 +239,22 @@ export async function GET(request: NextRequest) {
       const pendingByUser = new Map<string, PendingContact[]>();
 
       for (const contact of contacts) {
-        const daysSinceUpdate = Math.floor(
-          (now.getTime() - new Date(contact.updated_at).getTime()) / (1000 * 60 * 60 * 24)
-        );
         const hasOwner = !!contact.assigned_to_user_id;
         const lastInteraction = interactionMap.get(contact.id) || null;
+
+        // NAO usar updated_at: existe um gatilho no banco (update_contacts_updated_at)
+        // que forca updated_at = NOW() em QUALQUER alteracao. Corrigir um telefone
+        // zerava o contador de "parado ha X dias" e o contato sumia da cobranca.
+        // Ordem do sinal mais confiavel pro menos: interacao registrada > ultima
+        // interacao marcada no contato > data de cadastro.
+        const referencia =
+          lastInteraction?.happened_at ||
+          contact.last_interaction_at ||
+          contact.created_at ||
+          contact.updated_at;
+        const daysSinceUpdate = Math.max(0, Math.floor(
+          (now.getTime() - new Date(referencia).getTime()) / (1000 * 60 * 60 * 24)
+        ));
 
         const base = { ...contact, daysSinceUpdate, lastInteraction };
 
