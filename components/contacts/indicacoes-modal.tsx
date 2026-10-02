@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 
 interface Empresa {
@@ -33,24 +34,46 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
   const [perfil, setPerfil] = useState('industria');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [pendente, setPendente] = useState(false);
+  const [buscadoEm, setBuscadoEm] = useState<string | null>(null);
+  const [montado, setMontado] = useState(false);
 
+  useEffect(() => setMontado(true), []);
+
+  // 1) abre instantaneo com o que ja foi garimpado antes
+  const verCache = useCallback(async (qualPerfil: string) => {
+    setErro(null); setEmpresas([]); setEscolhidas(new Set()); setResumo(null);
+    try {
+      const r = await fetch(`/api/contacts/${contactId}/indicacoes?perfil=${qualPerfil}&cache=1`);
+      const j = await r.json();
+      if (j.perfis) setPerfis(j.perfis);
+      if (j.erro) { setErro(j.erro); return; }
+      if (j.pendente) { setPendente(true); return; }
+      setEmpresas(j.empresas || []); setResumo(j.resumo || null);
+      setBuscadoEm(j.buscadoEm || null); setPendente(false);
+    } catch {
+      setErro('Não consegui abrir agora.');
+    }
+  }, [contactId]);
+
+  // 2) garimpo de verdade: roda em segundo plano, a janela pode ser fechada
   const buscar = useCallback(async (qualPerfil: string) => {
-    setCarregando(true); setErro(null); setEmpresas([]); setEscolhidas(new Set());
+    setCarregando(true); setErro(null); setPendente(false);
     try {
       const r = await fetch(`/api/contacts/${contactId}/indicacoes?perfil=${qualPerfil}`);
       const j = await r.json();
       if (j.perfis) setPerfis(j.perfis);
       if (j.erro) { setErro(j.erro); return; }
-      setEmpresas(j.empresas || []);
-      setResumo(j.resumo || null);
+      setEmpresas(j.empresas || []); setResumo(j.resumo || null);
+      setBuscadoEm(j.buscadoEm || null);
     } catch {
-      setErro('Não consegui buscar agora. Tente de novo.');
+      setErro('A busca não respondeu. Tente de novo em um minuto.');
     } finally {
       setCarregando(false);
     }
   }, [contactId]);
 
-  useEffect(() => { if (aberto) buscar(perfil); /* eslint-disable-next-line */ }, [aberto]);
+  useEffect(() => { if (aberto) verCache(perfil); /* eslint-disable-next-line */ }, [aberto]);
 
   function alternar(id: string) {
     setEscolhidas((s) => {
@@ -82,9 +105,12 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
     }
   }
 
-  if (!aberto) return null;
+  if (!aberto || !montado) return null;
 
-  return (
+  // Desenhado direto no <body>, fora do cartao. Dentro do cartao do kanban a
+  // janela cobria o card, o mouse "saia" dele, o card encolhia, a janela
+  // remontava — e a tela entrava em laco de piscar.
+  return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 p-4" onClick={onFechar}>
       <div className="w-full max-w-3xl max-h-[85vh] flex flex-col rounded-2xl border border-purple-700/40 bg-[#1e0f35] shadow-2xl"
            onClick={(e) => e.stopPropagation()}>
@@ -105,7 +131,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
             <div className="flex gap-1.5 flex-wrap mt-3">
               {perfis.map((p) => (
                 <button key={p.id}
-                  onClick={() => { setPerfil(p.id); buscar(p.id); }}
+                  onClick={() => { setPerfil(p.id); verCache(p.id); }}
                   disabled={carregando}
                   className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors disabled:opacity-50 ${
                     perfil === p.id
@@ -115,6 +141,13 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
                 </button>
               ))}
             </div>
+          )}
+
+          {buscadoEm && !carregando && (
+            <p className="text-[10px] text-neutral-600 mt-1.5">
+              Garimpado em {new Date(buscadoEm).toLocaleString('pt-BR')} · guardado por 7 dias
+              <button onClick={() => buscar(perfil)} className="ml-2 underline text-amber-400/80 hover:text-amber-300">buscar de novo</button>
+            </p>
           )}
 
           {resumo && !carregando && (
@@ -128,8 +161,25 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
           {carregando && (
             <div className="flex flex-col items-center gap-3 py-12 text-purple-300/70">
               <span className="w-6 h-6 rounded-full border-2 border-purple-400/30 border-t-purple-300 animate-spin" />
-              <p className="text-sm">Consultando o mapa... isso leva até 1 minuto.</p>
-              <p className="text-xs text-neutral-600">Os servidores são públicos e doados — vale a espera.</p>
+              <p className="text-sm">Garimpando no mapa... leva até 1 minuto.</p>
+              <p className="text-xs text-neutral-600">
+                Pode fechar esta janela e continuar trabalhando — a busca segue sozinha
+                e o resultado fica guardado.
+              </p>
+            </div>
+          )}
+
+          {pendente && !carregando && !erro && (
+            <div className="flex flex-col items-center gap-3 py-12 text-center">
+              <p className="text-sm text-neutral-300">Ainda não garimpamos esta cidade e perfil.</p>
+              <p className="text-xs text-neutral-500 max-w-sm">
+                A busca consulta servidores públicos de mapa e leva até 1 minuto.
+                Depois fica guardada por 7 dias — para você e para o resto da equipe.
+              </p>
+              <button onClick={() => buscar(perfil)}
+                className="mt-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#1a0a2e] text-sm font-bold">
+                Garimpar agora
+              </button>
             </div>
           )}
 
@@ -140,7 +190,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
             </div>
           )}
 
-          {!carregando && !erro && empresas.length === 0 && (
+          {!carregando && !erro && !pendente && empresas.length === 0 && (
             <p className="text-sm text-neutral-500 italic py-10 text-center">
               Nenhuma empresa nova encontrada nesse perfil. Experimente outro acima.
             </p>
@@ -186,6 +236,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 // O piscar da aba e o que pega quem deixou o CRM em segundo plano.
 
 const INTERVALO_MS = 30_000; // de quanto em quanto tempo olha se chegou cobranca
-const DURACAO_TREMOR_MS = 20_000; // 20s de tremor: a ideia e incomodar ate a pessoa agir
+const DURACAO_TREMOR_MS = 5_000; // 5s: o suficiente pra chamar atencao sem atrapalhar o trabalho
 
 export default function CobrancaZumbido() {
   const router = useRouter();
@@ -103,18 +103,16 @@ export default function CobrancaZumbido() {
     };
   }, [pendentes]);
 
-  // --- tremor na tela inteira ---
-  useEffect(() => {
-    document.body.classList.toggle('zumbido-tremor', tremendo);
-    return () => document.body.classList.remove('zumbido-tremor');
-  }, [tremendo]);
+  // O tremor NAO vai mais no <body>: transform num ancestral quebra
+  // position:fixed de todo o resto — janelas de cadastro saiam do lugar e o
+  // botao Salvar ficava inclicavel. Agora treme so o aviso flutuante.
 
   if (pendentes <= 0) return null;
 
   return (
     <button
       onClick={() => router.push('/kanban')}
-      className={`fixed bottom-4 right-4 z-[90] flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-lg transition-colors
+      className={`${tremendo ? 'zumbido-alvo ' : ''}fixed bottom-4 right-4 z-[90] flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-lg transition-colors
         ${pendentes >= 10
           ? 'bg-red-600 hover:bg-red-500 border-red-400/50 text-white animate-pulse'
           : 'bg-amber-500 hover:bg-amber-400 border-amber-300/50 text-[#1a0a2e]'}`}

@@ -722,13 +722,15 @@ input[type="range"].density-slider:disabled {
   55%, 100% { transform: translate(0, 0) rotate(0deg); }
 }
 
-/* Repete em rajadas pelos 20s: sacode, da uma brecha, sacode de novo.
-   Tremor continuo por 20s enjoa de verdade e trava o clique; em rajada
-   incomoda igual e deixa a pessoa usar a tela pra resolver a pendencia. */
-body.zumbido-tremor {
+/* NAO aplicar transform no <body>.
+   transform num ancestral quebra position:fixed de TODOS os descendentes —
+   as janelas de cadastro saiam do lugar e o botao Salvar ficava inclicavel
+   enquanto a tela tremia. Foi isso que fez vendedor digitar cidade e "nao salvar".
+   O tremor agora fica so no aviso flutuante, que e isolado e nao contem formulario. */
+.zumbido-alvo {
   animation: zumbido-tremor 1.5s cubic-bezier(.36, .07, .19, .97) infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  body.zumbido-tremor { animation: none; }
+  .zumbido-alvo { animation: none; }
 }
