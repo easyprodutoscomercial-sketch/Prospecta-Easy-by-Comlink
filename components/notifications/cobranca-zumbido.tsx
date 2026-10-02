@@ -112,7 +112,7 @@ export default function CobrancaZumbido() {
   return (
     <button
       onClick={() => router.push('/kanban')}
-      className={`${tremendo ? 'zumbido-alvo ' : ''}fixed bottom-4 right-4 z-[90] flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-lg transition-colors
+      className={`${tremendo ? 'zumbido-alvo ' : ''}fixed top-4 right-4 z-[90] flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-lg transition-colors
         ${pendentes >= 10
           ? 'bg-red-600 hover:bg-red-500 border-red-400/50 text-white animate-pulse'
           : 'bg-amber-500 hover:bg-amber-400 border-amber-300/50 text-[#1a0a2e]'}`}
