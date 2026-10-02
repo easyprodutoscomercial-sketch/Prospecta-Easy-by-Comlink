@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { ensureProfile } from '@/lib/ensure-profile';
-import { garimpar, chaveNome, PERFIS, EmpresaIndicada } from '@/lib/indicacoes/osm';
+import { chaveNome, PERFIS, EmpresaIndicada } from '@/lib/indicacoes/osm';
+import { contexto, ContatoReferencia } from '@/lib/indicacoes/contexto';
+import { salvarComoContato, EmpresaParaSalvar } from '@/lib/indicacoes/salvar';
 
 // GET  /api/contacts/:id/indicacoes?perfil=industria        -> busca (demora ate 1 min)
 // GET  /api/contacts/:id/indicacoes?perfil=...&cache=1      -> so o que ja foi garimpado (instantaneo)
@@ -14,36 +14,8 @@ import { garimpar, chaveNome, PERFIS, EmpresaIndicada } from '@/lib/indicacoes/o
 
 export const maxDuration = 60;
 
-const PIPELINE_PADRAO = 'ca0488f4-ae6d-4ce7-bc34-0afeeeb4a521';
-const ETAPA_NOVO = '66e2a4dc-b694-42f9-9d3e-0674c0d9e31e';
-const DIAS_CACHE = 7;
 
-type Contato = {
-  id: string; organization_id: string; name: string; company: string | null;
-  cidade: string | null; estado: string | null; segmento: string | null; pipeline_id: string | null;
-};
-
-async function contexto(id: string) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { erro: NextResponse.json({ error: 'Nao autorizado' }, { status: 401 }) };
-
-  const profile = await ensureProfile(supabase, user);
-  if (!profile) return { erro: NextResponse.json({ error: 'Profile nao encontrado' }, { status: 404 }) };
-
-  const admin = getAdminClient();
-  const { data: contato } = await admin
-    .from('contacts')
-    .select('id, organization_id, name, company, cidade, estado, segmento, pipeline_id')
-    .eq('id', id)
-    .single();
-
-  if (!contato) return { erro: NextResponse.json({ error: 'Contato nao encontrado' }, { status: 404 }) };
-  if (contato.organization_id !== profile.organization_id) {
-    return { erro: NextResponse.json({ error: 'Nao autorizado' }, { status: 403 }) };
-  }
-  return { admin, contato: contato as Contato, profile };
-}
+type Contato = ContatoReferencia;
 
 // tira quem ja esta no CRM e ordena por quem da pra trabalhar agora
 async function prepararLista(
@@ -122,7 +94,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Nao garimpa aqui. O caminho anterior rodava a busca dentro da requisicao
     // que o vendedor esperava e a funcao morria com 504 antes do mapa responder.
     // Quem garimpa agora e /api/cron/garimpar, em segundo plano. Esta rota so le.
-    return NextResponse.json({ pendente: true, empresas: [], perfis, perfil, cidade: contato.cidade });
+    // Devolve a ultima falha do robo nesta cidade: sem isso o vendedor via
+    // "na fila" para sempre e ninguem sabia se o robo tinha sequer tentado.
+    const { data: falha } = await admin
+      .from('ai_analysis_cache')
+      .select('result, created_at, expires_at')
+      .eq('organization_id', contato.organization_id)
+      .eq('analysis_type', 'INDICACOES_OSM_FALHA')
+      .eq('cache_key', chave)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const ultimaTentativa = falha
+      ? { quando: falha.created_at, erro: (falha.result as { erro?: string }).erro || null, proximaApos: falha.expires_at }
+      : null;
+    console.log('[indicacoes GET] sem cache', JSON.stringify({ chave, ultimaTentativa }));
+
+    return NextResponse.json({ pendente: true, empresas: [], perfis, perfil, cidade: contato.cidade, chave, ultimaTentativa });
   } catch (e) {
     console.error('[indicacoes GET]', e);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });
@@ -137,39 +126,39 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const { admin, contato, profile } = ctx;
 
     const body = await request.json().catch(() => ({}));
-    const escolhidas: EmpresaIndicada[] = Array.isArray(body?.empresas) ? body.empresas : [];
+
+    // "Jogar pro funil": as indicacoes da IA ja estao salvas como rascunho atribuido
+    // a quem buscou; aqui so saem do rascunho e entram no funil (sem criar de novo)
+    if (Array.isArray(body?.contatoIds)) {
+      const ids = (body.contatoIds as unknown[]).filter((x): x is string => typeof x === 'string').slice(0, 50);
+      if (!ids.length) return NextResponse.json({ erro: 'Nenhuma empresa selecionada.' }, { status: 400 });
+      const { data, error } = await admin.from('contacts')
+        .update({ is_draft: false, updated_at: new Date().toISOString() })
+        .eq('organization_id', contato.organization_id).eq('is_draft', true).eq('origem', 'INDICACAO')
+        .in('id', ids).select('id');
+      if (error) {
+        console.error('[indicacoes POST] jogar pro funil', error.message);
+        return NextResponse.json({ erro: 'Não consegui jogar pro funil.' }, { status: 500 });
+      }
+      return NextResponse.json({ criados: data?.length || 0, duplicados: [] });
+    }
+
+    const escolhidas: EmpresaParaSalvar[] = Array.isArray(body?.empresas) ? body.empresas : [];
     if (escolhidas.length === 0) {
       return NextResponse.json({ erro: 'Nenhuma empresa selecionada.' }, { status: 400 });
     }
 
-    const agora = new Date().toISOString();
     let criados = 0;
     const duplicados: string[] = [];
 
     // o banco tem indice unico de telefone/email por organizacao: insere uma a uma
     // pra uma duplicata nao derrubar o lote inteiro
     for (const e of escolhidas.slice(0, 50)) {
-      const { error } = await admin.from('contacts').insert({
-        organization_id: contato.organization_id,
-        name: e.nome,
-        company: e.nome,
-        phone: e.telefone,
-        website: e.site,
-        endereco: e.endereco,
-        cidade: e.cidade || contato.cidade,
-        estado: contato.estado,
-        status: 'NOVO',
-        stage_id: ETAPA_NOVO,
-        pipeline_id: contato.pipeline_id || PIPELINE_PADRAO,
-        assigned_to_user_id: profile.user_id,
-        created_by_user_id: profile.user_id,
-        origem: 'INDICACAO',
-        notes: `Indicação a partir de ${contato.name}${contato.company ? ` (${contato.company})` : ''}. Fonte: OpenStreetMap.`,
-        is_draft: false,
-        updated_at: agora,
+      const r = await salvarComoContato(admin, {
+        organizationId: contato.organization_id, userId: profile.user_id, referencia: contato, empresa: e, rascunho: false,
       });
-      if (error) duplicados.push(e.nome);
-      else criados++;
+      if (r.id) criados++;
+      else duplicados.push(e.nome);
     }
 
     return NextResponse.json({ criados, duplicados });

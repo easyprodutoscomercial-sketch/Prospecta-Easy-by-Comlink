@@ -89,10 +89,10 @@ async function buscarJson(url: string, corpo?: string, msTimeout = 45000) {
 }
 
 // Nominatim: "Rio Claro" + "SP" -> id da area no OSM
-async function acharArea(cidade: string, estado: string | null) {
+async function acharArea(cidade: string, estado: string | null, msTimeout = 20000) {
   const busca = [cidade, estado, 'Brasil'].filter(Boolean).join(', ');
   const q = new URLSearchParams({ q: busca, format: 'json', limit: '1' });
-  const d = await buscarJson(`https://nominatim.openstreetmap.org/search?${q}`, undefined, 20000);
+  const d = await buscarJson(`https://nominatim.openstreetmap.org/search?${q}`, undefined, msTimeout);
   const o = Array.isArray(d) ? d[0] : null;
   if (!o) return null;
   return {
@@ -135,12 +135,25 @@ function normalizar(e: any): EmpresaIndicada | null {
   };
 }
 
+// Cada passo do garimpo vira uma linha de log. Sem isso, quando a Vercel
+// cortava a funcao no meio, nao sobrava nada dizendo onde tinha parado.
+export type LogGarimpo = (passo: string, detalhe?: Record<string, unknown>) => void;
+
 export async function garimpar(
   cidade: string,
   estado: string | null,
-  perfil: string
+  perfil: string,
+  opcoes: { prazo?: number; log?: LogGarimpo } = {}
 ): Promise<{ empresas: EmpresaIndicada[]; regiao: string; raioKm: number | null }> {
-  const area = await acharArea(cidade, estado);
+  const log: LogGarimpo = opcoes.log || (() => {});
+  // A funcao da Vercel morre aos 60s. Sem prazo, Nominatim (20s) + 3 espelhos
+  // (45s cada) podiam somar 155s: a funcao era cortada sem deixar rastro.
+  const prazo = opcoes.prazo ?? Date.now() + 150000;
+  const resta = () => prazo - Date.now();
+
+  let t0 = Date.now();
+  const area = await acharArea(cidade, estado, Math.min(20000, Math.max(resta() - 2000, 1000)));
+  log('nominatim', { ms: Date.now() - t0, achou: !!area, areaId: area?.areaId ?? null, regiao: area?.nome ?? null });
   if (!area) throw new Error(`Não encontrei "${cidade}" no mapa.`);
 
   const def = PERFIS[perfil] || PERFIS.tudo;
@@ -152,20 +165,30 @@ export async function garimpar(
     const corpo = new URLSearchParams({ data: consulta }).toString();
     const erros: string[] = [];
     for (const espelho of ESPELHOS) {
+      const host = new URL(espelho).host;
+      const teto = Math.min(msTeto, resta() - 2000);
+      if (teto < 5000) {
+        log('overpass-sem-tempo', { host, restaMs: resta() });
+        erros.push(`${host}: sem tempo`);
+        break;
+      }
+      t0 = Date.now();
       try {
-        const r = await buscarJson(espelho, corpo, msTeto);
-        return (r.elements || []).map(normalizar).filter(Boolean) as EmpresaIndicada[];
+        const r = await buscarJson(espelho, corpo, teto);
+        const lista = (r.elements || []).map(normalizar).filter(Boolean) as EmpresaIndicada[];
+        log('overpass-ok', { host, ms: Date.now() - t0, elementos: (r.elements || []).length, empresas: lista.length });
+        return lista;
       } catch (e) {
-        erros.push(`${new URL(espelho).host}: ${e instanceof Error ? e.message : 'falhou'}`);
+        const msg = e instanceof Error ? e.message : 'falhou';
+        log('overpass-falhou', { host, ms: Date.now() - t0, tetoMs: teto, erro: msg });
+        erros.push(`${host}: ${msg}`);
       }
     }
     // Os 3 espelhos sao servicos doados e oscilam muito: medido em 02/10, a
     // mesma consulta respondeu em 9s para uma cidade e deu 504 para outras 4
-    // no mesmo minuto. Mensagem precisa deixar claro que e do lado deles.
-    throw new Error(
-      'Os servidores públicos de mapa estão sobrecarregados agora (eles são gratuitos e doados). ' +
-      'Isso costuma passar em alguns minutos — tente de novo. Quando funcionar, o resultado fica guardado por 7 dias.'
-    );
+    // no mesmo minuto. So o robo chama isto, entao a mensagem leva o motivo
+    // de cada espelho: e ela que aparece no log e na janela do vendedor.
+    throw new Error(`Servidores de mapa não responderam (${erros.join(' | ')})`);
   }
 
   const achadas = await rodar();

@@ -734,3 +734,47 @@ input[type="range"].density-slider:disabled {
 @media (prefers-reduced-motion: reduce) {
   .zumbido-alvo { animation: none; }
 }
+
+/* ---- Mapa da busca de indicacoes com IA (components/contacts/indicacoes-mapa-inner.tsx) ---- */
+/* o fundo da Esri e cinza: sepia + hue-rotate puxa pro roxo do Controlei */
+.mapa-ind-fundo { filter: sepia(.45) hue-rotate(215deg) saturate(2.2) brightness(1.05) contrast(1.05); }
+.mapa-ind-vinheta {
+  position: absolute; inset: 0; pointer-events: none; z-index: 450;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(18, 8, 38, .85) 100%);
+}
+.mapa-ind-caixa {
+  position: absolute; z-index: 500; padding: 6px 10px; border-radius: 10px; border-width: 1px;
+  background: rgba(18, 8, 38, .82); backdrop-filter: blur(4px); font-size: 11px; pointer-events: none;
+}
+.mapa-ind-bola { display: inline-block; width: 9px; height: 9px; border-radius: 9999px; margin-right: 5px; vertical-align: -1px; }
+.mapa-ind-casa {
+  width: 16px; height: 16px; border-radius: 9999px; background: #f59e0b; border: 3px solid #120826;
+  animation: mapa-ind-pulso-casa 1.8s infinite;
+}
+.mapa-ind-pino {
+  width: 24px; height: 24px; border-radius: 9999px; background: linear-gradient(135deg, #34d399, #059669);
+  border: 2px solid #120826; color: #06281d; font: 800 11px/20px system-ui, sans-serif; text-align: center;
+  box-shadow: 0 0 10px rgba(16, 185, 129, .6);
+}
+.mapa-ind-pino.novo { animation: mapa-ind-pulso-pino 1.4s infinite; }
+.mapa-ind-aviao {
+  transition: transform .2s linear;
+  filter: drop-shadow(0 0 6px rgba(251, 191, 36, .9)) drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
+}
+.leaflet-tooltip.mapa-ind-rotulo {
+  background: rgba(18, 8, 38, .92); border: 1px solid rgba(147, 51, 234, .5); color: #f5f3ff;
+  font-weight: 600; font-size: 11px; border-radius: 8px; box-shadow: none; padding: 3px 7px;
+}
+.leaflet-tooltip.mapa-ind-rotulo::before { display: none; }
+@keyframes mapa-ind-pulso-casa { 0% { box-shadow: 0 0 0 0 rgba(245, 158, 11, .7); } 100% { box-shadow: 0 0 0 18px rgba(245, 158, 11, 0); } }
+@keyframes mapa-ind-pulso-pino { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, .8); } 100% { box-shadow: 0 0 0 14px rgba(16, 185, 129, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .mapa-ind-casa, .mapa-ind-pino.novo { animation: none; }
+}
+/* botoes de zoom do mapa de indicacoes no tema escuro */
+.mapa-ind .leaflet-control-zoom { border: 1px solid rgba(147, 51, 234, .45); border-radius: 10px; overflow: hidden; box-shadow: 0 4px 14px rgba(0, 0, 0, .45); margin: 0 12px 12px 0; }
+.mapa-ind .leaflet-control-zoom a {
+  background: rgba(18, 8, 38, .9); color: #e9d5ff; border-bottom-color: rgba(147, 51, 234, .3);
+  width: 30px; height: 30px; line-height: 28px; font-size: 18px;
+}
+.mapa-ind .leaflet-control-zoom a:hover { background: rgba(42, 18, 69, .95); color: #fff; }

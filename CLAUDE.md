@@ -757,6 +757,10 @@ export function useX() { return useContext(Ctx) }
 | GET | `/api/contacts/export` | Exportar Excel | ✅ |
 | GET | `/api/contacts/facets` | Facetas de filtros | ✅ |
 | POST | `/api/contacts/merge` | Merge de duplicatas | ✅ admin |
+| GET/POST | `/api/contacts/[id]/indicacoes` | Indicações do mapa (OpenStreetMap, só lê cache do robô) / trazer escolhidas pro funil | ✅ |
+| GET/POST/DELETE | `/api/contacts/[id]/indicacoes/ia` | Indicações por IA (OpenAI `gpt-5-mini` + pesquisa web) em **rodadas de 4** até 12 empresas, usando a ficha inteira do cliente (+ CNAE da Receita se tiver CNPJ). GET mostra custo estimado (média real) e limite de **2 buscas por usuário por dia**; só contato **apontado** (vendedor só nos dele, admin/gerente em qualquer apontado); toda busca fica guardada e é revista pelo histórico sem custo; POST exige `confirmado:true`; `?job=` devolve parciais; DELETE para a busca. Cada empresa achada vira **contato rascunho** (`is_draft=true`, `origem=INDICACAO`) atribuído a quem buscou — só entra no funil pelo "Jogar pro funil" (POST `/indicacoes` com `contatoIds`) | ✅ |
+| GET | `/api/indicacoes/buscadas` | `{ contactId: nº de empresas }` das buscas de indicação com IA — selo "✈ N indicações" no card do kanban | ✅ |
+| GET | `/api/cron/garimpar` | Robô que garimpa 1 cidade/rodada no OpenStreetMap; diário em `ai_analysis_cache` (`GARIMPO_LOG`) | 🔒 cron |
 
 ### Interações (2)
 
@@ -1037,6 +1041,8 @@ Arquivo: `.env.local` (nunca commitar)
 | `VAPID_PRIVATE_KEY` | ⚪ Não | Chave privada Web Push | `...` |
 | `VAPID_EMAIL` | ⚪ Não | Email contato VAPID | `admin@exemplo.com` |
 | `CRON_SECRET` | ⚪ Não | Auth de cron jobs Vercel | `...` |
+| `INDICACOES_IA_MODELO` | ⚪ Não | Modelo da busca de indicações por IA (padrão `gpt-5-mini` em rodadas: 12 empresas/~R$1,20; `gpt-5` custou R$2,61) | `gpt-5-mini` |
+| `INDICACOES_IA_ESFORCO` | ⚪ Não | Esforço de raciocínio da busca por IA (padrão `low`) | `low` |
 
 ### 🚨 ALERTA DE SEGURANÇA ATUAL (2026-04-13)
 
