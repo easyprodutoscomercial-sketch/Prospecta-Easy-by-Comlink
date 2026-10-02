@@ -95,6 +95,10 @@ export default function PushObrigatorio() {
 
   useEffect(() => {
     (async () => {
+      // Sem a chave publica no build, nenhum aparelho consegue se inscrever:
+      // cobrar a ativacao so prende o vendedor numa tela que nunca resolve.
+      if (!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY) { setEstado('sem-suporte'); return; }
+
       const ehIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const instalado = window.matchMedia('(display-mode: standalone)').matches
         || (navigator as unknown as { standalone?: boolean }).standalone === true;
