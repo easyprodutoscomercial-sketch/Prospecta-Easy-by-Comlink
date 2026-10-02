@@ -159,30 +159,23 @@ export async function garimpar(
         erros.push(`${new URL(espelho).host}: ${e instanceof Error ? e.message : 'falhou'}`);
       }
     }
-    throw new Error(`Os servidores do mapa não responderam. ${erros.join(' | ')}`);
+    // Os 3 espelhos sao servicos doados e oscilam muito: medido em 02/10, a
+    // mesma consulta respondeu em 9s para uma cidade e deu 504 para outras 4
+    // no mesmo minuto. Mensagem precisa deixar claro que e do lado deles.
+    throw new Error(
+      'Os servidores públicos de mapa estão sobrecarregados agora (eles são gratuitos e doados). ' +
+      'Isso costuma passar em alguns minutos — tente de novo. Quando funcionar, o resultado fica guardado por 7 dias.'
+    );
   }
 
-  // 1a tentativa: dentro do municipio
-  let achadas = await rodar();
-  let raioUsado: number | null = null;
+  const achadas = await rodar();
+  const raioUsado: number | null = null;
 
-  // Cidade pequena entrega pouco. Em vez de dizer "nada encontrado", abre pra
-  // 40km em volta: a industria boa costuma estar no municipio vizinho.
-  // Cidade pequena entrega pouco. Abre pra 25km em volta — a industria boa
-  // costuma estar no municipio vizinho. Teto de 35s: se o servidor publico
-  // engasgar, fica com o que a 1a busca trouxe em vez de deixar o vendedor
-  // esperando ate a requisicao morrer.
-  if (achadas.length < 10) {
-    try {
-      const ampliado = await rodar(25, 35000);
-      if (ampliado.length > achadas.length) {
-        achadas = [...achadas, ...ampliado];
-        raioUsado = 25;
-      }
-    } catch {
-      // servidor publico engasgou: segue com o resultado do municipio
-    }
-  }
+  // Ampliacao por raio foi REMOVIDA. Medido em 02/10: raio de 30km levou 107s,
+  // 50km deu 504, e horas depois ate 10km passou a dar 504. Os espelhos publicos
+  // sao doados e oscilam demais — a tentativa so fazia o vendedor esperar mais
+  // 35 segundos pra receber o mesmo resultado. Melhor entregar rapido o que o
+  // municipio tem e dizer a verdade na tela quando vier pouco.
 
   // tira repetidos pelo nome
   const vistos = new Set<string>();

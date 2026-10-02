@@ -194,8 +194,22 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
           )}
 
           {!carregando && !erro && !pendente && empresas.length === 0 && (
-            <p className="text-sm text-neutral-500 italic py-10 text-center">
-              Nenhuma empresa nova encontrada nesse perfil. Experimente outro acima.
+            <div className="py-8 text-center">
+              <p className="text-sm text-neutral-300 mb-2">Nada novo nesse perfil para {cidade}.</p>
+              <p className="text-xs text-neutral-500 max-w-md mx-auto leading-relaxed">
+                Esta busca usa o OpenStreetMap, que é um mapa colaborativo: a empresa só
+                aparece se alguém a cadastrou lá. Em cidades grandes como Ribeirão Preto e
+                Campinas o cadastro é rico; em cidades menores costuma ser vazio.
+                Tente outro perfil acima, ou peça indicações a partir de um cliente de
+                cidade maior.
+              </p>
+            </div>
+          )}
+
+          {!carregando && !erro && empresas.length > 0 && empresas.length < 5 && (
+            <p className="mb-3 text-xs text-amber-300/90 bg-amber-500/10 border border-amber-500/20 rounded-md px-2.5 py-2">
+              Só {empresas.length} resultado(s): o mapa tem pouca coisa cadastrada em {cidade}.
+              Em cidades maiores essa busca rende bem mais.
             </p>
           )}
 
