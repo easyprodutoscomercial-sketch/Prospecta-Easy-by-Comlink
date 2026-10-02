@@ -43,6 +43,19 @@ export default function PushObrigatorio() {
   const [estado, setEstado] = useState<Estado>('checando');
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [adiado, setAdiado] = useState(false);
+
+  // Trava sem saida deixava o CRM inutilizavel pra quem ja tinha clicado
+  // "Bloquear" no navegador: a tela cobria tudo e nao havia como sair.
+  // Continua insistindo (volta a cada login), mas nao impede o trabalho.
+  useEffect(() => {
+    try { setAdiado(sessionStorage.getItem('push_adiado') === '1'); } catch { /* sessao sem storage */ }
+  }, []);
+
+  function adiar() {
+    try { sessionStorage.setItem('push_adiado', '1'); } catch { /* ignora */ }
+    setAdiado(true);
+  }
 
   const inscrever = useCallback(async () => {
     setOcupado(true);
@@ -106,12 +119,21 @@ export default function PushObrigatorio() {
     })();
   }, [inscrever]);
 
-  if (estado === 'ok' || estado === 'checando' || estado === 'sem-suporte') return null;
+  if (estado === 'ok' || estado === 'checando' || estado === 'sem-suporte' || adiado) return null;
 
   const Caixa = ({ children }: { children: React.ReactNode }) => (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4">
       <div className="w-full max-w-lg rounded-2xl border border-amber-500/40 bg-[#1e0f35] p-6 shadow-2xl">
         {children}
+        <button
+          onClick={adiar}
+          className="mt-4 w-full py-2 text-xs font-semibold text-neutral-500 hover:text-neutral-300 transition-colors"
+        >
+          Agora não — voltar a trabalhar
+        </button>
+        <p className="text-[10px] text-neutral-600 text-center mt-1">
+          Volta a pedir no próximo acesso.
+        </p>
       </div>
     </div>
   );
