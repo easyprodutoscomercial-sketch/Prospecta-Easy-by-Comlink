@@ -98,7 +98,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       });
     }
 
-    const perfil = request.nextUrl.searchParams.get('perfil') || 'industria';
+    const perfil = request.nextUrl.searchParams.get('perfil') || 'tudo';
     const soCache = request.nextUrl.searchParams.get('cache') === '1';
     const chave = `${contato.cidade.toLowerCase()}|${contato.estado || ''}|${perfil}`;
 
@@ -115,7 +115,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     if (cache?.result) {
       const guardadas = ((cache.result as { empresas?: EmpresaIndicada[] }).empresas) || [];
       const lista = await prepararLista(admin, contato, guardadas);
-      return NextResponse.json({ ...lista, perfil, cacheado: true, buscadoEm: cache.created_at });
+      const raio = (cache.result as { raioKm?: number | null }).raioKm ?? null;
+      return NextResponse.json({ ...lista, perfil, raioKm: raio, cacheado: true, buscadoEm: cache.created_at });
     }
 
     // 2) a tela pediu so o cache: responde que ainda nao tem e nao segura ninguem
@@ -123,9 +124,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // 3) garimpo de verdade
     let achadas: EmpresaIndicada[] = [];
+    let raioKm: number | null = null;
     try {
       const r = await garimpar(contato.cidade, contato.estado, perfil);
       achadas = r.empresas;
+      raioKm = r.raioKm;
     } catch (e) {
       return NextResponse.json({
         erro: e instanceof Error ? e.message : 'Falha ao consultar o mapa.',
@@ -139,12 +142,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       organization_id: contato.organization_id,
       analysis_type: 'INDICACOES_OSM',
       cache_key: chave,
-      result: { empresas: achadas, cidade: contato.cidade, estado: contato.estado, perfil },
+      result: { empresas: achadas, cidade: contato.cidade, estado: contato.estado, perfil, raioKm },
       expires_at: expira,
     });
 
     const lista = await prepararLista(admin, contato, achadas);
-    return NextResponse.json({ ...lista, perfil, cacheado: false });
+    return NextResponse.json({ ...lista, perfil, raioKm, cacheado: false });
   } catch (e) {
     console.error('[indicacoes GET]', e);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

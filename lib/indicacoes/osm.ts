@@ -22,6 +22,15 @@ export interface EmpresaIndicada {
 
 const UA = 'ControleiCRM/1.0 (prospeccao B2B)';
 
+// Na ampliacao por raio so entram estes: 4 filtros levam ~100s num raio de 30km,
+// e a lista completa estoura o tempo do servidor publico (testado: 504).
+const NUCLEO_INDUSTRIAL = [
+  '["landuse"="industrial"]["name"]',
+  '["man_made"="works"]["name"]',
+  '["landuse"="quarry"]["name"]',
+  '["industrial"]["name"]',
+];
+
 // Espelhos publicos do Overpass. Sao servicos doados e caem/engasgam com frequencia,
 // entao tenta um por um, com teto de tempo curto em cada.
 const ESPELHOS = [
@@ -32,6 +41,23 @@ const ESPELHOS = [
 
 // Perfis de busca. "industria" e o padrao: pega fabrica, pedreira e planta industrial.
 export const PERFIS: Record<string, { rotulo: string; filtros: string[] }> = {
+  // Padrao amplo: so filtrar depois, se vier demais. Perfil estreito achando
+  // zero parece sistema quebrado, e empresa boa fica de fora por causa da
+  // marcacao que o mapa usou (uma automatizadora pneumatica costuma estar
+  // como "office" ou "craft", nao como "industrial").
+  tudo: {
+    rotulo: 'Tudo',
+    // Lista curada de proposito. ["office"] e ["craft"] sem qualificar traziam
+    // Ministerio Publico, Sindicato Rural, Casa da Agricultura e chaveiro —
+    // nada disso compra de concreteira nem de metalurgica.
+    filtros: [
+      '["landuse"="quarry"]["name"]', '["man_made"="works"]["name"]',
+      '["landuse"="industrial"]["name"]', '["industrial"]["name"]',
+      '["office"~"^(company|industrial|logistics|engineer|construction_company|energy_supplier)$"]["name"]',
+      '["craft"~"^(metal_construction|blacksmith|welder|builder|electrician|carpenter)$"]["name"]',
+      '["shop"~"^(trade|doityourself|hardware|car_repair)$"]["name"]',
+    ],
+  },
   industria: {
     rotulo: 'Indústria, pedreira e fábrica',
     filtros: ['["landuse"="quarry"]["name"]', '["man_made"="works"]["name"]', '["landuse"="industrial"]["name"]'],
@@ -77,10 +103,17 @@ async function acharArea(cidade: string, estado: string | null) {
   };
 }
 
-function montarConsulta(area: { areaId: number | null; lat: number; lon: number }, filtros: string[]) {
-  const escopo = area.areaId ? `area(${area.areaId})->.a;` : '';
-  // sem relation no Nominatim, cai pra um raio de 25km em volta do ponto
-  const dentro = area.areaId ? '(area.a)' : `(around:25000,${area.lat},${area.lon})`;
+function montarConsulta(
+  area: { areaId: number | null; lat: number; lon: number },
+  filtros: string[],
+  raioKm?: number
+) {
+  // raioKm forca a busca por raio, ignorando a divisa do municipio
+  const porRaio = raioKm != null || area.areaId == null;
+  const escopo = porRaio ? '' : `area(${area.areaId})->.a;`;
+  const dentro = porRaio
+    ? `(around:${(raioKm ?? 25) * 1000},${area.lat},${area.lon})`
+    : '(area.a)';
   const corpo = filtros.map((f) => `  nwr${f}${dentro};`).join('\n');
   return `[out:json][timeout:60];\n${escopo}\n(\n${corpo}\n);\nout center tags;`;
 }
@@ -106,29 +139,61 @@ export async function garimpar(
   cidade: string,
   estado: string | null,
   perfil: string
-): Promise<{ empresas: EmpresaIndicada[]; regiao: string; fonte: string }> {
+): Promise<{ empresas: EmpresaIndicada[]; regiao: string; raioKm: number | null }> {
   const area = await acharArea(cidade, estado);
   if (!area) throw new Error(`Não encontrei "${cidade}" no mapa.`);
 
-  const def = PERFIS[perfil] || PERFIS.industria;
-  const consulta = montarConsulta(area, def.filtros);
-  const corpo = new URLSearchParams({ data: consulta }).toString();
+  const def = PERFIS[perfil] || PERFIS.tudo;
 
-  const erros: string[] = [];
-  for (const espelho of ESPELHOS) {
+  async function rodar(raioKm?: number, msTeto = 45000) {
+    // no raio vale so o nucleo industrial: a lista completa derruba o servidor
+    const filtros = raioKm ? NUCLEO_INDUSTRIAL : def.filtros;
+    const consulta = montarConsulta(area!, filtros, raioKm);
+    const corpo = new URLSearchParams({ data: consulta }).toString();
+    const erros: string[] = [];
+    for (const espelho of ESPELHOS) {
+      try {
+        const r = await buscarJson(espelho, corpo, msTeto);
+        return (r.elements || []).map(normalizar).filter(Boolean) as EmpresaIndicada[];
+      } catch (e) {
+        erros.push(`${new URL(espelho).host}: ${e instanceof Error ? e.message : 'falhou'}`);
+      }
+    }
+    throw new Error(`Os servidores do mapa não responderam. ${erros.join(' | ')}`);
+  }
+
+  // 1a tentativa: dentro do municipio
+  let achadas = await rodar();
+  let raioUsado: number | null = null;
+
+  // Cidade pequena entrega pouco. Em vez de dizer "nada encontrado", abre pra
+  // 40km em volta: a industria boa costuma estar no municipio vizinho.
+  // Cidade pequena entrega pouco. Abre pra 25km em volta — a industria boa
+  // costuma estar no municipio vizinho. Teto de 35s: se o servidor publico
+  // engasgar, fica com o que a 1a busca trouxe em vez de deixar o vendedor
+  // esperando ate a requisicao morrer.
+  if (achadas.length < 10) {
     try {
-      const r = await buscarJson(espelho, corpo);
-      const empresas = (r.elements || [])
-        .map(normalizar)
-        .filter(Boolean)
-        .filter((e: EmpresaIndicada, i: number, arr: EmpresaIndicada[]) =>
-          arr.findIndex((o) => o.nome.toLowerCase() === e.nome.toLowerCase()) === i);
-      return { empresas, regiao: area.nome, fonte: new URL(espelho).host };
-    } catch (e) {
-      erros.push(`${new URL(espelho).host}: ${e instanceof Error ? e.message : 'falhou'}`);
+      const ampliado = await rodar(25, 35000);
+      if (ampliado.length > achadas.length) {
+        achadas = [...achadas, ...ampliado];
+        raioUsado = 25;
+      }
+    } catch {
+      // servidor publico engasgou: segue com o resultado do municipio
     }
   }
-  throw new Error(`Os servidores do mapa não responderam. ${erros.join(' | ')}`);
+
+  // tira repetidos pelo nome
+  const vistos = new Set<string>();
+  const unicas = achadas.filter((e) => {
+    const k = e.nome.toLowerCase();
+    if (vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
+  });
+
+  return { empresas: unicas, regiao: area.nome, raioKm: raioUsado };
 }
 
 // comparacao de nomes pra nao reindicar quem ja esta no CRM

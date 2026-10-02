@@ -31,11 +31,12 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
   const [escolhidas, setEscolhidas] = useState<Set<string>>(new Set());
   const [resumo, setResumo] = useState<Record<string, number> | null>(null);
   const [perfis, setPerfis] = useState<{ id: string; rotulo: string }[]>([]);
-  const [perfil, setPerfil] = useState('industria');
+  const [perfil, setPerfil] = useState('tudo');
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [pendente, setPendente] = useState(false);
   const [buscadoEm, setBuscadoEm] = useState<string | null>(null);
+  const [raioKm, setRaioKm] = useState<number | null>(null);
   const [montado, setMontado] = useState(false);
 
   useEffect(() => setMontado(true), []);
@@ -50,7 +51,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
       if (j.erro) { setErro(j.erro); return; }
       if (j.pendente) { setPendente(true); return; }
       setEmpresas(j.empresas || []); setResumo(j.resumo || null);
-      setBuscadoEm(j.buscadoEm || null); setPendente(false);
+      setBuscadoEm(j.buscadoEm || null); setRaioKm(j.raioKm ?? null); setPendente(false);
     } catch {
       setErro('Não consegui abrir agora.');
     }
@@ -65,7 +66,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
       if (j.perfis) setPerfis(j.perfis);
       if (j.erro) { setErro(j.erro); return; }
       setEmpresas(j.empresas || []); setResumo(j.resumo || null);
-      setBuscadoEm(j.buscadoEm || null);
+      setBuscadoEm(j.buscadoEm || null); setRaioKm(j.raioKm ?? null);
     } catch {
       setErro('A busca não respondeu. Tente de novo em um minuto.');
     } finally {
@@ -121,7 +122,9 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
               <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest">Indicações</p>
               <h2 className="text-lg font-bold text-white truncate">Empresas parecidas perto de {contactNome}</h2>
               <p className="text-xs text-purple-300/70 mt-0.5">
-                {cidade ? `Buscando em ${cidade} e região` : 'Contato sem cidade cadastrada'}
+                {cidade
+                  ? (raioKm ? `${cidade} e ${raioKm}km em volta` : `Buscando em ${cidade} e região`)
+                  : 'Contato sem cidade cadastrada'}
               </p>
             </div>
             <button onClick={onFechar} className="shrink-0 w-8 h-8 rounded-lg hover:bg-purple-800/40 text-neutral-400 hover:text-white">✕</button>
