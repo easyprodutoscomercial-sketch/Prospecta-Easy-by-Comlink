@@ -119,35 +119,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ ...lista, perfil, raioKm: raio, cacheado: true, buscadoEm: cache.created_at });
     }
 
-    // 2) a tela pediu so o cache: responde que ainda nao tem e nao segura ninguem
-    if (soCache) return NextResponse.json({ pendente: true, empresas: [], perfis, perfil });
-
-    // 3) garimpo de verdade
-    let achadas: EmpresaIndicada[] = [];
-    let raioKm: number | null = null;
-    try {
-      const r = await garimpar(contato.cidade, contato.estado, perfil);
-      achadas = r.empresas;
-      raioKm = r.raioKm;
-    } catch (e) {
-      return NextResponse.json({
-        erro: e instanceof Error ? e.message : 'Falha ao consultar o mapa.',
-        empresas: [], perfis, perfil,
-      });
-    }
-
-    // guarda por 7 dias: o proximo que abrir — inclusive outro vendedor — nao espera
-    const expira = new Date(Date.now() + DIAS_CACHE * 864e5).toISOString();
-    await admin.from('ai_analysis_cache').insert({
-      organization_id: contato.organization_id,
-      analysis_type: 'INDICACOES_OSM',
-      cache_key: chave,
-      result: { empresas: achadas, cidade: contato.cidade, estado: contato.estado, perfil, raioKm },
-      expires_at: expira,
-    });
-
-    const lista = await prepararLista(admin, contato, achadas);
-    return NextResponse.json({ ...lista, perfil, raioKm, cacheado: false });
+    // Nao garimpa aqui. O caminho anterior rodava a busca dentro da requisicao
+    // que o vendedor esperava e a funcao morria com 504 antes do mapa responder.
+    // Quem garimpa agora e /api/cron/garimpar, em segundo plano. Esta rota so le.
+    return NextResponse.json({ pendente: true, empresas: [], perfis, perfil, cidade: contato.cidade });
   } catch (e) {
     console.error('[indicacoes GET]', e);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

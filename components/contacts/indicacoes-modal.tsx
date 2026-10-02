@@ -149,7 +149,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
           {buscadoEm && !carregando && (
             <p className="text-[10px] text-neutral-600 mt-1.5">
               Garimpado em {new Date(buscadoEm).toLocaleString('pt-BR')} · guardado por 7 dias
-              <button onClick={() => buscar(perfil)} className="ml-2 underline text-amber-400/80 hover:text-amber-300">buscar de novo</button>
+              <button onClick={() => verCache(perfil)} className="ml-2 underline text-amber-400/80 hover:text-amber-300">atualizar</button>
             </p>
           )}
 
@@ -174,14 +174,15 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
 
           {pendente && !carregando && !erro && (
             <div className="flex flex-col items-center gap-3 py-12 text-center">
-              <p className="text-sm text-neutral-300">Ainda não garimpamos esta cidade e perfil.</p>
-              <p className="text-xs text-neutral-500 max-w-sm">
-                A busca consulta servidores públicos de mapa e leva até 1 minuto.
-                Depois fica guardada por 7 dias — para você e para o resto da equipe.
+              <p className="text-sm text-neutral-300">Esta cidade ainda está na fila do garimpo.</p>
+              <p className="text-xs text-neutral-500 max-w-sm leading-relaxed">
+                O sistema garimpa as cidades sozinho, em segundo plano, a cada meia hora —
+                começando pelas que têm mais clientes de vocês. Quando chegar nesta, o
+                resultado aparece aqui e fica guardado por 7 dias para a equipe toda.
               </p>
-              <button onClick={() => buscar(perfil)}
+              <button onClick={() => verCache(perfil)}
                 className="mt-1 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-[#1a0a2e] text-sm font-bold">
-                Garimpar agora
+                Verificar de novo
               </button>
             </div>
           )}
