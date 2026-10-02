@@ -10,6 +10,7 @@ import { getUserColor, getUserInitials } from '@/lib/utils/user-colors';
 import { computeLeadScore, getScoreColor } from '@/lib/utils/lead-score';
 import ContactAvatar from '@/components/contacts/contact-avatar';
 import { formatarCnpj, limparCnpj } from '@/lib/receita/cnpj';
+import IndicacoesModal from '@/components/contacts/indicacoes-modal';
 
 export interface UserInfo {
   name: string;
@@ -116,6 +117,8 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
   const canJumpBackward = canBwd !== undefined ? canBwd : true;
 
   const isOverdue = contact.proxima_acao_data && new Date(contact.proxima_acao_data) < new Date();
+
+  const [verIndicacoes, setVerIndicacoes] = useState(false);
 
   const leadScore = useMemo(() => (contact as any).lead_score ?? computeLeadScore(contact), [contact.temperatura, contact.valor_estimado, contact.status, contact.updated_at, contact.proxima_acao_data, contact.proxima_acao_tipo, contact.phone, contact.email, contact.whatsapp, contact.company, contact.assigned_to_user_id, (contact as any).lead_score]);
   const scoreStyle = useMemo(() => getScoreColor(leadScore), [leadScore]);
@@ -351,6 +354,35 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
               Email
             </a>
           )}
+        </div>
+      )}
+
+      {/* Indicacoes: busca empresas parecidas na cidade deste contato.
+          Fica fora do bloco acima de proposito — nao depende de ter telefone. */}
+      {!overlay && (
+        <div className="px-1 mt-1.5">
+          <button
+            onClick={(e) => { e.stopPropagation(); setVerIndicacoes(true); }}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 transition-colors"
+            title={contact.cidade ? `Buscar empresas parecidas em ${contact.cidade}` : 'Buscar empresas parecidas'}
+          >
+            <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            Quero indicações
+          </button>
+        </div>
+      )}
+
+      {verIndicacoes && (
+        <div onClick={(e) => e.stopPropagation()}>
+          <IndicacoesModal
+            contactId={contact.id}
+            contactNome={contact.name}
+            cidade={contact.cidade ?? null}
+            aberto={verIndicacoes}
+            onFechar={() => setVerIndicacoes(false)}
+          />
         </div>
       )}
 

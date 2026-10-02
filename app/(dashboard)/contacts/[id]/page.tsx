@@ -10,6 +10,7 @@ import MotivoModal from '@/components/ui/motivo-modal';
 import Tabs from '@/components/ui/tabs';
 import ContactSidebar from '@/components/contacts/contact-sidebar';
 import ContactDetails from '@/components/contacts/contact-details';
+import IndicacoesModal from '@/components/contacts/indicacoes-modal';
 import ContactAvatar from '@/components/contacts/contact-avatar';
 import ContactTimeline from '@/components/contacts/contact-timeline';
 import AICopilotPanel from '@/components/ai/ai-copilot-panel';
@@ -36,6 +37,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [stand, setStand] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [verIndicacoes, setVerIndicacoes] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [activeTab, setActiveTab] = useState('timeline');
@@ -312,6 +314,17 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         {canModify && (
           <div className="flex items-center gap-2 shrink-0">
             <button
+              onClick={() => setVerIndicacoes(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg hover:bg-amber-500/15 hover:border-amber-400 transition-colors min-h-[40px]"
+              aria-label="Buscar indicações de empresas parecidas"
+              title={contact.cidade ? `Buscar empresas parecidas em ${contact.cidade}` : 'Buscar empresas parecidas'}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span className="hidden sm:inline">Indicações</span>
+            </button>
+            <button
               onClick={() => setIsEditing(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/15 hover:border-emerald-400 transition-colors min-h-[40px]"
               aria-label="Editar contato"
@@ -525,6 +538,13 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         />
       )}
       {pendingStatus && <MotivoModal isOpen={showMotivoModal} onClose={() => { setShowMotivoModal(false); setPendingStatus(null); setPendingTerminalStageId(null); }} onConfirm={handleMotivoConfirm} tipo={pendingStatus} loading={motivoLoading} />}
+      <IndicacoesModal
+        contactId={id}
+        contactNome={contact.name}
+        cidade={contact.cidade ?? null}
+        aberto={verIndicacoes}
+        onFechar={() => setVerIndicacoes(false)}
+      />
     </div>
   );
 }

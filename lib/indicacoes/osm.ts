@@ -1,0 +1,141 @@
+// Garimpo de empresas parecidas, na mesma regiao de um cliente que ja esta no CRM.
+//
+// Fonte: OpenStreetMap (Nominatim pra achar a cidade, Overpass pra listar empresas).
+// Tudo gratuito e de uso permitido.
+//
+// Por que isso traz empresa media/grande sem precisar de filtro de porte:
+// no OSM, so empresa de porte ganha um poligono industrial proprio no mapa.
+// Padaria e oficina de esquina nao aparecem em landuse=industrial nem man_made=works.
+// A escolha da tag JA E o filtro de tamanho.
+
+export interface EmpresaIndicada {
+  osmId: string;
+  nome: string;
+  tipo: string;
+  endereco: string | null;
+  cidade: string | null;
+  telefone: string | null;
+  site: string | null;
+  lat: number | null;
+  lon: number | null;
+}
+
+const UA = 'ControleiCRM/1.0 (prospeccao B2B)';
+
+// Espelhos publicos do Overpass. Sao servicos doados e caem/engasgam com frequencia,
+// entao tenta um por um, com teto de tempo curto em cada.
+const ESPELHOS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+
+// Perfis de busca. "industria" e o padrao: pega fabrica, pedreira e planta industrial.
+export const PERFIS: Record<string, { rotulo: string; filtros: string[] }> = {
+  industria: {
+    rotulo: 'Indústria, pedreira e fábrica',
+    filtros: ['["landuse"="quarry"]["name"]', '["man_made"="works"]["name"]', '["landuse"="industrial"]["name"]'],
+  },
+  construcao: {
+    rotulo: 'Construção e materiais',
+    filtros: ['["shop"="trade"]["name"]', '["shop"="doityourself"]["name"]', '["craft"="builder"]["name"]', '["landuse"="quarry"]["name"]'],
+  },
+  oficina: {
+    rotulo: 'Oficina e metalurgia',
+    filtros: ['["craft"~"^(metal_construction|blacksmith|welder)$"]["name"]', '["shop"="car_repair"]["name"]'],
+  },
+  empresa: {
+    rotulo: 'Escritórios e empresas',
+    filtros: ['["office"="company"]["name"]', '["office"="industrial"]["name"]'],
+  },
+};
+
+async function buscarJson(url: string, corpo?: string, msTimeout = 45000) {
+  const r = await fetch(url, {
+    method: corpo ? 'POST' : 'GET',
+    headers: { 'User-Agent': UA, Accept: 'application/json',
+               ...(corpo ? { 'Content-Type': 'application/x-www-form-urlencoded' } : {}) },
+    body: corpo,
+    signal: AbortSignal.timeout(msTimeout),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// Nominatim: "Rio Claro" + "SP" -> id da area no OSM
+async function acharArea(cidade: string, estado: string | null) {
+  const busca = [cidade, estado, 'Brasil'].filter(Boolean).join(', ');
+  const q = new URLSearchParams({ q: busca, format: 'json', limit: '1' });
+  const d = await buscarJson(`https://nominatim.openstreetmap.org/search?${q}`, undefined, 20000);
+  const o = Array.isArray(d) ? d[0] : null;
+  if (!o) return null;
+  return {
+    areaId: o.osm_type === 'relation' ? 3600000000 + Number(o.osm_id) : null,
+    lat: Number(o.lat),
+    lon: Number(o.lon),
+    nome: o.display_name as string,
+  };
+}
+
+function montarConsulta(area: { areaId: number | null; lat: number; lon: number }, filtros: string[]) {
+  const escopo = area.areaId ? `area(${area.areaId})->.a;` : '';
+  // sem relation no Nominatim, cai pra um raio de 25km em volta do ponto
+  const dentro = area.areaId ? '(area.a)' : `(around:25000,${area.lat},${area.lon})`;
+  const corpo = filtros.map((f) => `  nwr${f}${dentro};`).join('\n');
+  return `[out:json][timeout:60];\n${escopo}\n(\n${corpo}\n);\nout center tags;`;
+}
+
+function normalizar(e: any): EmpresaIndicada | null {
+  const t = e.tags || {};
+  if (!t.name) return null;
+  const rua = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(', ');
+  return {
+    osmId: `${e.type}/${e.id}`,
+    nome: String(t.name).trim(),
+    tipo: t.landuse || t.man_made || t.craft || t.shop || t.office || t.industrial || 'empresa',
+    endereco: rua || null,
+    cidade: t['addr:city'] || null,
+    telefone: t.phone || t['contact:phone'] || null,
+    site: t.website || t['contact:website'] || null,
+    lat: e.lat ?? e.center?.lat ?? null,
+    lon: e.lon ?? e.center?.lon ?? null,
+  };
+}
+
+export async function garimpar(
+  cidade: string,
+  estado: string | null,
+  perfil: string
+): Promise<{ empresas: EmpresaIndicada[]; regiao: string; fonte: string }> {
+  const area = await acharArea(cidade, estado);
+  if (!area) throw new Error(`Não encontrei "${cidade}" no mapa.`);
+
+  const def = PERFIS[perfil] || PERFIS.industria;
+  const consulta = montarConsulta(area, def.filtros);
+  const corpo = new URLSearchParams({ data: consulta }).toString();
+
+  const erros: string[] = [];
+  for (const espelho of ESPELHOS) {
+    try {
+      const r = await buscarJson(espelho, corpo);
+      const empresas = (r.elements || [])
+        .map(normalizar)
+        .filter(Boolean)
+        .filter((e: EmpresaIndicada, i: number, arr: EmpresaIndicada[]) =>
+          arr.findIndex((o) => o.nome.toLowerCase() === e.nome.toLowerCase()) === i);
+      return { empresas, regiao: area.nome, fonte: new URL(espelho).host };
+    } catch (e) {
+      erros.push(`${new URL(espelho).host}: ${e instanceof Error ? e.message : 'falhou'}`);
+    }
+  }
+  throw new Error(`Os servidores do mapa não responderam. ${erros.join(' | ')}`);
+}
+
+// comparacao de nomes pra nao reindicar quem ja esta no CRM
+export function chaveNome(s: string) {
+  return s
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/\b(ltda|me|epp|eireli|sa|s\/a|cia|comercio|industria|e|de|da|do|dos|das)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
