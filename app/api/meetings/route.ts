@@ -170,64 +170,80 @@ export async function GET(request: NextRequest) {
     const contactId = request.nextUrl.searchParams.get('contact_id');
     const status = request.nextUrl.searchParams.get('status');
 
-    // Se NAO e admin, buscar IDs de contatos de pipelines onde e membro
-    let allowedContactIds: string[] | null = null;
-    if (profile.role !== 'admin') {
+    // Reunioes visiveis: as dos contatos das pipelines onde a pessoa e membro,
+    // MAIS aquelas em que ela e participante.
+    //
+    // Antes isso era feito listando TODOS os contact_id permitidos dentro de um
+    // .or(contact_id.in.(...)). Com 3769 contatos a URL passava de 130 mil
+    // caracteres, o servidor recusava e a agenda devolvia 500. Mesmo erro que ja
+    // tinha derrubado a aba de Contatos antes.
+    //
+    // Agora filtra pela pipeline atraves da juncao com contacts: a URL fica
+    // do tamanho da lista de pipelines (2), nao da lista de contatos.
+    const base = () => admin
+      .from('meetings')
+      .select('*')
+      .eq('organization_id', profile.organization_id);
+
+    let data: unknown[] | null = null;
+    let error: { message: string } | null = null;
+
+    if (profile.role === 'admin') {
+      let q = base().order('meeting_at', { ascending: true });
+      if (contactId) q = q.eq('contact_id', contactId);
+      if (status) q = q.eq('status', status);
+      const r = await q;
+      data = r.data; error = r.error;
+    } else {
       const { data: myMemberships } = await admin
         .from('pipeline_members')
         .select('pipeline_id')
         .eq('user_id', user.id);
+      const myPipelineIds = (myMemberships || []).map((m: { pipeline_id: string }) => m.pipeline_id);
 
-      const myPipelineIds = (myMemberships || []).map((m: any) => m.pipeline_id);
-
-      if (myPipelineIds.length > 0) {
-        const { data: myContacts } = await admin
-          .from('contacts')
-          .select('id')
-          .eq('organization_id', profile.organization_id)
-          .in('pipeline_id', myPipelineIds);
-
-        allowedContactIds = (myContacts || []).map((c: any) => c.id);
-      } else {
-        allowedContactIds = [];
-      }
-    }
-
-    let query = admin
-      .from('meetings')
-      .select('*')
-      .eq('organization_id', profile.organization_id)
-      .order('meeting_at', { ascending: true });
-
-    // Filtrar por contatos de pipelines permitidos (non-admin)
-    // Tambem incluir reunioes onde o usuario e participante
-    if (allowedContactIds !== null) {
-      // Buscar reunioes onde e participante
       const { data: myParticipations } = await admin
         .from('meeting_participants')
         .select('meeting_id')
         .eq('user_id', user.id);
+      const myMeetingIds = (myParticipations || []).map((p: { meeting_id: string }) => p.meeting_id);
 
-      const myMeetingIds = (myParticipations || []).map((p: any) => p.meeting_id);
-
-      if (allowedContactIds.length > 0 || myMeetingIds.length > 0) {
-        // Usar or para combinar: contatos permitidos OU reunioes onde participa
-        if (myMeetingIds.length > 0 && allowedContactIds.length > 0) {
-          query = query.or(`contact_id.in.(${allowedContactIds.join(',')}),id.in.(${myMeetingIds.join(',')})`);
-        } else if (allowedContactIds.length > 0) {
-          query = query.in('contact_id', allowedContactIds);
-        } else {
-          query = query.in('id', myMeetingIds);
+      const porPipeline: Record<string, unknown>[] = [];
+      if (myPipelineIds.length > 0) {
+        let q = admin
+          .from('meetings')
+          .select('*, contacts!inner(pipeline_id)')
+          .eq('organization_id', profile.organization_id)
+          .in('contacts.pipeline_id', myPipelineIds)
+          .order('meeting_at', { ascending: true });
+        if (contactId) q = q.eq('contact_id', contactId);
+        if (status) q = q.eq('status', status);
+        const r = await q;
+        if (r.error) error = r.error;
+        for (const m of r.data || []) {
+          const { contacts: _junta, ...limpo } = m as Record<string, unknown>;
+          porPipeline.push(limpo);
         }
-      } else {
-        return NextResponse.json({ meetings: [] });
       }
+
+      // participacoes sao poucas: aqui a lista de ids nao estoura a URL
+      const porParticipacao: Record<string, unknown>[] = [];
+      if (myMeetingIds.length > 0) {
+        let q = base().in('id', myMeetingIds).order('meeting_at', { ascending: true });
+        if (contactId) q = q.eq('contact_id', contactId);
+        if (status) q = q.eq('status', status);
+        const r = await q;
+        if (r.error) error = r.error;
+        porParticipacao.push(...((r.data || []) as Record<string, unknown>[]));
+      }
+
+      const vistos = new Set<string>();
+      data = [...porPipeline, ...porParticipacao].filter((m) => {
+        const id = String((m as { id: string }).id);
+        if (vistos.has(id)) return false;
+        vistos.add(id);
+        return true;
+      });
     }
-
-    if (contactId) query = query.eq('contact_id', contactId);
-    if (status) query = query.eq('status', status);
-
-    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching meetings:', error);
