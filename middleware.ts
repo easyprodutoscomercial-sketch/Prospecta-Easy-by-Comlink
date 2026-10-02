@@ -115,11 +115,13 @@ export async function middleware(request: NextRequest) {
   //   - Supabase (auth, storage, realtime)
   //   - OpenAI (chamadas server-side, mas frontend pode tentar)
   //   - Vercel insights (telemetria do hosting)
+  //   - Esri (fundo escuro dos mapas de Contatos e da busca de indicacoes). O CARTO
+  //     que estava em uso passou a exigir chave paga e so devolve "API KEY REQUIRED".
   const csp = [
     "default-src 'self'",
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.vercel-insights.com https://accounts.google.com",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://api.zapt.tech https://maps.zapt.tech https://*.tile.openstreetmap.org",
+    "img-src 'self' data: blob: https://*.supabase.co https://lh3.googleusercontent.com https://api.zapt.tech https://maps.zapt.tech https://*.tile.openstreetmap.org https://server.arcgisonline.com",
     "font-src 'self' data:",
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.zapt.tech https://api.openai.com https://*.vercel-insights.com",
     "frame-src 'self' https://accounts.google.com",
