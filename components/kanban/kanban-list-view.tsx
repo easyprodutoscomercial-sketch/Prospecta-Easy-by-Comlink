@@ -22,9 +22,13 @@ function daysInStage(updatedAt: string): number {
   return Math.floor((Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24));
 }
 
+const LINHAS_POR_VEZ = 100;
+
 export function KanbanListView({ contacts, stages, userMap, onCardClick, lastInteractionMap, stageMap }: KanbanListViewProps) {
   const [sortBy, setSortBy] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  // so as primeiras linhas vao pra tela: 3.788 linhas (x2, celular + computador) travavam maquina fraca
+  const [mostrar, setMostrar] = useState(LINHAS_POR_VEZ);
 
   const toggleSort = (key: SortKey) => {
     if (sortBy === key) {
@@ -125,7 +129,7 @@ export function KanbanListView({ contacts, stages, userMap, onCardClick, lastInt
 
         {/* Card list */}
         <div className="divide-y divide-purple-800/10">
-          {sorted.map((contact) => {
+          {sorted.slice(0, mostrar).map((contact) => {
             const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id || ''];
             const stage = stageMap[contact.stage_id || ''];
             const days = daysInStage(contact.updated_at);
@@ -208,7 +212,7 @@ export function KanbanListView({ contacts, stages, userMap, onCardClick, lastInt
           </tr>
         </thead>
         <tbody>
-          {sorted.map((contact) => {
+          {sorted.slice(0, mostrar).map((contact) => {
             const owner = userMap[contact.assigned_to_user_id || contact.created_by_user_id || ''];
             const stage = stageMap[contact.stage_id || ''];
             const days = daysInStage(contact.updated_at);
@@ -292,6 +296,15 @@ export function KanbanListView({ contacts, stages, userMap, onCardClick, lastInt
           })}
         </tbody>
       </table>
+
+      {sorted.length > mostrar && (
+        <button
+          onClick={() => setMostrar((n) => n + LINHAS_POR_VEZ)}
+          className="w-full py-3 text-xs font-semibold text-purple-300/80 hover:text-purple-100 hover:bg-purple-800/20 transition-colors border-t border-purple-800/20"
+        >
+          Mostrar mais {Math.min(LINHAS_POR_VEZ, sorted.length - mostrar)} · faltam {sorted.length - mostrar}
+        </button>
+      )}
 
       {sorted.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-center">

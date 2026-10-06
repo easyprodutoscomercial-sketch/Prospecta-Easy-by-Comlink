@@ -100,6 +100,11 @@ function contactMatchesFilter(contact: Contact, query: string, userMap: Record<s
   return fields.some(f => f && normalizeSearch(f).includes(q));
 }
 
+// Desenha so os primeiros cartoes de cada coluna. Em 06/10 a coluna "Novo" tinha
+// 3.788 cartoes arrastaveis de uma vez e travava os computadores mais fracos.
+// O filtro da coluna e a busca do topo continuam olhando TODOS os contatos.
+const CARTOES_POR_VEZ = 50;
+
 function abbreviateValue(value: number): string {
   if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
   if (value >= 1000) return `${(value / 1000).toFixed(0)}k`;
@@ -109,6 +114,7 @@ function abbreviateValue(value: number): string {
 function KanbanColumnImpl({ stage, contacts, userMap, currentUserId, onClaimContact, onRequestContact, pendingRequestContactIds, onJumpForward, onJumpBackward, onScheduleMeeting, contactsWithMeeting, lastInteractionMap, bulkMode, bulkSelectedIds, onBulkToggle, pipelineType, attachmentCountMap, dimmedContactIds, hiddenContactIds, stuckContactIds, compact, onCardClick, collapsed, onToggleCollapse, swimlaneBy }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: stage.id });
   const [filter, setFilter] = useState('');
+  const [mostrar, setMostrar] = useState(CARTOES_POR_VEZ);
   const color = stage.color || '#a3a3a3';
   const label = stage.name;
   const totalValue = contacts.reduce((sum, c) => sum + (c.valor_estimado || 0), 0);
@@ -206,6 +212,13 @@ function KanbanColumnImpl({ stage, contacts, userMap, currentUserId, onClaimCont
 
     return groups;
   }, [filtered, swimlaneBy, userMap]);
+
+  // cartoes que vao de fato pra tela (com agrupamento, ate `mostrar` por grupo)
+  const visiveis = useMemo(
+    () => swimlaneGroups ? swimlaneGroups.flatMap((g) => g.contacts.slice(0, mostrar)) : filtered.slice(0, mostrar),
+    [swimlaneGroups, filtered, mostrar]
+  );
+  const faltam = filtered.length - visiveis.length;
 
   // === COLLAPSED VIEW ===
   if (collapsed) {
@@ -329,7 +342,7 @@ function KanbanColumnImpl({ stage, contacts, userMap, currentUserId, onClaimCont
             <input
               type="text"
               value={filter}
-              onChange={(e) => setFilter(e.target.value)}
+              onChange={(e) => { setFilter(e.target.value); setMostrar(CARTOES_POR_VEZ); }}
               placeholder="Filtrar..."
               className="w-full pl-7 pr-6 py-1 text-[10px] bg-[#1e0f35] border border-purple-800/20 rounded-md text-neutral-300 placeholder-purple-400/25 focus:outline-none focus:border-purple-600/40 focus:ring-1 focus:ring-purple-600/20"
             />
@@ -355,7 +368,7 @@ function KanbanColumnImpl({ stage, contacts, userMap, currentUserId, onClaimCont
         ref={setNodeRef}
         className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[80px] sm:min-h-[120px] max-h-[50vh] sm:max-h-[calc(100vh-280px)]"
       >
-        <SortableContext items={filtered.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={visiveis.map((c) => c.id)} strategy={verticalListSortingStrategy}>
           {swimlaneGroups ? (
             /* === SWIMLANE MODE === */
             swimlaneGroups.map((group) => {
@@ -391,7 +404,7 @@ function KanbanColumnImpl({ stage, contacts, userMap, currentUserId, onClaimCont
                   {/* Swimlane cards */}
                   {!isGroupCollapsed && (
                     <div className="space-y-2 mt-1 ml-1 pl-2 border-l-2 border-purple-800/15" style={{ borderColor: `${group.color}20` }}>
-                      {group.contacts.map((contact) => (
+                      {group.contacts.slice(0, mostrar).map((contact) => (
                         <KanbanCard
                           key={contact.id}
                           contact={contact}
@@ -424,7 +437,7 @@ function KanbanColumnImpl({ stage, contacts, userMap, currentUserId, onClaimCont
             })
           ) : (
             /* === NORMAL MODE (no swimlanes) === */
-            filtered.map((contact) => (
+            visiveis.map((contact) => (
               <KanbanCard
                 key={contact.id}
                 contact={contact}
@@ -452,6 +465,15 @@ function KanbanColumnImpl({ stage, contacts, userMap, currentUserId, onClaimCont
             ))
           )}
         </SortableContext>
+
+        {faltam > 0 && (
+          <button
+            onClick={() => setMostrar((n) => n + CARTOES_POR_VEZ)}
+            className="w-full py-2 rounded-lg border border-dashed border-purple-700/30 text-[11px] font-semibold text-purple-300/80 hover:text-purple-100 hover:bg-purple-800/20 transition-colors"
+          >
+            Mostrar mais {Math.min(CARTOES_POR_VEZ, faltam)} · faltam {faltam}
+          </button>
+        )}
 
         {filtered.length === 0 && (
           <div className={`flex flex-col items-center justify-center py-10 px-3 text-center rounded-lg border-2 border-dashed transition-colors ${isOver ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-purple-700/20 bg-purple-900/5'}`}>
