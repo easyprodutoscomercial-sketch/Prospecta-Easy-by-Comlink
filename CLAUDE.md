@@ -1121,6 +1121,9 @@ Ver `docs/DECISOES_TECNICAS.md` para o plano completo.
 11. **Rotas públicas sem rate limiting**
     `/api/lead-capture`, `/api/quiz/route`, `/api/portal/*`. Como é sistema interno, risco menor, mas um bot pode poluir dados.
 
+13. **Nada de animação contínua em camada de tela cheia** (06/10/2026)
+    O aviso de cobrança (`components/notifications/cobranca-zumbido.tsx`) fica em TODAS as páginas, para quase todo vendedor. Em 06/10 um "raio de luz" girando nas bordas (`conic-gradient` animado via `@property` + camada com `filter: blur`) travou as máquinas: 2571 repinturas em 5s contra 2 na versão parada. Animação permanente só de `opacity`/`transform`, e de preferência só por alguns segundos.
+
 12. **`NEXT_PUBLIC_*` aparecem no bundle client**
     Tudo que começa com `NEXT_PUBLIC_` vai pro navegador. Nunca colocar segredo nesse prefixo.
 
