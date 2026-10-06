@@ -78,7 +78,7 @@ function espalhar(nome: string, base: [number, number]): [number, number] {
   return [base[0] + r * Math.sin(a), base[1] + r * Math.cos(a)];
 }
 
-const MAXIMO_IA = 12;
+const MAXIMO_IA = 8; // igual a MAX_EMPRESAS em lib/indicacoes/ia.ts
 const reais = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 interface Props {
@@ -580,10 +580,10 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
                       {iaRodada && (iaRodada.atual === 0
                         ? <span className="text-neutral-400 font-normal"> · conferindo o CNPJ do cliente na Receita</span>
                         : <span className="text-neutral-400 font-normal"> · rodada {iaRodada.atual} de até {iaRodada.max}</span>)}
-                      <span className="text-neutral-400 font-normal"> · {empresas.length} de 12</span>
+                      <span className="text-neutral-400 font-normal"> · {empresas.length} de {MAXIMO_IA}</span>
                     </p>
                     <p className="text-[11px] text-neutral-500">
-                      Para sozinha ao chegar em 12. Pode fechar a janela — o que já foi achado fica salvo nos seus Rascunhos.
+                      Para sozinha ao chegar em 8. Pode fechar a janela: a busca continua sozinha e as empresas aparecem nos seus Rascunhos.
                     </p>
                     {iaCnpj && <p className="text-[11px] text-sky-300/90 mt-0.5">{iaCnpj}</p>}
                     {iaCadastro.length > 0 && (
@@ -613,7 +613,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-neutral-100">
-                      {origem === 'ia' ? 'Buscar de novo com IA' : 'Buscar até 12 empresas de médio/grande porte com IA'}
+                      {origem === 'ia' ? 'Buscar de novo com IA' : `Buscar até ${MAXIMO_IA} empresas de médio/grande porte com IA`}
                     </p>
                     <p className="text-[11px] text-neutral-500">
                       {ia.semCidade

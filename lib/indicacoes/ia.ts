@@ -17,15 +17,23 @@
 // teve as 4 descartadas por fonte nao aberta). gpt-5 inteiro custou R$2,61 na tela:
 // caro demais pro dono. Por isso o padrao e o mini em rodadas.
 export const MODELO = process.env.INDICACOES_IA_MODELO || 'gpt-5-mini';
-export const MIN_EMPRESAS = 10;
-export const MAX_EMPRESAS = 12;
+// Meta de 8 empresas boas (pedido do dono em 06/10: "ta lento e caro"). Com os filtros de
+// porte e de ja-no-CRM, chegar em 12 exigia esgotar 5 rodadas: R$1,15-1,35 e 3-5 min.
+export const MIN_EMPRESAS = 6; // abaixo disso a tela avisa "poucas"
+export const MAX_EMPRESAS = 8;
 // Buscas por dia agora sao por usuario, definidas pelo admin: ver lib/indicacoes/permissao.ts
 export const DIAS_CACHE_IA = 3650; // busca fica guardada (o dono revisita quando quiser)
 // A busca roda em RODADAS curtas pra tela ir enchendo e o consultor poder parar
 // quando quiser: cada rodada pede poucas empresas novas por um angulo diferente.
-export const POR_RODADA = 4;
-export const MAX_RODADAS = 5;
-export const MAX_PESQUISAS = 4; // pesquisas na internet dentro de UMA rodada
+// Cada RODADA dispara 2 pedidos ao mesmo tempo, por angulos diferentes (metade do tempo).
+// Cada pesquisa na internet custa ~R$0,055 e era 85% do custo; o filtro da Receita e gratis.
+// Por isso: poucas pesquisas por pedido e MUITAS empresas por pesquisa, de fontes que ja
+// mostram porte/capital. Teste de 06/10 (Oderco, Maringa): 16 -> 9 pesquisas, R$1,12 -> R$0,73,
+// 3 -> 6 empresas boas (todas "Demais" na Receita), 88s -> 80s.
+export const POR_RODADA = 10; // empresas pedidas em CADA pedido
+export const PEDIDOS_POR_RODADA = 2;
+export const MAX_RODADAS = 3;
+export const MAX_PESQUISAS = 2; // pesquisas na internet dentro de UM pedido
 
 // Empresa grande e mais rara que oficina: os angulos miram fabricante, distribuidor,
 // distrito industrial e lista de associados/expositores, e o raio e de 100 km.
@@ -54,7 +62,7 @@ const RACIOCINA = (m: string) => /^(gpt-5|o\d)/.test(m);
 export const DOLAR_EM_REAIS = 5.5;
 // Usada so ate existir historico; depois o valor exibido e a media real das
 // ultimas buscas da empresa.
-export const ESTIMATIVA_INICIAL_REAIS = 0.9;
+export const ESTIMATIVA_INICIAL_REAIS = 0.65; // teste do motor de 06/10: R$0,61 por 8 empresas
 
 export interface EmpresaIA {
   osmId: string; // id da linha na tela (mesmo campo das indicacoes do mapa)
@@ -185,6 +193,7 @@ Depois encontre ${rodada.quantas} empresas REAIS com o MESMO perfil — mesma at
 PORTE: só empresas de MÉDIO ou GRANDE porte, mesmo que o cliente de referência seja pequeno. Procure indústrias, fabricantes, distribuidores e atacadistas com estrutura própria (fábrica, vários funcionários, filiais, marca conhecida no setor). Na Receita Federal elas aparecem com porte "Demais" (faturamento acima de R$ 4,8 milhões por ano).
 NÃO inclua: microempresa, MEI, oficina, tornearia, assistência técnica, loja de bairro, revenda pequena, representante comercial autônomo nem prestador de serviço individual.
 Traga o CNPJ sempre que conseguir confirmar numa página: o porte de cada empresa será conferido na Receita e as pequenas serão descartadas.
+ONDE PROCURAR (cada pesquisa custa caro — aproveite cada página ao máximo): prefira páginas que JÁ MOSTRAM O TAMANHO da empresa — listas de empresas por atividade (CNAE) e cidade que exibem porte ou capital social, rankings de maiores empresas da região/setor, listas de associados de entidades do setor. Nessas listas, escolha só as de porte "Demais" ou capital social acima de R$ 1 milhão e IGNORE as marcadas como ME, EPP ou MEI. Uma boa lista rende várias empresas de uma vez.
 Nesta rodada, pesquise ${angulo}.${excluir}${jaClientes}
 NÃO inclua o cliente de referência (${empresa}) nem empresas do mesmo grupo dele.
 Cada dado de uma empresa tem que vir de uma página sobre AQUELA empresa — não misture endereço, telefone ou e-mail de empresas diferentes.
@@ -371,14 +380,14 @@ export function lerCnpj(resp: any): { cnpj: string | null; fonte: string | null;
   return { cnpj: digitos.length === 14 ? digitos : null, fonte, pesquisas };
 }
 
-export async function iniciarBusca(instrucoes: string, pedido: string, opcoes: { maxPesquisas?: number } = {}) {
+export async function iniciarBusca(instrucoes: string, pedido: string, opcoes: { maxPesquisas?: number; contexto?: 'low' | 'medium' | 'high' } = {}) {
   const r = await openai('/responses', {
     method: 'POST',
     body: JSON.stringify({
       model: MODELO,
       instructions: instrucoes,
       input: pedido,
-      tools: [{ type: 'web_search', user_location: { type: 'approximate', country: 'BR' } }],
+      tools: [{ type: 'web_search', user_location: { type: 'approximate', country: 'BR' }, ...(opcoes.contexto ? { search_context_size: opcoes.contexto } : {}) }],
       include: ['web_search_call.action.sources'],
       // Teto de gasto POR busca (o limite diario so conta quantas buscas).
       // No teste o gpt-5 fez 17 pesquisas e 7,4 mil tokens de saida pra 12 empresas;

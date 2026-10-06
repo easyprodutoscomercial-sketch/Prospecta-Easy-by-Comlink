@@ -1,7 +1,13 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { avancarBuscasParadas } from '@/lib/indicacoes/motor';
+
+// toda tela do CRM consulta esta rota a cada 30s: depois de responder, ela tambem empurra
+// buscas de indicacao que ficaram paradas (vendedor fechou a janela no meio). O empurrao
+// pode processar uma rodada inteira (Receita + rascunhos), por isso os 60s.
+export const maxDuration = 60;
 
 export async function GET() {
   try {
@@ -11,6 +17,8 @@ export async function GET() {
 
     const profile = await ensureProfile(supabase, user);
     if (!profile) return NextResponse.json({ error: 'Profile não encontrado' }, { status: 404 });
+
+    after(() => avancarBuscasParadas().catch((e) => console.warn('[indicacoes IA] empurrao', e instanceof Error ? e.message : e)));
 
     const admin = getAdminClient();
 
