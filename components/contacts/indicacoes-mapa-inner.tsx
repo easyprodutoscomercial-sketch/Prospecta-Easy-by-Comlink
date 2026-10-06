@@ -29,6 +29,7 @@ interface Props {
   voando: boolean; // busca terminada: mapa fica so com os pontos, sem aviao
   status: string;
   onPousou: (id: string) => void;
+  onPousoFinal?: () => void; // aviao voltou pra casa e sumiu: a janela toca o video do pouso
 }
 
 // CARTO passou a devolver "API KEY REQUIRED" em todo bloco (conferido em 02/10).
@@ -106,7 +107,7 @@ const SEM_INTERACAO: L.MapOptions = {
   doubleClickZoom: false, boxZoom: false, keyboard: false, touchZoom: false,
 };
 
-export default function IndicacoesMapaInner({ origem, nomeCliente, pousados, destino, voando, status, onPousou }: Props) {
+export default function IndicacoesMapaInner({ origem, nomeCliente, pousados, destino, voando, status, onPousou, onPousoFinal }: Props) {
   const caixa = useRef<HTMLDivElement>(null);
   const caixaMini = useRef<HTMLDivElement>(null);
   const mapa = useRef<L.Map | null>(null);
@@ -117,6 +118,8 @@ export default function IndicacoesMapaInner({ origem, nomeCliente, pousados, des
   const inicial = useRef({ origem, pousados, nomeCliente });
   const onPousouRef = useRef(onPousou);
   onPousouRef.current = onPousou;
+  const onPousoFinalRef = useRef(onPousoFinal);
+  onPousoFinalRef.current = onPousoFinal;
   // a janela redesenha a cada consulta de andamento (4s) e recria o objeto destino:
   // o voo so recomeca quando muda a EMPRESA de destino, nao a cada redesenho
   const destinoRef = useRef(destino);
@@ -292,6 +295,7 @@ export default function IndicacoesMapaInner({ origem, nomeCliente, pousados, des
           marcador.current = null;
           setFaseUI(null);
           setPousos((n) => n + 1);
+          onPousoFinalRef.current?.();
           return; // fim do laco; se outra busca comecar, o efeito decola de novo
         }
       }

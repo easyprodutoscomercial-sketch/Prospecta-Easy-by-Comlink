@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -9,6 +9,7 @@ import type { PontoMapa } from './indicacoes-mapa-inner';
 import { recarregarIndicacoesBuscadas } from '@/lib/hooks/use-indicacoes-buscadas';
 
 // Leaflet mexe em window: so carrega no navegador
+import VideoAviao, { SRC_VIDEO, type VideoAviaoTipo } from './video-aviao';
 const MapaBusca = dynamic(() => import('./indicacoes-mapa-inner'), { ssr: false, loading: () => null });
 
 interface Empresa {
@@ -116,6 +117,9 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
   const [iaRodada, setIaRodada] = useState<{ atual: number; max: number } | null>(null);
   const [parando, setParando] = useState(false);
   const [iaCnpj, setIaCnpj] = useState<string | null>(null);
+  // video do King Air: subida ao mandar buscar, descida quando a busca termina
+  const [video, setVideo] = useState<{ tipo: VideoAviaoTipo; legenda: string } | null>(null);
+  const pousoPendente = useRef<number | null>(null); // qtd de empresas, esperando o aviao do mapa chegar em casa
   const [iaCadastro, setIaCadastro] = useState<string[]>([]); // campos que a Receita preencheu no cliente
   // contato sem cidade: empresa que a IA achou pelo nome, esperando o vendedor dizer se e o cliente
   const [iaAchada, setIaAchada] = useState<EmpresaAchada | null>(null);
@@ -191,6 +195,8 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
   async function iniciarIA() {
     if (!ia) return;
     setIaConfirmar(false); setIaAviso(null); setErro(null);
+    // toca ja no clique: a busca dispara por baixo enquanto o aviao decola
+    setVideo({ tipo: 'decolagem', legenda: `Decolando para achar empresas parecidas com ${contactNome}...` });
     try {
       const r = await fetch(`/api/contacts/${contactId}/indicacoes/ia`, {
         method: 'POST',
@@ -199,7 +205,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
       });
       const j = await r.json();
       console.info('[indicacoes IA] iniciar', { status: r.status, ...j });
-      if (j.erro || !j.job) { setIaAviso(j.erro || 'Não consegui iniciar a busca.'); return; }
+      if (j.erro || !j.job) { setVideo(null); setIaAviso(j.erro || 'Não consegui iniciar a busca.'); return; }
       setIaSegundos(0);
       setIaRodada(null);
       setIaCnpj(null);
@@ -210,6 +216,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
       setOrigem('ia'); setPendente(false); setResumo(null); setEmpresas([]); setEscolhidas(new Set());
       setIaJob(j.job);
     } catch {
+      setVideo(null);
       setIaAviso('Não consegui iniciar a busca. Tente de novo.');
     }
   }
@@ -258,6 +265,11 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
           setBuscadoEm(new Date().toISOString()); setRaioKm(null);
           const qtd = j.empresas?.length || 0;
           const custo = reais(j.custo_reais || 0);
+          // descida: com mapa, espera o aviao pequeno voltar pra casa; sem mapa, toca agora
+          if (qtd > 0) {
+            if (pontoInicial) pousoPendente.current = qtd;
+            else setVideo({ tipo: 'pouso', legenda: `Pousamos! ${qtd} empresa(s) encontrada(s).` });
+          }
           setIaAviso(j.motivo === 'parada'
             ? `Busca parada com ${qtd} empresa(s). Custou ${custo}.`
             : j.poucas ? `A IA só comprovou ${qtd} empresa(s) com fonte. Custou ${custo}.` : `${qtd} empresas salvas nos seus Rascunhos. Custou ${custo}.`);
@@ -479,8 +491,16 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
   // remontava — e a tela entrava em laco de piscar.
   return createPortal(
     <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 p-4" onClick={onFechar}>
-      <div className={`w-full ${mostrarMapa ? 'max-w-6xl h-[88vh]' : 'max-w-3xl max-h-[85vh]'} flex flex-col rounded-2xl border border-purple-700/40 bg-[#1e0f35] shadow-2xl`}
+      <div className={`relative w-full ${mostrarMapa ? 'max-w-6xl h-[88vh]' : 'max-w-3xl max-h-[85vh]'} flex flex-col rounded-2xl border border-purple-700/40 bg-[#1e0f35] shadow-2xl`}
            onClick={(e) => e.stopPropagation()}>
+        {video && <VideoAviao key={video.tipo} tipo={video.tipo} legenda={video.legenda} onFim={() => setVideo(null)} />}
+        {/* baixa os videos so pra quem pode buscar, pra tocarem sem engasgar */}
+        {ia && ia.limiteDia > 0 && !video && (
+          <div className="hidden" aria-hidden>
+            <video src={SRC_VIDEO.decolagem} preload="auto" muted />
+            {iaJob && <video src={SRC_VIDEO.pouso} preload="auto" muted />}
+          </div>
+        )}
 
         <div className="p-5 border-b border-purple-800/40">
           <div className="flex items-start justify-between gap-3">
@@ -702,6 +722,12 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
                   destino={destino}
                   voando={voando}
                   onPousou={pousou}
+                  onPousoFinal={() => {
+                    const qtd = pousoPendente.current;
+                    if (qtd == null) return;
+                    pousoPendente.current = null;
+                    setVideo({ tipo: 'pouso', legenda: `Pousamos! ${qtd} empresa(s) encontrada(s).` });
+                  }}
                   status={destino ? `✈ voando para ${destino.nome} · ${pousados.length + 1} de ${MAXIMO_IA}`
                     : iaJob ? '✈ procurando empresas na região...'
                     : `${pousados.length} empresas · passe o mouse num ponto`}

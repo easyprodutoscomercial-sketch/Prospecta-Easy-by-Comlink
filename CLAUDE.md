@@ -129,6 +129,7 @@ Além do núcleo CRM + Feiras, o sistema cresceu com módulos adjacentes: **supo
 
 - `vercel.json` fixa as funções em **`pdx1` (Oregon)**, a mesma região do banco Supabase (**us-west-2**). Até 06/10/2026 elas rodavam em `iad1` (Washington) e cada consulta ao banco cruzava os EUA (~65ms cada; uma tela faz de 3 a 8). Não trocar a região sem mudar o banco junto.
 - Mapa da busca de indicações: **avião da Comlink** (logo vetorial original de comlink.com.br, "Com" na asa esquerda e "link" na direita, [`components/contacts/aviao-comlink.ts`](components/contacts/aviao-comlink.ts)). Decola da casa do cliente quando a busca começa, voa até cada empresa e pousa de volta no fim. Animação só com `transform`/`opacity` num elemento de 88px e só enquanto a busca roda (ver armadilha 13).
+- **Vídeo do King Air da Comlink** por cima da janela de indicações: a subida (3,6s) toca ao clicar em "Buscar com IA" e a descida (4,4s) quando o avião do mapa volta pra casa no fim da busca ([`components/contacts/video-aviao.tsx`](components/contacts/video-aviao.tsx)). Sem som, com botão "Pular". Os vídeos ficam em `public/noprecache/videos/` (o PWA **não** pré-baixa a pasta `noprecache`) e o `middleware.ts` não passa `.mp4` pela checagem de login. Precisa de `z-[1200]`: as camadas do Leaflet usam z-index 400-700.
 - Kanban desenha **50 cartões por coluna** (lista: 100 linhas) com botão "Mostrar mais": a coluna Novo chegou a 3.788 cartões e travava máquina fraca.
 
 ### TypeScript
@@ -427,6 +428,7 @@ No primeiro login, o sistema:
 ### Middleware (`middleware.ts`)
 
 - **Rate limit** na rota `POST /login` (10 tentativas/minuto por IP)
+- O `matcher` não roda o middleware para arquivos estáticos (`svg|png|jpg|jpeg|gif|webp|mp4`)
 - Redireciona para `/login` qualquer rota não autenticada, EXCETO:
   - `/login`, `/lead-capture`, `/quiz`, `/portal`, `/api`, `/_next`, `/offline`
 - Adiciona headers de segurança: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`
