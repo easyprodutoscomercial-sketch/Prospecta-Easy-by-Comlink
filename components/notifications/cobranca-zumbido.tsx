@@ -3,12 +3,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// Zumbido estilo MSN: quando chega cobranca nova, a tela inteira treme,
-// toca um som curto e o titulo da aba fica piscando ate a pessoa voltar.
-// O piscar da aba e o que pega quem deixou o CRM em segundo plano.
+// Aviso de cobranca: um raio de luz corre pelas bordas da tela enquanto houver
+// cobranca pendente, e uma lingueta pequena pendurada no topo mostra quantas sao.
+// Quando chega cobranca nova o raio acelera e brilha por 5s, com bipe.
+// O titulo da aba fica piscando: e o que pega quem deixou o CRM em segundo plano.
+//
+// Antes era um botao flutuante no canto de cima a direita, por cima de tudo:
+// tampava Filtros/Expandir do kanban (reclamacao do dono em 05/10). O raio fica
+// numa camada que deixa o clique passar (pointer-events: none) — nao trava nada.
 
 const INTERVALO_MS = 30_000; // de quanto em quanto tempo olha se chegou cobranca
-const DURACAO_TREMOR_MS = 5_000; // 5s: o suficiente pra chamar atencao sem atrapalhar o trabalho
+const DURACAO_ALERTA_MS = 5_000; // 5s de raio acelerado: chama atencao sem atrapalhar o trabalho
 
 export default function CobrancaZumbido() {
   const router = useRouter();
@@ -55,7 +60,7 @@ export default function CobrancaZumbido() {
     setTimeout(() => {
       clearInterval(rajada);
       setTremendo(false);
-    }, DURACAO_TREMOR_MS);
+    }, DURACAO_ALERTA_MS);
   }
 
   // --- verifica periodicamente se o numero de cobrancas subiu ---
@@ -103,25 +108,31 @@ export default function CobrancaZumbido() {
     };
   }, [pendentes]);
 
-  // O tremor NAO vai mais no <body>: transform num ancestral quebra
-  // position:fixed de todo o resto — janelas de cadastro saiam do lugar e o
-  // botao Salvar ficava inclicavel. Agora treme so o aviso flutuante.
-
   if (pendentes <= 0) return null;
 
+  const classe = `raio-cobranca${pendentes >= 10 ? ' vermelho' : ''}${tremendo ? ' alerta' : ''}`;
+  const texto = `${pendentes} ${pendentes === 1 ? 'cobrança esperando' : 'cobranças esperando'}`;
+
   return (
-    <button
-      onClick={() => router.push('/kanban')}
-      className={`${tremendo ? 'zumbido-alvo ' : ''}fixed top-4 right-4 z-[90] flex items-center gap-2 px-4 py-2.5 rounded-xl border shadow-lg transition-colors
-        ${pendentes >= 10
-          ? 'bg-red-600 hover:bg-red-500 border-red-400/50 text-white animate-pulse'
-          : 'bg-amber-500 hover:bg-amber-400 border-amber-300/50 text-[#1a0a2e]'}`}
-      title="Ver cobrancas pendentes"
-    >
-      <span className="text-lg leading-none">🔔</span>
-      <span className="text-sm font-bold">
-        {pendentes} {pendentes === 1 ? 'cobranca' : 'cobrancas'} esperando voce
-      </span>
-    </button>
+    <>
+      {/* camadas so de luz: o clique passa direto (pointer-events: none no CSS) */}
+      <div className={classe} aria-hidden>
+        <div className="raio-cobranca-fundo" />
+        <div className="raio-cobranca-brilho" />
+        <div className="raio-cobranca-linha" />
+      </div>
+      {/* Lingueta no TOPO, nao embaixo: o rodape tem as barras de acao (Modo Foco,
+          acoes em massa) com botoes centralizados. No computador fica no meio da
+          barra do topo (vazio); no celular, entre o logo e o sininho. */}
+      <button
+        onClick={() => router.push('/kanban')}
+        className={`${classe} raio-cobranca-lingueta fixed top-0 right-14 lg:right-auto lg:left-1/2 lg:-translate-x-1/2`}
+        title={`${texto} — ver no kanban`}
+      >
+        <span>🔔</span>
+        <span className="lg:hidden">{pendentes}</span>
+        <span className="hidden lg:inline">{texto} · ver</span>
+      </button>
+    </>
   );
 }

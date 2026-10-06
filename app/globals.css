@@ -706,33 +706,43 @@ input[type="range"].density-slider:disabled {
   border-left-color: #8b5cf6;
 }
 
-/* Zumbido estilo MSN: sacode a tela inteira quando chega cobranca nova.
-   Respeita quem pediu menos animacao no sistema (acessibilidade). */
-@keyframes zumbido-tremor {
-  /* 0-55%: rajada de tremor. 55-100%: pausa, pra dar brecha de clique. */
-  0%   { transform: translate(0, 0) rotate(0deg); }
-  5%   { transform: translate(-9px, -5px) rotate(-0.6deg); }
-  11%  { transform: translate(8px, 5px) rotate(0.6deg); }
-  17%  { transform: translate(-8px, 4px) rotate(-0.5deg); }
-  23%  { transform: translate(7px, -4px) rotate(0.5deg); }
-  29%  { transform: translate(-6px, -3px) rotate(-0.4deg); }
-  35%  { transform: translate(5px, 3px) rotate(0.3deg); }
-  41%  { transform: translate(-4px, 2px) rotate(-0.2deg); }
-  47%  { transform: translate(3px, -2px) rotate(0.2deg); }
-  55%, 100% { transform: translate(0, 0) rotate(0deg); }
+/* ---- Aviso de cobranca (components/notifications/cobranca-zumbido.tsx) ----
+   Raio de luz correndo pelas bordas da tela. Tudo pointer-events:none: nunca
+   tampa nem bloqueia clique (o botao flutuante antigo tampava o topo do kanban,
+   e o tremor no <body> chegou a impedir vendedor de salvar). */
+@property --raio-angulo { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+.raio-cobranca { --raio-cor: #f59e0b; --raio-claro: #fff7d6; --raio-fraco: rgba(245, 158, 11, .35); --raio-volta: 6s; }
+.raio-cobranca.vermelho { --raio-cor: #ef4444; --raio-claro: #ffe4e4; --raio-fraco: rgba(239, 68, 68, .4); }
+.raio-cobranca.alerta { --raio-volta: 1.2s; }
+.raio-cobranca-fundo, .raio-cobranca-brilho, .raio-cobranca-linha {
+  position: fixed; inset: 0; pointer-events: none; z-index: 95;
 }
-
-/* NAO aplicar transform no <body>.
-   transform num ancestral quebra position:fixed de TODOS os descendentes —
-   as janelas de cadastro saiam do lugar e o botao Salvar ficava inclicavel
-   enquanto a tela tremia. Foi isso que fez vendedor digitar cidade e "nao salvar".
-   O tremor agora fica so no aviso flutuante, que e isolado e nao contem formulario. */
-.zumbido-alvo {
-  animation: zumbido-tremor 1.5s cubic-bezier(.36, .07, .19, .97) infinite;
+.raio-cobranca-fundo { box-shadow: inset 0 0 0 1px var(--raio-fraco), inset 0 0 40px color-mix(in srgb, var(--raio-cor) 12%, transparent); }
+.raio-cobranca-brilho, .raio-cobranca-linha {
+  padding: 3px;
+  background: conic-gradient(from var(--raio-angulo), transparent 0 62%, color-mix(in srgb, var(--raio-cor) 15%, transparent) 72%,
+    var(--raio-cor) 84%, var(--raio-claro) 87%, var(--raio-cor) 89%, transparent 93%);
+  /* mascara deixa so a moldura de 3px: o meio da tela fica intocado */
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: raio-cobranca-volta var(--raio-volta) linear infinite;
 }
-
+.raio-cobranca-brilho { padding: 10px; filter: blur(8px); opacity: .8; }
+.raio-cobranca.alerta .raio-cobranca-linha { padding: 5px; }
+.raio-cobranca.alerta .raio-cobranca-brilho { padding: 16px; opacity: 1; }
+@keyframes raio-cobranca-volta { to { --raio-angulo: 360deg; } }
+.raio-cobranca-lingueta {
+  z-index: 96; display: flex; align-items: center; gap: 6px; padding: 4px 14px 5px;
+  border-radius: 0 0 10px 10px; background: var(--raio-cor); color: #1a0a2e;
+  font-size: 12px; font-weight: 800; line-height: 1.2; cursor: pointer;
+  box-shadow: 0 0 18px color-mix(in srgb, var(--raio-cor) 60%, transparent);
+}
+.raio-cobranca-lingueta.vermelho { color: #fff; }
+.raio-cobranca-lingueta:hover { filter: brightness(1.1); }
 @media (prefers-reduced-motion: reduce) {
-  .zumbido-alvo { animation: none; }
+  /* sem raio correndo: fica so a borda acesa */
+  .raio-cobranca-brilho, .raio-cobranca-linha { animation: none; background: var(--raio-fraco); }
 }
 
 /* ---- Mapa da busca de indicacoes com IA (components/contacts/indicacoes-mapa-inner.tsx) ---- */
