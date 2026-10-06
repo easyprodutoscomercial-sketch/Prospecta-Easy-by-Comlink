@@ -46,9 +46,9 @@ export default function VideoAviao({ tipo, legenda, onFim }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // z-[1200]: as camadas do Leaflet usam z-index 400-700 e cobririam o video
+  // tela inteira (fixed), por cima de tudo: z-[1200] porque as camadas do Leaflet usam 400-700
   return (
-    <div className={`absolute inset-0 z-[1200] overflow-hidden rounded-2xl bg-black transition-opacity duration-[450ms] ${saindo ? 'opacity-0' : 'opacity-100'}`}>
+    <div className={`fixed inset-0 z-[1200] overflow-hidden bg-black transition-opacity duration-[450ms] ${saindo ? 'opacity-0' : 'opacity-100'}`}>
       <video
         src={SRC_VIDEO[tipo]}
         poster={SRC_VIDEO[tipo].replace('.mp4', '.jpg')}

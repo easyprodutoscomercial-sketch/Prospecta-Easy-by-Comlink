@@ -120,6 +120,13 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
   // video do King Air: subida ao mandar buscar, descida quando a busca termina
   const [video, setVideo] = useState<{ tipo: VideoAviaoTipo; legenda: string } | null>(null);
   const pousoPendente = useRef<number | null>(null); // qtd de empresas, esperando o aviao do mapa chegar em casa
+
+  // fechou a janela: sai da tela cheia que a busca abriu
+  const sairTelaCheia = () => { if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {}); };
+  const fechar = () => { sairTelaCheia(); onFechar(); };
+  // a janela fica montada escondida (aberto=false): sai da tela cheia tambem quando fecha por fora
+  useEffect(() => { if (!aberto) sairTelaCheia(); }, [aberto]);
+  useEffect(() => () => sairTelaCheia(), []);
   const [iaCadastro, setIaCadastro] = useState<string[]>([]); // campos que a Receita preencheu no cliente
   // contato sem cidade: empresa que a IA achou pelo nome, esperando o vendedor dizer se e o cliente
   const [iaAchada, setIaAchada] = useState<EmpresaAchada | null>(null);
@@ -194,6 +201,9 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
 
   async function iniciarIA() {
     if (!ia) return;
+    // tela cheia do navegador durante a busca (pedido do dono em 06/10). Tem que ser
+    // aqui, no clique: o navegador so deixa entrar em tela cheia como resposta a um clique.
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => { /* navegador recusou: segue na janela */ });
     setIaConfirmar(false); setIaAviso(null); setErro(null);
     // toca ja no clique: a busca dispara por baixo enquanto o aviao decola
     setVideo({ tipo: 'decolagem', legenda: `Decolando para achar empresas parecidas com ${contactNome}...` });
@@ -475,7 +485,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
       }
       if (j.criados > 0) {
         router.refresh();
-        onFechar();
+        fechar();
       } else {
         setErro(j.erro || 'Nenhuma empresa foi adicionada (podem já existir no CRM).');
       }
@@ -490,8 +500,11 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
   // janela cobria o card, o mouse "saia" dele, o card encolhia, a janela
   // remontava — e a tela entrava em laco de piscar.
   return createPortal(
-    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/80 p-4" onClick={onFechar}>
-      <div className={`relative w-full ${mostrarMapa ? 'max-w-6xl h-[88vh]' : 'max-w-3xl max-h-[85vh]'} flex flex-col rounded-2xl border border-purple-700/40 bg-[#1e0f35] shadow-2xl`}
+    <div className={`fixed inset-0 z-[150] flex items-center justify-center bg-black/80 ${mostrarMapa ? 'p-0' : 'p-4'}`} onClick={fechar}>
+      {/* com o mapa (busca e resultado) a janela ocupa a tela inteira: o voo aparece bem */}
+      <div className={`relative w-full flex flex-col bg-[#1e0f35] shadow-2xl ${mostrarMapa
+        ? 'h-[100dvh] max-w-none rounded-none border-0'
+        : 'max-w-3xl max-h-[85vh] rounded-2xl border border-purple-700/40'}`}
            onClick={(e) => e.stopPropagation()}>
         {video && <VideoAviao key={video.tipo} tipo={video.tipo} legenda={video.legenda} onFim={() => setVideo(null)} />}
         {/* baixa os videos so pra quem pode buscar, pra tocarem sem engasgar */}
@@ -513,7 +526,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
                   : 'Contato sem cidade cadastrada'}
               </p>
             </div>
-            <button onClick={onFechar} className="shrink-0 w-8 h-8 rounded-lg hover:bg-purple-800/40 text-neutral-400 hover:text-white">✕</button>
+            <button onClick={fechar} className="shrink-0 w-8 h-8 rounded-lg hover:bg-purple-800/40 text-neutral-400 hover:text-white">✕</button>
           </div>
 
           {perfis.length > 0 && (
