@@ -5,9 +5,10 @@ import { contexto, ContatoReferencia } from '@/lib/indicacoes/contexto';
 import {
   MODELO, DIAS_CACHE_IA, MIN_EMPRESAS, MAX_EMPRESAS, ESTIMATIVA_INICIAL_REAIS, POR_RODADA, MAX_RODADAS,
   EmpresaIA, DadosOficiais, chaveIA, montarPedido, iniciarBusca, consultarBusca, cancelarBusca, lerResposta, custoEmReais,
+  montarPedidoCnpj, lerCnpj, MAX_PESQUISAS_CNPJ,
 } from '@/lib/indicacoes/ia';
 import { normalizeCNPJ, normalizeName, normalizePhone } from '@/lib/utils/normalize';
-import { buscarDadosReceita, cnpjValido } from '@/lib/receita/cnpj';
+import { buscarDadosReceita, cnpjValido, formatarCnpj } from '@/lib/receita/cnpj';
 import { filtrarPorPorte } from '@/lib/indicacoes/porte';
 import { salvarComoContato } from '@/lib/indicacoes/salvar';
 import { getContactCoords } from '@/lib/data/brazil-cities-coords';
@@ -32,6 +33,10 @@ import type { UserRole } from '@/lib/types';
 //   INDICACOES_IA      resultado final por cliente de referencia (equipe reve sem custo)
 //   INDICACOES_IA_JOB  busca em andamento: rodada, resposta atual na OpenAI, empresas e custo acumulados
 //   INDICACOES_IA_USO  uma linha por busca, com o custo real somado — base da estimativa e do limite diario
+//
+// Rodada ZERO (contato sem CNPJ): a IA acha o CNPJ do proprio cliente, a Receita
+// confere (mesma cidade + nome) e ele e gravado no contato se o campo estiver vazio.
+// Dai a busca usa a atividade oficial (CNAE) e o porte em vez de adivinhar pelo nome.
 
 export const maxDuration = 30;
 const MINUTOS_MAX_RODADA = 4;
@@ -45,6 +50,7 @@ type MetaJob = {
   receita?: DadosOficiais | null; parecidos?: string[]; inicio?: string; perfil?: string | null;
   vazias?: number; // rodadas seguidas sem empresa nova
   pequenas?: string[]; // descartadas pela Receita (micro/pequena/fechada): nao podem voltar
+  cnpjCliente?: string | null; // CNPJ do cliente achado e confirmado na rodada zero
 };
 
 // Regra do dono (02/10): so contato APONTADO pode ter busca com IA. Vendedor so busca
@@ -75,6 +81,29 @@ async function dadosOficiais(cnpj: string | null): Promise<DadosOficiais | null>
     return d ? { razao_social: d.razao_social, cnae_principal: d.cnae_principal, cnaes_secundarios: d.cnaes_secundarios, porte: d.porte } : null;
   } catch {
     return null;
+  }
+}
+
+const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+const PALAVRAS_GENERICAS = new Set(['ltda', 'eireli', 'comercio', 'industria', 'servicos', 'maquinas', 'equipamentos',
+  'empresa', 'brasil', 'distribuidora', 'de', 'da', 'do', 'dos', 'das', 'e', 'me', 'epp', 'sa', 'cia']);
+
+// O CNPJ que a IA achou e mesmo deste cliente? Exige a MESMA cidade na Receita e
+// uma palavra propria do nome (nao "ltda", "maquinas"...) na razao social ou fantasia.
+// Sem isso, gravaria CNPJ de outra empresa no cadastro do cliente.
+async function conferirCnpjDoCliente(c: ContatoReferencia, digitos: string) {
+  try {
+    const d = await Promise.race([buscarDadosReceita(digitos), new Promise<null>((r) => setTimeout(() => r(null), 8000))]);
+    if (!d) return { dados: null, motivo: 'Receita não respondeu' };
+    const mesmaCidade = !!d.municipio && !!c.cidade && semAcento(d.municipio).trim() === semAcento(c.cidade).trim();
+    const nomeReceita = semAcento(`${d.razao_social || ''} ${d.nome_fantasia || ''}`);
+    const palavras = semAcento(`${c.company || ''} ${c.name}`).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !PALAVRAS_GENERICAS.has(w));
+    const nomeBate = palavras.some((w) => nomeReceita.includes(w));
+    if (!mesmaCidade) return { dados: null, motivo: `cidade na Receita é ${d.municipio}` };
+    if (!nomeBate) return { dados: null, motivo: `nome na Receita é ${d.razao_social}` };
+    return { dados: d, motivo: null };
+  } catch (e) {
+    return { dados: null, motivo: e instanceof Error ? e.message.slice(0, 80) : 'falhou' };
   }
 }
 
@@ -265,21 +294,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     const [receita, parecidos] = await Promise.all([dadosOficiais(contato.cnpj), parecidosNoCrm(admin, contato)]);
-    const { instrucoes, pedido } = montarPedido(
-      { ...contato, cidade: contato.cidade }, receita, parecidos,
-      { numero: 1, quantas: POR_RODADA, excluir: [] }
-    );
-    const busca = await iniciarBusca(instrucoes, pedido);
+    // sem CNPJ valido (ou Receita fora): primeiro acha o CNPJ do proprio cliente
+    const rodadaZero = !contato.cnpj || !cnpjValido(contato.cnpj);
+    const { instrucoes, pedido } = rodadaZero
+      ? montarPedidoCnpj({ ...contato, cidade: contato.cidade })
+      : montarPedido({ ...contato, cidade: contato.cidade }, receita, parecidos, { numero: 1, quantas: POR_RODADA, excluir: [] });
+    const busca = await iniciarBusca(instrucoes, pedido, rodadaZero ? { maxPesquisas: MAX_PESQUISAS_CNPJ } : {});
     const job = randomUUID();
 
     console.log('[indicacoes IA] iniciada', JSON.stringify({
       job, resposta: busca.id, chave, user: profile.user_id, custoMostrado: body.custoMostrado,
-      usouReceita: !!receita, parecidos: parecidos.length, tamanhoPedido: pedido.length,
+      usouReceita: !!receita, rodadaZero, parecidos: parecidos.length, tamanhoPedido: pedido.length,
     }));
 
     const meta: MetaJob = {
       chave, contato_id: contato.id, user_id: profile.user_id, alvo, custo_mostrado: body.custoMostrado ?? null,
-      rodada: 1, resposta: busca.id, empresas: [], custo_reais: 0, pesquisas: 0,
+      rodada: rodadaZero ? 0 : 1, resposta: busca.id, empresas: [], custo_reais: 0, pesquisas: 0,
       receita, parecidos, inicio: new Date().toISOString(),
     };
     await admin.from('ai_analysis_cache').insert({
@@ -371,6 +401,8 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
     .select('id');
   if (!legado && !travado?.length) return parcial();
 
+  if (rodada === 0) return depoisDaRodadaZero(admin, contato, job, meta, resp, segundos);
+
   const lido = lerResposta(resp, contato.company || contato.name, [...acumuladas.map((e) => e.nome), ...(meta.pequenas || [])]);
   const custo = (meta.custo_reais || 0) + custoEmReais(resp.usage, lido.pesquisas);
   const pesquisas = (meta.pesquisas || 0) + lido.pesquisas;
@@ -429,6 +461,56 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
   return NextResponse.json({
     status: 'pesquisando', segundos, rodada: rodada + 1, maxRodadas: MAX_RODADAS, maximo: MAX_EMPRESAS,
     empresas: await situacaoNoFunil(admin, orgId, empresas), custo_ate_agora: custo,
+  });
+}
+
+// Rodada zero terminou: confere o CNPJ achado, grava no contato e dispara a rodada 1
+// ja com a atividade oficial e o porte da Receita.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function depoisDaRodadaZero(admin: Admin, contato: ContatoReferencia, job: string, meta: MetaJob, resp: any, segundos: number) {
+  const orgId = contato.organization_id;
+  const achado = lerCnpj(resp);
+  const custo = (meta.custo_reais || 0) + custoEmReais(resp.usage, achado.pesquisas);
+  let receita: DadosOficiais | null = null;
+  let cnpjCliente: string | null = null;
+  let motivo: string | null = achado.cnpj ? null : 'IA não achou o CNPJ';
+
+  if (achado.cnpj && cnpjValido(achado.cnpj)) {
+    const conf = await conferirCnpjDoCliente(contato, achado.cnpj);
+    motivo = conf.motivo;
+    if (conf.dados) {
+      const d = conf.dados;
+      receita = { razao_social: d.razao_social, cnae_principal: d.cnae_principal, cnaes_secundarios: d.cnaes_secundarios, porte: d.porte };
+      cnpjCliente = formatarCnpj(achado.cnpj);
+      // grava so se o CNPJ do contato ainda estiver vazio: nunca sobrescreve o que alguem digitou
+      const { data: gravou } = await admin.from('contacts')
+        .update({ cnpj: cnpjCliente, cnpj_digits: achado.cnpj, updated_at: new Date().toISOString() })
+        .eq('id', contato.id).eq('organization_id', orgId).or('cnpj.is.null,cnpj.eq.')
+        .select('id');
+      if (!gravou?.length) motivo = 'CNPJ confirmado, mas o contato já tinha CNPJ: não sobrescrevi';
+    }
+  }
+
+  console.log('[indicacoes IA] rodada zero (CNPJ do cliente)', JSON.stringify({
+    job, achado: achado.cnpj, fonte: achado.fonte, confirmado: !!receita, motivo,
+    cnae: receita?.cnae_principal, porte: receita?.porte, pesquisas: achado.pesquisas, custo_rodada: custo - (meta.custo_reais || 0),
+  }));
+
+  const novoMeta: MetaJob = { ...meta, receita, cnpjCliente, custo_reais: custo, pesquisas: (meta.pesquisas || 0) + achado.pesquisas };
+  const { instrucoes, pedido } = montarPedido(
+    { ...contato, cnpj: cnpjCliente || contato.cnpj, cidade: contato.cidade || '' }, receita, meta.parecidos || [],
+    { numero: 1, quantas: POR_RODADA, excluir: [] }
+  );
+  const proxima = await iniciarBusca(instrucoes, pedido);
+  const { data: seguiu } = await admin.from('ai_analysis_cache')
+    .update({ result: { ...novoMeta, rodada: 1, resposta: proxima.id } })
+    .eq('organization_id', orgId).eq('analysis_type', 'INDICACOES_IA_JOB').eq('cache_key', job)
+    .select('id');
+  if (!seguiu?.length) await cancelarBusca(proxima.id); // parado enquanto conferia
+
+  return NextResponse.json({
+    status: 'pesquisando', segundos, rodada: 1, maxRodadas: MAX_RODADAS, maximo: MAX_EMPRESAS,
+    empresas: [], custo_ate_agora: custo, cnpjCliente, cnpjMotivo: motivo,
   });
 }
 

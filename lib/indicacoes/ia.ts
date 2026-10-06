@@ -326,7 +326,46 @@ async function openai(caminho: string, init?: RequestInit) {
 // Roda em segundo plano na OpenAI (background): a pesquisa pode passar de 1
 // minuto e a funcao da Vercel morre aos 60s — foi o que derrubou o garimpo
 // antigo com 504. Aqui a requisicao so dispara e a tela vai perguntando.
-export async function iniciarBusca(instrucoes: string, pedido: string) {
+// ---- Rodada zero: achar o CNPJ do PROPRIO cliente (pedido do dono em 06/10) ----
+// So 334 de 3811 contatos tinham CNPJ. Sem ele a busca adivinha o ramo pelo nome
+// (ja achou que a Wortex era locadora; e fabricante de maquinas pra plastico).
+// Com o CNPJ, a Receita da a atividade oficial (CNAE) e o porte — a melhor pista
+// de "empresa parecida". Quem confere se o CNPJ e mesmo do cliente e a rota
+// (cidade + nome contra a Receita); a IA so sugere.
+export const MAX_PESQUISAS_CNPJ = 3;
+
+export function montarPedidoCnpj(ref: { name: string; company: string | null; cidade: string; estado: string | null; endereco: string | null; website: string | null }) {
+  const empresa = ref.company && ref.company !== ref.name ? `${ref.name} (${ref.company})` : ref.name;
+  const instrucoes = `Você confere cadastro de empresas brasileiras. Responde somente com JSON válido.
+Nunca invente CNPJ: só devolva um número que você leu numa página desta pesquisa. Se não achar, devolva null.`;
+  const pedido = `Ache o CNPJ da empresa abaixo (de preferência a matriz ou a unidade desta cidade):
+- Empresa: ${empresa}
+- Cidade: ${ref.cidade}${ref.estado ? `/${ref.estado}` : ''}${ref.endereco ? `\n- Endereço: ${corta(ref.endereco, 150)}` : ''}${ref.website ? `\n- Site: ${ref.website}` : ''}
+
+Procure no site da empresa (rodapé, "contato", "quem somos") e em guias de CNPJ.
+Responda SOMENTE com: {"cnpj":"00.000.000/0000-00","razao_social":"","fonte":"url da página"}`;
+  return { instrucoes, pedido };
+}
+
+export function lerCnpj(resp: any): { cnpj: string | null; fonte: string | null; pesquisas: number } {
+  const saida: any[] = Array.isArray(resp?.output) ? resp.output : [];
+  const pesquisas = saida.filter((o) => o?.type === 'web_search_call').length;
+  let bruto = '';
+  for (const o of saida) if (o?.type === 'message') for (const c of o.content || []) if (typeof c?.text === 'string') bruto += c.text;
+  // aceita o JSON pedido ou, se a IA escreveu em texto, o primeiro numero com cara de CNPJ
+  let cnpj: string | null = null;
+  let fonte: string | null = null;
+  const ini = bruto.indexOf('{');
+  const fim = bruto.lastIndexOf('}');
+  if (ini >= 0 && fim > ini) {
+    try { const j = JSON.parse(bruto.slice(ini, fim + 1)); cnpj = texto(j?.cnpj); fonte = texto(j?.fonte); } catch { /* cai no regex */ }
+  }
+  if (!cnpj) cnpj = bruto.match(/\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2}/)?.[0] || null;
+  const digitos = cnpj?.replace(/\D/g, '') || '';
+  return { cnpj: digitos.length === 14 ? digitos : null, fonte, pesquisas };
+}
+
+export async function iniciarBusca(instrucoes: string, pedido: string, opcoes: { maxPesquisas?: number } = {}) {
   const r = await openai('/responses', {
     method: 'POST',
     body: JSON.stringify({
@@ -339,7 +378,7 @@ export async function iniciarBusca(instrucoes: string, pedido: string) {
       // No teste o gpt-5 fez 17 pesquisas e 7,4 mil tokens de saida pra 12 empresas;
       // 12 pesquisas ainda chegam a 10+, e a saida com folga evita resposta cortada
       // (cortada = sem JSON = paga e nao aproveita nada).
-      max_tool_calls: MAX_PESQUISAS,
+      max_tool_calls: opcoes.maxPesquisas ?? MAX_PESQUISAS,
       max_output_tokens: 20000,
       ...(RACIOCINA(MODELO) ? { reasoning: { effort: process.env.INDICACOES_IA_ESFORCO || 'low' } } : {}),
       background: true,

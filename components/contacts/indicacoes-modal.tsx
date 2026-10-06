@@ -105,6 +105,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
   const [iaAviso, setIaAviso] = useState<string | null>(null);
   const [iaRodada, setIaRodada] = useState<{ atual: number; max: number } | null>(null);
   const [parando, setParando] = useState(false);
+  const [iaCnpj, setIaCnpj] = useState<string | null>(null);
   // empresas que o aviao ja "visitou": so essas aparecem na lista enquanto a busca anima
   const [reveladas, setReveladas] = useState<Set<string>>(new Set());
   const [animar, setAnimar] = useState(false);
@@ -183,6 +184,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
       if (j.erro || !j.job) { setIaAviso(j.erro || 'Não consegui iniciar a busca.'); return; }
       setIaSegundos(0);
       setIaRodada(null);
+      setIaCnpj(null);
       setReveladas(new Set());
       setAnimar(true);
       setOrigem('ia'); setPendente(false); setResumo(null); setEmpresas([]); setEscolhidas(new Set());
@@ -205,7 +207,10 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
           empresas: j.empresas?.length, custo: j.custo_reais ?? j.custo_ate_agora, motivo: j.motivo, erro: j.erro });
         if (j.status === 'pesquisando') {
           setIaSegundos(j.segundos || 0);
-          if (j.rodada) setIaRodada({ atual: j.rodada, max: j.maxRodadas });
+          // rodada 0 = conferindo o CNPJ do proprio cliente (o "if (j.rodada)" pulava o zero)
+          if (j.rodada != null) setIaRodada({ atual: j.rodada, max: j.maxRodadas });
+          if (j.cnpjCliente) setIaCnpj(`CNPJ do cliente confirmado na Receita: ${j.cnpjCliente} — busca pela atividade oficial.`);
+          else if (j.cnpjMotivo) setIaCnpj(`CNPJ do cliente não confirmado (${j.cnpjMotivo}) — busca pelo cadastro.`);
           // parciais: a lista e o mapa vao enchendo enquanto as rodadas seguem
           if (j.empresas?.length) { setOrigem('ia'); setPendente(false); setResumo(null); setEmpresas(j.empresas); }
           return;
@@ -379,12 +384,15 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-emerald-200">
                       Pesquisando na internet... {iaSegundos}s
-                      {iaRodada && <span className="text-neutral-400 font-normal"> · rodada {iaRodada.atual} de até {iaRodada.max}</span>}
+                      {iaRodada && (iaRodada.atual === 0
+                        ? <span className="text-neutral-400 font-normal"> · conferindo o CNPJ do cliente na Receita</span>
+                        : <span className="text-neutral-400 font-normal"> · rodada {iaRodada.atual} de até {iaRodada.max}</span>)}
                       <span className="text-neutral-400 font-normal"> · {empresas.length} de 12</span>
                     </p>
                     <p className="text-[11px] text-neutral-500">
                       Para sozinha ao chegar em 12. Pode fechar a janela — o que já foi achado fica salvo nos seus Rascunhos.
                     </p>
+                    {iaCnpj && <p className="text-[11px] text-sky-300/90 mt-0.5">{iaCnpj}</p>}
                   </div>
                   <button onClick={pararIA} disabled={parando}
                     className="ml-auto shrink-0 px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-bold disabled:opacity-50">
