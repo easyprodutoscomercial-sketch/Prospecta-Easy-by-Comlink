@@ -6,37 +6,13 @@ import {
   buscarDadosReceita, limparCnpj, formatarCnpj, cnpjValido,
   CnpjNaoEncontrado, DadosReceita,
 } from '@/lib/receita/cnpj';
+import { preencherVazios, CAMPOS_PREENCHIVEIS_SELECT } from '@/lib/receita/preencher';
 
 // GET  /api/contacts/:id/receita  -> consulta a Receita pelo CNPJ ja cadastrado
 // POST /api/contacts/:id/receita  -> o vendedor informa o CNPJ; salva e consulta na hora
 //
 // Em ambos os casos so sao preenchidos os campos VAZIOS do contato.
 // Nada que uma pessoa digitou e sobrescrito.
-
-const CAMPOS_SELECT =
-  'id, organization_id, cnpj, cnpj_digits, company, endereco, cidade, estado, cep, phone, email, contato_nome, cargo';
-
-const PREENCHIVEIS: { campo: string; rotulo: string; valor: (d: DadosReceita) => string | null }[] = [
-  { campo: 'company',  rotulo: 'Empresa',  valor: (d) => d.razao_social },
-  { campo: 'endereco', rotulo: 'Endereco', valor: (d) => d.endereco_completo },
-  { campo: 'cidade',   rotulo: 'Cidade',   valor: (d) => d.municipio },
-  { campo: 'estado',   rotulo: 'Estado',   valor: (d) => d.uf },
-  { campo: 'cep',      rotulo: 'CEP',      valor: (d) => d.cep },
-  { campo: 'phone',    rotulo: 'Telefone', valor: (d) => d.telefone },
-  { campo: 'email',    rotulo: 'Email',    valor: (d) => d.email },
-  { campo: 'contato_nome', rotulo: 'Nome do contato', valor: (d) => socioPrincipal(d)?.nome ?? null },
-  { campo: 'cargo',        rotulo: 'Cargo',           valor: (d) => socioPrincipal(d)?.qualificacao ?? null },
-];
-
-function socioPrincipal(d: DadosReceita) {
-  if (!d.socios.length) return null;
-  const admin = d.socios.find((s) => /administrador|presidente|diretor/i.test(s.qualificacao || ''));
-  return admin || d.socios[0];
-}
-
-function vazio(v: unknown) {
-  return v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
-}
 
 async function autorizar(id: string) {
   const supabase = await createClient();
@@ -47,7 +23,7 @@ async function autorizar(id: string) {
   if (!profile) return { erro: NextResponse.json({ error: 'Profile nao encontrado' }, { status: 404 }) };
 
   const admin = getAdminClient();
-  const { data: contato, error } = await admin.from('contacts').select(CAMPOS_SELECT).eq('id', id).single();
+  const { data: contato, error } = await admin.from('contacts').select(CAMPOS_PREENCHIVEIS_SELECT).eq('id', id).single();
   if (error || !contato) return { erro: NextResponse.json({ error: 'Contato nao encontrado' }, { status: 404 }) };
   if (contato.organization_id !== profile.organization_id) {
     return { erro: NextResponse.json({ error: 'Nao autorizado' }, { status: 403 }) };
@@ -78,25 +54,9 @@ async function consultarEPreencher(
     });
   }
 
-  const mudancas: Record<string, string> = { ...extras };
-  const atualizados: string[] = [];
-  for (const p of PREENCHIVEIS) {
-    const novo = p.valor(dados);
-    if (!vazio(novo) && vazio(contato[p.campo])) {
-      mudancas[p.campo] = String(novo);
-      atualizados.push(p.rotulo);
-    }
-  }
-
-  if (Object.keys(mudancas).length > 0) {
-    const { error } = await admin
-      .from('contacts')
-      .update({ ...mudancas, updated_at: new Date().toISOString() })
-      .eq('id', contato.id as string);
-    if (error) return NextResponse.json({ dados, atualizados: [], erro: 'Nao consegui salvar os campos preenchidos.' });
-  }
-
-  return NextResponse.json({ dados, atualizados });
+  const { atualizados, erro, avisos } = await preencherVazios(admin, contato, dados, extras);
+  if (erro) return NextResponse.json({ dados, atualizados: [], erro });
+  return NextResponse.json({ dados, atualizados, avisos });
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

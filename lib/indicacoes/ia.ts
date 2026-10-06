@@ -334,13 +334,15 @@ async function openai(caminho: string, init?: RequestInit) {
 // (cidade + nome contra a Receita); a IA so sugere.
 export const MAX_PESQUISAS_CNPJ = 3;
 
-export function montarPedidoCnpj(ref: { name: string; company: string | null; cidade: string; estado: string | null; endereco: string | null; website: string | null }) {
+// cidade pode faltar (45% dos contatos estao sem): ai a busca vai so pelo nome e
+// o vendedor confirma na tela se a empresa achada e mesmo o cliente.
+export function montarPedidoCnpj(ref: { name: string; company: string | null; cidade: string | null; estado: string | null; endereco: string | null; website: string | null }) {
   const empresa = ref.company && ref.company !== ref.name ? `${ref.name} (${ref.company})` : ref.name;
   const instrucoes = `Você confere cadastro de empresas brasileiras. Responde somente com JSON válido.
 Nunca invente CNPJ: só devolva um número que você leu numa página desta pesquisa. Se não achar, devolva null.`;
   const pedido = `Ache o CNPJ da empresa abaixo (de preferência a matriz ou a unidade desta cidade):
 - Empresa: ${empresa}
-- Cidade: ${ref.cidade}${ref.estado ? `/${ref.estado}` : ''}${ref.endereco ? `\n- Endereço: ${corta(ref.endereco, 150)}` : ''}${ref.website ? `\n- Site: ${ref.website}` : ''}
+- Cidade: ${ref.cidade ? `${ref.cidade}${ref.estado ? `/${ref.estado}` : ''}` : `não sabemos${ref.estado ? ` (estado: ${ref.estado})` : ''} — ache pelo nome`}${ref.endereco ? `\n- Endereço: ${corta(ref.endereco, 150)}` : ''}${ref.website ? `\n- Site: ${ref.website}` : ''}
 
 Procure no site da empresa (rodapé, "contato", "quem somos") e em guias de CNPJ.
 Responda SOMENTE com: {"cnpj":"00.000.000/0000-00","razao_social":"","fonte":"url da página"}`;

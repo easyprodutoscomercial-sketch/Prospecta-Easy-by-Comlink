@@ -44,6 +44,11 @@ interface Empresa {
   apagado?: boolean;
 }
 
+interface EmpresaAchada {
+  cnpj: string; razao_social: string | null; nome_fantasia: string | null;
+  cidade: string | null; uf: string | null; endereco: string | null; porte: string | null;
+}
+
 interface InfoIA {
   custoEstimado: number;
   estimativaBaseadaEm: number;
@@ -53,7 +58,8 @@ interface InfoIA {
   segmentoCadastrado: string | null;
   origem: [number, number] | null;
   estado: string | null;
-  bloqueio: string | null; // por que este usuario nao pode buscar aqui (contato sem dono, de outro vendedor)
+  bloqueio: string | null;
+  semCidade?: boolean; // a busca acha o CNPJ pelo nome e o vendedor confirma a empresa // por que este usuario nao pode buscar aqui (contato sem dono, de outro vendedor)
   historico: { id: string; buscadoEm: string; empresas: number; quem: string; custo: number | null }[];
   resultado?: { id?: string } | null;
 }
@@ -106,6 +112,11 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
   const [iaRodada, setIaRodada] = useState<{ atual: number; max: number } | null>(null);
   const [parando, setParando] = useState(false);
   const [iaCnpj, setIaCnpj] = useState<string | null>(null);
+  const [iaCadastro, setIaCadastro] = useState<string[]>([]); // campos que a Receita preencheu no cliente
+  // contato sem cidade: empresa que a IA achou pelo nome, esperando o vendedor dizer se e o cliente
+  const [iaAchada, setIaAchada] = useState<EmpresaAchada | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
+  const [iaAchadaErro, setIaAchadaErro] = useState<string | null>(null);
   // empresas que o aviao ja "visitou": so essas aparecem na lista enquanto a busca anima
   const [reveladas, setReveladas] = useState<Set<string>>(new Set());
   const [animar, setAnimar] = useState(false);
@@ -185,6 +196,8 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
       setIaSegundos(0);
       setIaRodada(null);
       setIaCnpj(null);
+      setIaAchada(null); setIaAchadaErro(null);
+      setIaCadastro(j.cadastro || []);
       setReveladas(new Set());
       setAnimar(true);
       setOrigem('ia'); setPendente(false); setResumo(null); setEmpresas([]); setEscolhidas(new Set());
@@ -205,7 +218,14 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
         if (!vivo) return;
         console.info('[indicacoes IA] andamento', { status: j.status, segundos: j.segundos, rodada: j.rodada,
           empresas: j.empresas?.length, custo: j.custo_reais ?? j.custo_ate_agora, motivo: j.motivo, erro: j.erro });
+        if (j.status === 'confirmar_cnpj') {
+          setIaSegundos(j.segundos || 0);
+          setIaAchada(j.empresa);
+          return;
+        }
         if (j.status === 'pesquisando') {
+          setIaAchada(null);
+          if (j.cadastro?.length) setIaCadastro(j.cadastro);
           setIaSegundos(j.segundos || 0);
           // rodada 0 = conferindo o CNPJ do proprio cliente (o "if (j.rodada)" pulava o zero)
           if (j.rodada != null) setIaRodada({ atual: j.rodada, max: j.maxRodadas });
@@ -242,6 +262,35 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
         } else {
           carregarIA();
         }
+  }
+
+  // vendedor responde se a empresa achada pelo nome e mesmo o cliente
+  async function confirmarEmpresa(sim: boolean) {
+    if (!iaJob) return;
+    setConfirmando(true); setIaAchadaErro(null);
+    try {
+      const r = await fetch(`/api/contacts/${contactId}/indicacoes/ia?job=${encodeURIComponent(iaJob)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmar: sim }),
+      });
+      const j = await r.json();
+      console.info('[indicacoes IA] confirmar empresa', { sim, status: r.status, ...j });
+      if (j.erro) { setIaAchadaErro(j.erro); return; }
+      if (j.status === 'pesquisando') {
+        setIaAchada(null);
+        if (j.cadastro?.length) setIaCadastro(j.cadastro);
+        if (j.cnpjCliente) setIaCnpj(`CNPJ do cliente confirmado: ${j.cnpjCliente} — busca pela atividade oficial.`);
+        if (j.rodada != null) setIaRodada({ atual: j.rodada, max: j.maxRodadas });
+        return;
+      }
+      setIaAchada(null);
+      terminou(j);
+    } catch {
+      setIaAchadaErro('Não consegui enviar. Tente de novo.');
+    } finally {
+      setConfirmando(false);
+    }
   }
 
   async function pararIA() {
@@ -376,9 +425,33 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
             </div>
           )}
 
-          {cidade && ia && (
+          {ia && (
             <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3">
-              {iaJob ? (
+              {iaJob && iaAchada ? (
+                <div>
+                  <p className="text-sm font-semibold text-sky-200">Achamos esta empresa pelo nome — é o seu cliente?</p>
+                  <div className="mt-2 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2.5 text-[12px] text-neutral-200 space-y-0.5">
+                    <p className="font-semibold">{iaAchada.nome_fantasia || iaAchada.razao_social}</p>
+                    {iaAchada.nome_fantasia && iaAchada.razao_social && <p className="text-neutral-400">{iaAchada.razao_social}</p>}
+                    <p className="text-neutral-400">CNPJ {iaAchada.cnpj}{iaAchada.porte ? ` · ${iaAchada.porte}` : ''}</p>
+                    <p className="text-neutral-400">{[iaAchada.endereco, [iaAchada.cidade, iaAchada.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ')}</p>
+                  </div>
+                  <p className="mt-1.5 text-[11px] text-neutral-500">
+                    Sim: a cidade, o endereço e o que estiver vazio na ficha são preenchidos pela Receita e a busca continua. Não: nada é gravado.
+                  </p>
+                  {iaAchadaErro && <p className="mt-1 text-[11px] text-red-300/90">{iaAchadaErro}</p>}
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => confirmarEmpresa(true)} disabled={confirmando}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#1a0a2e] text-xs font-bold disabled:opacity-50">
+                      {confirmando ? 'Atualizando...' : 'Sim, é o cliente'}
+                    </button>
+                    <button onClick={() => confirmarEmpresa(false)} disabled={confirmando}
+                      className="px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-bold disabled:opacity-50">
+                      Não é
+                    </button>
+                  </div>
+                </div>
+              ) : iaJob ? (
                 <div className="flex items-center gap-3">
                   <span className="shrink-0 w-5 h-5 rounded-full border-2 border-emerald-400/30 border-t-emerald-300 animate-spin" />
                   <div className="min-w-0">
@@ -393,6 +466,9 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
                       Para sozinha ao chegar em 12. Pode fechar a janela — o que já foi achado fica salvo nos seus Rascunhos.
                     </p>
                     {iaCnpj && <p className="text-[11px] text-sky-300/90 mt-0.5">{iaCnpj}</p>}
+                    {iaCadastro.length > 0 && (
+                      <p className="text-[11px] text-emerald-300/90 mt-0.5">Cadastro completado pela Receita: {iaCadastro.join(', ')}.</p>
+                    )}
                   </div>
                   <button onClick={pararIA} disabled={parando}
                     className="ml-auto shrink-0 px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-bold disabled:opacity-50">
@@ -420,7 +496,9 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
                       {origem === 'ia' ? 'Buscar de novo com IA' : 'Buscar até 12 empresas de médio/grande porte com IA'}
                     </p>
                     <p className="text-[11px] text-neutral-500">
-                      {ia.segmentoCadastrado ? `Segmento: ${ia.segmentoCadastrado}` : 'Sem segmento cadastrado — a IA descobre pelo nome da empresa'}
+                      {ia.semCidade
+                        ? 'Sem cidade: primeiro acho o CNPJ pelo nome e você confirma a empresa'
+                        : ia.segmentoCadastrado ? `Segmento: ${ia.segmentoCadastrado}` : 'Sem segmento cadastrado — a IA descobre pelo nome da empresa'}
                       {' · '}custo ~{reais(ia.custoEstimado)}
                       {ia.estimativaBaseadaEm > 0 ? ` (média das últimas ${ia.estimativaBaseadaEm})` : ' (estimativa)'}
                       {' · '}você ainda tem {ia.restantesHoje} de {ia.limiteDia} buscas hoje

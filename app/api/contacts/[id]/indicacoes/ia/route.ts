@@ -1,14 +1,15 @@
 import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { contexto, ContatoReferencia } from '@/lib/indicacoes/contexto';
+import { contexto, ContatoReferencia, CAMPOS_CONTATO_REFERENCIA } from '@/lib/indicacoes/contexto';
+import { preencherVazios, CAMPOS_PREENCHIVEIS_SELECT } from '@/lib/receita/preencher';
 import {
   MODELO, DIAS_CACHE_IA, MIN_EMPRESAS, MAX_EMPRESAS, ESTIMATIVA_INICIAL_REAIS, POR_RODADA, MAX_RODADAS,
   EmpresaIA, DadosOficiais, chaveIA, montarPedido, iniciarBusca, consultarBusca, cancelarBusca, lerResposta, custoEmReais,
   montarPedidoCnpj, lerCnpj, MAX_PESQUISAS_CNPJ,
 } from '@/lib/indicacoes/ia';
 import { normalizeCNPJ, normalizeName, normalizePhone } from '@/lib/utils/normalize';
-import { buscarDadosReceita, cnpjValido, formatarCnpj } from '@/lib/receita/cnpj';
+import { buscarDadosReceita, cnpjValido, formatarCnpj, limparCnpj, type DadosReceita } from '@/lib/receita/cnpj';
 import { filtrarPorPorte } from '@/lib/indicacoes/porte';
 import { salvarComoContato } from '@/lib/indicacoes/salvar';
 import { getContactCoords } from '@/lib/data/brazil-cities-coords';
@@ -51,7 +52,38 @@ type MetaJob = {
   vazias?: number; // rodadas seguidas sem empresa nova
   pequenas?: string[]; // descartadas pela Receita (micro/pequena/fechada): nao podem voltar
   cnpjCliente?: string | null; // CNPJ do cliente achado e confirmado na rodada zero
+  // contato SEM cidade: a busca pausa ate o vendedor confirmar que a empresa achada e o cliente
+  aguardando?: EmpresaAchada | null;
+  cadastro?: string[]; // campos do cadastro que a Receita preencheu
 };
+
+type EmpresaAchada = {
+  cnpj: string; razao_social: string | null; nome_fantasia: string | null;
+  cidade: string | null; uf: string | null; endereco: string | null; porte: string | null;
+};
+const AGUARDANDO = 'aguardando-confirmacao';
+
+const paraOficiais = (d: DadosReceita): DadosOficiais =>
+  ({ razao_social: d.razao_social, cnae_principal: d.cnae_principal, cnaes_secundarios: d.cnaes_secundarios, porte: d.porte });
+
+// Regra do dono (06/10): achou o CNPJ do cliente -> completa o cadastro com a Receita
+// (cidade, endereco, CEP, telefone...) ANTES de buscar as indicacoes. So campos vazios.
+// Devolve o contato relido, ja com a cidade nova, e os campos preenchidos.
+async function completarCadastro(admin: Admin, contato: ContatoReferencia, dados: DadosReceita) {
+  const { data: atual } = await admin.from('contacts').select(CAMPOS_PREENCHIVEIS_SELECT)
+    .eq('id', contato.id).eq('organization_id', contato.organization_id).single();
+  const registro = (atual || {}) as unknown as Record<string, unknown>;
+  const digitos = limparCnpj(dados.cnpj);
+  const temCnpj = !!limparCnpj(registro.cnpj as string | null);
+  const extras: Record<string, string> = !temCnpj && digitos ? { cnpj: formatarCnpj(digitos), cnpj_digits: digitos } : {};
+  const { atualizados, erro, avisos } = await preencherVazios(admin, registro, dados, extras);
+  if (erro) console.warn('[indicacoes IA] nao completou o cadastro', contato.id, erro);
+  const { data: novo } = await admin.from('contacts').select(CAMPOS_CONTATO_REFERENCIA)
+    .eq('id', contato.id).eq('organization_id', contato.organization_id).single();
+  // avisos (ex.: CNPJ ja em outro contato) vao junto, pro vendedor ver na tela
+  const cadastro = [...atualizados, ...avisos];
+  return { contato: (novo as unknown as ContatoReferencia) || contato, cadastro };
+}
 
 // Regra do dono (02/10): so contato APONTADO pode ter busca com IA. Vendedor so busca
 // nos apontados pra ele (nao gasta a cota no cliente do colega); admin/gerente em qualquer apontado.
@@ -69,21 +101,6 @@ function alvoDaBusca(c: ContatoReferencia) {
   return c.segmento?.trim() || c.company?.trim() || c.name;
 }
 
-// Receita (CNAE e porte) e a pista mais forte de "empresa parecida", mas e servico
-// externo: se demorar, a busca segue so com o cadastro.
-async function dadosOficiais(cnpj: string | null): Promise<DadosOficiais | null> {
-  if (!cnpj || !cnpjValido(cnpj)) return null;
-  try {
-    const d = await Promise.race([
-      buscarDadosReceita(cnpj),
-      new Promise<null>((r) => setTimeout(() => r(null), 8000)),
-    ]);
-    return d ? { razao_social: d.razao_social, cnae_principal: d.cnae_principal, cnaes_secundarios: d.cnaes_secundarios, porte: d.porte } : null;
-  } catch {
-    return null;
-  }
-}
-
 const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 const PALAVRAS_GENERICAS = new Set(['ltda', 'eireli', 'comercio', 'industria', 'servicos', 'maquinas', 'equipamentos',
   'empresa', 'brasil', 'distribuidora', 'de', 'da', 'do', 'dos', 'das', 'e', 'me', 'epp', 'sa', 'cia']);
@@ -99,7 +116,11 @@ async function conferirCnpjDoCliente(c: ContatoReferencia, digitos: string) {
     const nomeReceita = semAcento(`${d.razao_social || ''} ${d.nome_fantasia || ''}`);
     const palavras = semAcento(`${c.company || ''} ${c.name}`).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !PALAVRAS_GENERICAS.has(w));
     const nomeBate = palavras.some((w) => nomeReceita.includes(w));
-    if (!mesmaCidade) return { dados: null, motivo: `cidade na Receita é ${d.municipio}` };
+    // sem cidade no cadastro nao da pra comparar: confere o estado (se tiver) e o vendedor confirma na tela
+    if (c.cidade && !mesmaCidade) return { dados: null, motivo: `cidade na Receita é ${d.municipio}` };
+    if (!c.cidade && c.estado && d.uf && d.uf.toUpperCase() !== c.estado.trim().toUpperCase()) {
+      return { dados: null, motivo: `estado na Receita é ${d.uf}` };
+    }
     if (!nomeBate) return { dados: null, motivo: `nome na Receita é ${d.razao_social}` };
     return { dados: d, motivo: null };
   } catch (e) {
@@ -198,9 +219,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const job = request.nextUrl.searchParams.get('job');
     if (job) return acompanhar(admin, contato, job);
 
-    if (!contato.cidade) {
-      return NextResponse.json({ erro: 'Este contato não tem cidade cadastrada. Preencha a cidade para buscar indicações.' });
-    }
 
     const chave = chaveIA(contato.id);
     // todas as buscas ja feitas para este cliente (o dono quer rever qualquer uma, quando quiser)
@@ -251,6 +269,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       // ponto de partida do aviao no mapa da busca
       origem: getContactCoords(contato.cidade, contato.estado), estado: contato.estado,
       bloqueio: bloqueioDeBusca(contato, profile, info.limiteDia),
+      semCidade: !contato.cidade, // a busca acha o CNPJ pelo nome e o vendedor confirma
       resultado: resultado && { ...resultado, id: guardado?.id }, historico, jobEmAndamento: andamento?.cache_key || null,
     });
   } catch (e) {
@@ -272,9 +291,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (body?.confirmado !== true) {
       return NextResponse.json({ erro: 'Confirme o custo antes de buscar.' }, { status: 400 });
     }
-    if (!contato.cidade) {
-      return NextResponse.json({ erro: 'Este contato não tem cidade cadastrada.' }, { status: 400 });
-    }
     const info = await painel(admin, orgId, profile.user_id);
     const bloqueio = bloqueioDeBusca(contato, profile, info.limiteDia);
     if (bloqueio) return NextResponse.json({ erro: bloqueio }, { status: 403 });
@@ -293,24 +309,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       return NextResponse.json({ erro: `Você já usou suas ${info.limiteDia} buscas de hoje. Amanhã libera de novo.` }, { status: 429 });
     }
 
-    const [receita, parecidos] = await Promise.all([dadosOficiais(contato.cnpj), parecidosNoCrm(admin, contato)]);
-    // sem CNPJ valido (ou Receita fora): primeiro acha o CNPJ do proprio cliente
-    const rodadaZero = !contato.cnpj || !cnpjValido(contato.cnpj);
+    // ja tem CNPJ: completa o cadastro com a Receita antes (sem custo de IA)
+    let ref = contato;
+    let receita: DadosOficiais | null = null;
+    let cadastro: string[] = [];
+    if (contato.cnpj && cnpjValido(contato.cnpj)) {
+      const d = await Promise.race([
+        buscarDadosReceita(contato.cnpj).catch(() => null),
+        new Promise<null>((r) => setTimeout(() => r(null), 8000)),
+      ]);
+      if (d) {
+        receita = paraOficiais(d);
+        ({ contato: ref, cadastro } = await completarCadastro(admin, contato, d));
+      }
+    }
+    // sem CNPJ valido: primeiro acha o CNPJ do proprio cliente (rodada zero)
+    const rodadaZero = !ref.cnpj || !cnpjValido(ref.cnpj);
+    if (!rodadaZero && !ref.cidade) {
+      return NextResponse.json({ erro: 'A Receita não respondeu e o contato não tem cidade. Preencha a cidade ou tente de novo em um minuto.' }, { status: 503 });
+    }
+    const parecidos = await parecidosNoCrm(admin, ref);
     const { instrucoes, pedido } = rodadaZero
-      ? montarPedidoCnpj({ ...contato, cidade: contato.cidade })
-      : montarPedido({ ...contato, cidade: contato.cidade }, receita, parecidos, { numero: 1, quantas: POR_RODADA, excluir: [] });
+      ? montarPedidoCnpj(ref)
+      : montarPedido({ ...ref, cidade: ref.cidade as string }, receita, parecidos, { numero: 1, quantas: POR_RODADA, excluir: [] });
     const busca = await iniciarBusca(instrucoes, pedido, rodadaZero ? { maxPesquisas: MAX_PESQUISAS_CNPJ } : {});
     const job = randomUUID();
 
     console.log('[indicacoes IA] iniciada', JSON.stringify({
       job, resposta: busca.id, chave, user: profile.user_id, custoMostrado: body.custoMostrado,
-      usouReceita: !!receita, rodadaZero, parecidos: parecidos.length, tamanhoPedido: pedido.length,
+      usouReceita: !!receita, rodadaZero, semCidade: !ref.cidade, cadastro, parecidos: parecidos.length, tamanhoPedido: pedido.length,
     }));
 
     const meta: MetaJob = {
       chave, contato_id: contato.id, user_id: profile.user_id, alvo, custo_mostrado: body.custoMostrado ?? null,
       rodada: rodadaZero ? 0 : 1, resposta: busca.id, empresas: [], custo_reais: 0, pesquisas: 0,
-      receita, parecidos, inicio: new Date().toISOString(),
+      receita, parecidos, inicio: new Date().toISOString(), cadastro,
     };
     await admin.from('ai_analysis_cache').insert({
       organization_id: orgId,
@@ -320,7 +353,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       expires_at: new Date(Date.now() + HORAS_REGISTRO_JOB * 36e5).toISOString(),
     });
 
-    return NextResponse.json({ job });
+    return NextResponse.json({ job, cadastro });
   } catch (e) {
     console.error('[indicacoes IA POST]', e);
     const msg = e instanceof Error ? e.message : '';
@@ -383,6 +416,9 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
     empresas: await situacaoNoFunil(admin, orgId, acumuladas), custo_ate_agora: meta.custo_reais || 0,
   });
 
+  if (meta.aguardando) {
+    return NextResponse.json({ status: 'confirmar_cnpj', segundos, empresa: meta.aguardando, custo_ate_agora: meta.custo_reais || 0 });
+  }
   const resposta = meta.resposta || job;
   if (resposta.startsWith('processando:')) return parcial(); // outra aba esta salvando esta rodada
 
@@ -464,41 +500,63 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
   });
 }
 
-// Rodada zero terminou: confere o CNPJ achado, grava no contato e dispara a rodada 1
-// ja com a atividade oficial e o porte da Receita.
+// Rodada zero terminou: confere o CNPJ achado na Receita.
+// - contato COM cidade: confirmado (cidade + nome) -> completa o cadastro e dispara a rodada 1.
+// - contato SEM cidade: confirmado pelo nome -> PAUSA e pergunta ao vendedor se e o cliente
+//   (nome parecido engana: gravar cidade errada no cadastro e pior que deixar em branco).
+//   Sem CNPJ confirmavel nao ha onde buscar: encerra pedindo a cidade.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function depoisDaRodadaZero(admin: Admin, contato: ContatoReferencia, job: string, meta: MetaJob, resp: any, segundos: number) {
   const orgId = contato.organization_id;
   const achado = lerCnpj(resp);
   const custo = (meta.custo_reais || 0) + custoEmReais(resp.usage, achado.pesquisas);
-  let receita: DadosOficiais | null = null;
-  let cnpjCliente: string | null = null;
+  const pesquisas = (meta.pesquisas || 0) + achado.pesquisas;
   let motivo: string | null = achado.cnpj ? null : 'IA não achou o CNPJ';
+  let dados: DadosReceita | null = null;
 
   if (achado.cnpj && cnpjValido(achado.cnpj)) {
     const conf = await conferirCnpjDoCliente(contato, achado.cnpj);
     motivo = conf.motivo;
-    if (conf.dados) {
-      const d = conf.dados;
-      receita = { razao_social: d.razao_social, cnae_principal: d.cnae_principal, cnaes_secundarios: d.cnaes_secundarios, porte: d.porte };
-      cnpjCliente = formatarCnpj(achado.cnpj);
-      // grava so se o CNPJ do contato ainda estiver vazio: nunca sobrescreve o que alguem digitou
-      const { data: gravou } = await admin.from('contacts')
-        .update({ cnpj: cnpjCliente, cnpj_digits: achado.cnpj, updated_at: new Date().toISOString() })
-        .eq('id', contato.id).eq('organization_id', orgId).or('cnpj.is.null,cnpj.eq.')
-        .select('id');
-      if (!gravou?.length) motivo = 'CNPJ confirmado, mas o contato já tinha CNPJ: não sobrescrevi';
-    }
+    dados = conf.dados;
   }
 
   console.log('[indicacoes IA] rodada zero (CNPJ do cliente)', JSON.stringify({
-    job, achado: achado.cnpj, fonte: achado.fonte, confirmado: !!receita, motivo,
-    cnae: receita?.cnae_principal, porte: receita?.porte, pesquisas: achado.pesquisas, custo_rodada: custo - (meta.custo_reais || 0),
+    job, achado: achado.cnpj, fonte: achado.fonte, confirmado: !!dados, semCidade: !contato.cidade, motivo,
+    cnae: dados?.cnae_principal, porte: dados?.porte, pesquisas: achado.pesquisas, custo_rodada: custo - (meta.custo_reais || 0),
   }));
 
-  const novoMeta: MetaJob = { ...meta, receita, cnpjCliente, custo_reais: custo, pesquisas: (meta.pesquisas || 0) + achado.pesquisas };
+  if (!contato.cidade) {
+    if (!dados) {
+      return finalizar(admin, contato, job, { ...meta, custo_reais: custo, pesquisas }, 'sem cidade',
+        `Não achei o CNPJ deste cliente pelo nome${motivo ? ` (${motivo})` : ''}. Preencha a cidade ou o CNPJ na ficha e busque de novo.`);
+    }
+    const empresa: EmpresaAchada = {
+      cnpj: formatarCnpj(achado.cnpj as string), razao_social: dados.razao_social, nome_fantasia: dados.nome_fantasia,
+      cidade: dados.municipio, uf: dados.uf, endereco: dados.endereco_completo, porte: dados.porte,
+    };
+    await admin.from('ai_analysis_cache')
+      .update({ result: { ...meta, custo_reais: custo, pesquisas, aguardando: empresa, resposta: AGUARDANDO } })
+      .eq('organization_id', orgId).eq('analysis_type', 'INDICACOES_IA_JOB').eq('cache_key', job);
+    return NextResponse.json({ status: 'confirmar_cnpj', segundos, empresa, custo_ate_agora: custo });
+  }
+
+  let ref = contato;
+  let cadastro: string[] = meta.cadastro || [];
+  if (dados) ({ contato: ref, cadastro } = await completarCadastro(admin, contato, dados));
+  return iniciarRodadaUm(admin, ref, job, { ...meta, custo_reais: custo, pesquisas, cadastro }, dados, segundos, motivo);
+}
+
+// dispara a primeira rodada de indicacoes (depois do CNPJ conferido, ou sem ele)
+async function iniciarRodadaUm(
+  admin: Admin, contato: ContatoReferencia, job: string, meta: MetaJob,
+  dados: DadosReceita | null, segundos: number, motivo: string | null
+) {
+  const orgId = contato.organization_id;
+  const receita = dados ? paraOficiais(dados) : meta.receita || null;
+  const cnpjCliente = dados ? formatarCnpj(limparCnpj(dados.cnpj) as string) : null;
+  const novoMeta: MetaJob = { ...meta, receita, cnpjCliente, aguardando: null };
   const { instrucoes, pedido } = montarPedido(
-    { ...contato, cnpj: cnpjCliente || contato.cnpj, cidade: contato.cidade || '' }, receita, meta.parecidos || [],
+    { ...contato, cnpj: contato.cnpj || cnpjCliente, cidade: contato.cidade || '' }, receita, meta.parecidos || [],
     { numero: 1, quantas: POR_RODADA, excluir: [] }
   );
   const proxima = await iniciarBusca(instrucoes, pedido);
@@ -510,11 +568,69 @@ async function depoisDaRodadaZero(admin: Admin, contato: ContatoReferencia, job:
 
   return NextResponse.json({
     status: 'pesquisando', segundos, rodada: 1, maxRodadas: MAX_RODADAS, maximo: MAX_EMPRESAS,
-    empresas: [], custo_ate_agora: custo, cnpjCliente, cnpjMotivo: motivo,
+    empresas: [], custo_ate_agora: meta.custo_reais || 0, cnpjCliente, cnpjMotivo: motivo, cadastro: meta.cadastro || [],
   });
 }
 
-async function finalizar(admin: Admin, contato: ContatoReferencia, job: string, meta: MetaJob, motivo: string) {
+// PATCH /api/contacts/:id/indicacoes/ia?job=ID { confirmar: true|false }
+// Resposta do vendedor a "Achamos esta empresa — é o seu cliente?" (contato sem cidade).
+// Sim: completa o cadastro com a Receita e segue a busca. Nao: encerra sem gravar nada.
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const ctx = await contexto(id);
+    if (ctx.erro) return ctx.erro;
+    const { admin, contato, profile } = ctx;
+    const orgId = contato.organization_id;
+    const job = request.nextUrl.searchParams.get('job');
+    const body = await request.json().catch(() => ({}));
+    if (!job || typeof body?.confirmar !== 'boolean') {
+      return NextResponse.json({ erro: 'job e confirmar obrigatorios' }, { status: 400 });
+    }
+
+    const registro = await lerJob(admin, orgId, job);
+    if (!registro) return NextResponse.json({ status: 'finalizada-em-outra-aba' });
+    const meta = registro.meta;
+    if (meta.user_id !== profile.user_id && !hasFullVisibility(profile.role as UserRole)) {
+      return NextResponse.json({ erro: 'Só quem iniciou a busca pode confirmar a empresa.' }, { status: 403 });
+    }
+    if (!meta.aguardando) return NextResponse.json({ status: 'pesquisando', rodada: meta.rodada ?? 1 });
+
+    if (!body.confirmar) {
+      console.log('[indicacoes IA] vendedor disse que o CNPJ nao e do cliente', JSON.stringify({ job, cnpj: meta.aguardando.cnpj }));
+      return finalizar(admin, contato, job, meta, 'cnpj recusado',
+        'Ok, nada foi gravado no cadastro. Preencha a cidade ou o CNPJ certo na ficha e busque de novo.');
+    }
+
+    // trava: so um clique processa (duplo clique nao dispara duas rodadas)
+    const { data: travado } = await admin.from('ai_analysis_cache')
+      .update({ result: { ...meta, resposta: `processando:${AGUARDANDO}` } })
+      .eq('organization_id', orgId).eq('analysis_type', 'INDICACOES_IA_JOB').eq('cache_key', job)
+      .eq('result->>resposta', AGUARDANDO).select('id');
+    if (!travado?.length) return NextResponse.json({ status: 'pesquisando', rodada: 1 });
+
+    const dados = await Promise.race([
+      buscarDadosReceita(meta.aguardando.cnpj).catch(() => null),
+      new Promise<null>((r) => setTimeout(() => r(null), 10000)),
+    ]);
+    if (!dados) {
+      // devolve a pergunta pro vendedor tentar de novo
+      await admin.from('ai_analysis_cache').update({ result: { ...meta, resposta: AGUARDANDO } })
+        .eq('organization_id', orgId).eq('analysis_type', 'INDICACOES_IA_JOB').eq('cache_key', job);
+      return NextResponse.json({ erro: 'A Receita não respondeu agora. Clique em "Sim" de novo em alguns segundos.' }, { status: 503 });
+    }
+
+    const { contato: ref, cadastro } = await completarCadastro(admin, contato, dados);
+    console.log('[indicacoes IA] vendedor confirmou o CNPJ', JSON.stringify({ job, cnpj: meta.aguardando.cnpj, cadastro, cidade: ref.cidade }));
+    const segundos = Math.round((Date.now() - new Date(meta.inicio || registro.criadoEm).getTime()) / 1000);
+    return iniciarRodadaUm(admin, ref, job, { ...meta, cadastro: [...(meta.cadastro || []), ...cadastro] }, dados, segundos, null);
+  } catch (e) {
+    console.error('[indicacoes IA PATCH]', e);
+    return NextResponse.json({ erro: 'Não consegui seguir a busca. Tente de novo.' }, { status: 500 });
+  }
+}
+
+async function finalizar(admin: Admin, contato: ContatoReferencia, job: string, meta: MetaJob, motivo: string, erroTexto?: string) {
   const orgId = contato.organization_id;
   // so quem conseguir apagar o job grava o resultado e o custo (evita cobrar duas vezes)
   const { data: apagado } = await admin.from('ai_analysis_cache').delete()
@@ -541,7 +657,7 @@ async function finalizar(admin: Admin, contato: ContatoReferencia, job: string, 
   if (!empresas.length) {
     return NextResponse.json({
       status: 'falhou', custo_reais: custo,
-      erro: motivo === 'parada' ? 'Busca parada antes de achar empresas.' : 'A IA não achou nenhuma empresa com fonte comprovada.',
+      erro: erroTexto || (motivo === 'parada' ? 'Busca parada antes de achar empresas.' : 'A IA não achou nenhuma empresa com fonte comprovada.'),
     });
   }
 
