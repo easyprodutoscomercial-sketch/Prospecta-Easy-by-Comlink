@@ -1,4 +1,4 @@
-import { buscarDadosReceita, cnpjValido, CnpjNaoEncontrado } from '@/lib/receita/cnpj';
+import { buscarDadosReceita, cnpjValido, CnpjNaoEncontrado, type DadosReceita } from '@/lib/receita/cnpj';
 import type { EmpresaIA } from '@/lib/indicacoes/ia';
 
 // Regra do dono (06/10): so empresa de medio ou grande porte. A IA nao serve de juiz disso
@@ -8,7 +8,7 @@ import type { EmpresaIA } from '@/lib/indicacoes/ia';
 const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 export async function filtrarPorPorte(empresas: EmpresaIA[]) {
-  const conferidas = await Promise.all(empresas.map(async (e): Promise<{ e: EmpresaIA; fora: string | null }> => {
+  const conferidas = await Promise.all(empresas.map(async (e): Promise<{ e: EmpresaIA; fora: string | null; d?: DadosReceita }> => {
     if (!e.cnpj || !cnpjValido(e.cnpj)) return { e: { ...e, porteConfirmado: false }, fora: null };
     try {
       const d = await Promise.race([
@@ -21,7 +21,7 @@ export async function filtrarPorPorte(empresas: EmpresaIA[]) {
       if (d.situacao && semAcento(d.situacao).trim() !== 'ativa') return { e, fora: `situação ${d.situacao}` };
       return {
         e: { ...e, porte: d.porte, porteConfirmado: !!d.porte, razao_social: e.razao_social || d.razao_social },
-        fora: null,
+        fora: null, d,
       };
     } catch (err) {
       // CNPJ que nao existe na Receita: a IA errou ou inventou o numero; nao grava ele
@@ -31,6 +31,8 @@ export async function filtrarPorPorte(empresas: EmpresaIA[]) {
   }));
   return {
     empresas: conferidas.filter((c) => !c.fora).map((c) => c.e),
+    // dados da Receita por nome: completam o rascunho (telefone, e-mail, socio...) sem custo
+    receita: new Map(conferidas.filter((c) => !c.fora && c.d).map((c) => [c.e.nome, c.d as DadosReceita])),
     // a IA tenta devolver a mesma empresa na rodada seguinte sem o CNPJ: estes nomes vao pra lista de "nao repita"
     descartadas: conferidas.filter((c) => c.fora).map((c) => ({ nome: c.e.nome, motivo: c.fora as string })),
   };

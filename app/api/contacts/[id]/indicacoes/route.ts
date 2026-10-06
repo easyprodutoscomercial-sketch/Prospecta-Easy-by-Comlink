@@ -118,6 +118,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 }
 
+// Regra do dono (06/10): indicacao que entra no funil ja ganha a tarefa "Primeiro contato"
+// pro proximo dia util as 9h. Sem ela a empresa sumia entre os milhares de cartoes do "Novo";
+// com ela a cobranca do CRM (tarefa vencida) lembra o dono do contato.
+function proximoDiaUtilAs9() {
+  const sp = new Date(Date.now() - 3 * 36e5); // relogio de Sao Paulo (UTC-3)
+  const d = new Date(Date.UTC(sp.getUTCFullYear(), sp.getUTCMonth(), sp.getUTCDate() + 1, 12)); // 9h SP = 12h UTC
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString();
+}
+
+async function agendarPrimeiroContato(admin: ReturnType<typeof getAdminClient>, orgId: string, ids: string[]) {
+  if (!ids.length) return;
+  // so quem ainda nao tem proxima acao: nao atropela o que alguem ja agendou
+  const { error } = await admin.from('contacts')
+    .update({ proxima_acao_tipo: 'LIGAR', proxima_acao_data: proximoDiaUtilAs9() })
+    .eq('organization_id', orgId).in('id', ids).is('proxima_acao_data', null);
+  if (error) console.warn('[indicacoes] nao agendou primeiro contato', error.message);
+}
+
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
@@ -140,7 +159,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         console.error('[indicacoes POST] jogar pro funil', error.message);
         return NextResponse.json({ erro: 'Não consegui jogar pro funil.' }, { status: 500 });
       }
-      return NextResponse.json({ criados: data?.length || 0, duplicados: [] });
+      await agendarPrimeiroContato(admin, contato.organization_id, (data || []).map((c) => c.id));
+      return NextResponse.json({ criados: data?.length || 0, duplicados: [], tarefa: proximoDiaUtilAs9() });
     }
 
     const escolhidas: EmpresaParaSalvar[] = Array.isArray(body?.empresas) ? body.empresas : [];
@@ -150,6 +170,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let criados = 0;
     const duplicados: string[] = [];
+    const novos: string[] = [];
 
     // o banco tem indice unico de telefone/email por organizacao: insere uma a uma
     // pra uma duplicata nao derrubar o lote inteiro
@@ -157,11 +178,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       const r = await salvarComoContato(admin, {
         organizationId: contato.organization_id, userId: profile.user_id, referencia: contato, empresa: e, rascunho: false,
       });
-      if (r.id) criados++;
+      if (r.id) { criados++; novos.push(r.id); }
       else duplicados.push(e.nome);
     }
+    await agendarPrimeiroContato(admin, contato.organization_id, novos);
 
-    return NextResponse.json({ criados, duplicados });
+    return NextResponse.json({ criados, duplicados, tarefa: proximoDiaUtilAs9() });
   } catch (e) {
     console.error('[indicacoes POST]', e);
     return NextResponse.json({ error: 'Erro interno' }, { status: 500 });

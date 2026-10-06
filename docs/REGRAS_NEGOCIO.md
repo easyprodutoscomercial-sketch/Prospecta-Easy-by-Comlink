@@ -204,6 +204,9 @@ Pipeline membership controlada por `pipeline_members` (user_id, pipeline_id).
 - Vendedor só busca em contato apontado para ele; admin/gerente em qualquer contato apontado.
 - **Antes de buscar, o cadastro do cliente é completado pela Receita** (só campos vazios; nada digitado pelo vendedor é sobrescrito). Sem CNPJ, a IA acha pelo nome. Sem cidade, **o vendedor confirma a empresa achada** antes de qualquer gravação (nome parecido engana; cidade errada no cadastro é pior que vazia).
 - Cargo do sócio só entra junto com o nome do sócio. CNPJ já usado em outro contato = provável cliente duplicado: não grava e avisa.
+- **A IA não traz empresa que já está no CRM** (CNPJ, telefone, site ou nome) — nem rascunho de busca anterior.
+- Indicação jogada pro funil ganha a tarefa **"Ligar" no próximo dia útil às 9h** (só se não tiver próxima ação), no nome do dono do contato. "Marcar todas" leva todas de uma vez.
+- Mensagem de WhatsApp das indicações **nunca cita o cliente de referência** (é cliente nosso; não se expõe a prospect).
 - **Só empresa de médio/grande porte.** Com CNPJ: conferida na Receita; Microempresa, Pequeno Porte, MEI ou CNPJ não ativo é descartada. Sem CNPJ: entra marcada "porte não confirmado" (a IA diz o indício de porte).
 
 ## 📋 Conferência de relatórios diários (regras do dono, 06/10/2026)

@@ -399,6 +399,34 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
     /* eslint-disable-next-line */
   }, [aberto]);
 
+  // da IA: so rascunho salvo pode ir pro funil; ja no funil / no CRM nao se marca
+  const podeMarcar = (e: Empresa) => !e.jaNoCrm && !e.noFunil && !(origem === 'ia' && !e.contatoId);
+  const marcaveis = iaVisiveis.filter(podeMarcar);
+  const todasMarcadas = marcaveis.length > 0 && marcaveis.every((e) => escolhidas.has(e.osmId));
+  function marcarTodas() {
+    setEscolhidas(todasMarcadas ? new Set() : new Set(marcaveis.map((e) => e.osmId)));
+  }
+
+  // mensagem de WhatsApp pronta pra empresa indicada (gera uma vez, ~R$0,01)
+  const [msgs, setMsgs] = useState<Record<string, { carregando?: boolean; texto?: string; link?: string | null; erro?: string; copiada?: boolean }>>({});
+  async function abrirWhatsApp(e: Empresa) {
+    if (!e.contatoId) return;
+    // abre a aba ja no clique (depois do await o navegador bloquearia o pop-up)
+    const aba = window.open('', '_blank');
+    setMsgs((m) => ({ ...m, [e.osmId]: { carregando: true } }));
+    try {
+      const r = await fetch(`/api/contacts/${e.contatoId}/mensagem-indicacao`, { method: 'POST' });
+      const j = await r.json();
+      if (j.erro || !j.mensagem) { aba?.close(); setMsgs((m) => ({ ...m, [e.osmId]: { erro: j.erro || 'Não consegui escrever.' } })); return; }
+      setMsgs((m) => ({ ...m, [e.osmId]: { texto: j.mensagem, link: j.link } }));
+      if (j.link && aba) aba.location.href = `${j.link}?text=${encodeURIComponent(j.mensagem)}`;
+      else aba?.close();
+    } catch {
+      aba?.close();
+      setMsgs((m) => ({ ...m, [e.osmId]: { erro: 'Não consegui escrever agora.' } }));
+    }
+  }
+
   function alternar(id: string) {
     setEscolhidas((s) => {
       const n = new Set(s);
@@ -423,7 +451,10 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
       });
       const j = await r.json();
       if (origem === 'ia') {
-        setIaAviso(j.criados > 0 ? `${j.criados} empresa(s) jogada(s) pro funil, na coluna Novo.` : (j.erro || 'Nenhuma foi pro funil.'));
+        const dia = j.tarefa ? new Date(j.tarefa).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' }) : null;
+        setIaAviso(j.criados > 0
+          ? `${j.criados} empresa(s) jogada(s) pro funil, na coluna Novo${dia ? `, com tarefa "Ligar" para ${dia} às 9h` : ''}.`
+          : (j.erro || 'Nenhuma foi pro funil.'));
         setEscolhidas(new Set());
         await carregarIA();
         router.refresh();
@@ -753,11 +784,20 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
             </p>
           )}
 
+          {marcaveis.length > 1 && (
+            <div className="mb-2 flex items-center justify-between">
+              <button onClick={marcarTodas}
+                className="px-2.5 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 text-[11px] font-bold">
+                {todasMarcadas ? 'Desmarcar todas' : `Marcar todas (${marcaveis.length})`}
+              </button>
+              <span className="text-[10px] text-neutral-500">ao jogar pro funil, cada uma ganha a tarefa “Ligar” no próximo dia útil</span>
+            </div>
+          )}
           <div className="space-y-2">
             {iaVisiveis.map((e) => {
               const marcada = escolhidas.has(e.osmId);
               // da IA: so rascunho salvo pode ir pro funil
-              const bloqueada = !!e.jaNoCrm || !!e.noFunil || (origem === 'ia' && !e.contatoId);
+              const bloqueada = !podeMarcar(e);
               const local = [e.endereco, e.bairro, e.cidade, e.estado].filter(Boolean).join(', ');
               return (
                 <div key={e.osmId} role="button" tabIndex={bloqueada ? -1 : 0}
@@ -812,6 +852,24 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
                           <span className="text-[10px] text-neutral-600 italic">sem contato encontrado — precisa pesquisar</span>
                         )}
                       </div>
+                      {origem === 'ia' && e.contatoId && (
+                        <div className="mt-1.5" onClick={(ev) => ev.stopPropagation()}>
+                          <button onClick={() => abrirWhatsApp(e)} disabled={msgs[e.osmId]?.carregando}
+                            className="px-2 py-0.5 rounded border border-green-500/40 bg-green-500/10 hover:bg-green-500/20 text-green-300 text-[10px] font-bold disabled:opacity-50">
+                            {msgs[e.osmId]?.carregando ? 'Escrevendo...' : (e.whatsapp || e.telefone) ? '💬 Mensagem pronta no WhatsApp' : '💬 Escrever mensagem'}
+                          </button>
+                          {msgs[e.osmId]?.erro && <span className="ml-2 text-[10px] text-red-300">{msgs[e.osmId].erro}</span>}
+                          {msgs[e.osmId]?.texto && !msgs[e.osmId]?.link && (
+                            <div className="mt-1.5 rounded border border-green-500/20 bg-green-500/5 p-2 text-[11px] text-neutral-200 whitespace-pre-line">
+                              {msgs[e.osmId].texto}
+                              <button onClick={() => { navigator.clipboard?.writeText(msgs[e.osmId].texto || ''); setMsgs((m) => ({ ...m, [e.osmId]: { ...m[e.osmId], copiada: true } })); }}
+                                className="block mt-1 text-[10px] text-green-300 underline">
+                                {msgs[e.osmId].copiada ? 'copiada ✓' : 'copiar (sem telefone pra abrir o WhatsApp)'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {e.fonte && (
                         <a href={e.fonte} target="_blank" rel="noopener noreferrer" onClick={(ev) => ev.stopPropagation()}
                           className="inline-block mt-1.5 text-[10px] text-sky-400/80 hover:text-sky-300 underline truncate max-w-full">

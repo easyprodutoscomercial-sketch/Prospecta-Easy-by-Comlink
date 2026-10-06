@@ -125,7 +125,7 @@ export function montarPedido(
   ref: FichaCliente,
   receita: DadosOficiais | null | undefined,
   parecidosNoCrm: string[],
-  rodada: { numero: number; quantas: number; excluir: string[]; perfilConfirmado?: string | null }
+  rodada: { numero: number; quantas: number; excluir: string[]; perfilConfirmado?: string | null; jaClientes?: string[] }
 ) {
   const local = `${ref.cidade}${ref.estado ? `/${ref.estado}` : ''}`;
   const empresa = ref.company && ref.company !== ref.name ? `${ref.name} (${ref.company})` : ref.name;
@@ -165,6 +165,10 @@ Regras invioláveis:
   const excluir = rodada.excluir.length
     ? `\nJá encontradas nas rodadas anteriores (NÃO repita nenhuma destas): ${rodada.excluir.join('; ')}.`
     : '';
+  // regra do dono (06/10): quem ja esta no CRM nao interessa — so empresa nova
+  const jaClientes = rodada.jaClientes?.length
+    ? `\nEstas empresas JÁ estão no nosso CRM — NÃO inclua nenhuma delas nem filiais delas: ${rodada.jaClientes.join('; ')}.`
+    : '';
 
   // Sem segmento nem CNPJ o mini chutou que a Wortex era locadora (fabrica maquinas
   // pra plastico). Na 1a rodada ele confere o site do cliente; as seguintes recebem
@@ -181,7 +185,7 @@ Depois encontre ${rodada.quantas} empresas REAIS com o MESMO perfil — mesma at
 PORTE: só empresas de MÉDIO ou GRANDE porte, mesmo que o cliente de referência seja pequeno. Procure indústrias, fabricantes, distribuidores e atacadistas com estrutura própria (fábrica, vários funcionários, filiais, marca conhecida no setor). Na Receita Federal elas aparecem com porte "Demais" (faturamento acima de R$ 4,8 milhões por ano).
 NÃO inclua: microempresa, MEI, oficina, tornearia, assistência técnica, loja de bairro, revenda pequena, representante comercial autônomo nem prestador de serviço individual.
 Traga o CNPJ sempre que conseguir confirmar numa página: o porte de cada empresa será conferido na Receita e as pequenas serão descartadas.
-Nesta rodada, pesquise ${angulo}.${excluir}
+Nesta rodada, pesquise ${angulo}.${excluir}${jaClientes}
 NÃO inclua o cliente de referência (${empresa}) nem empresas do mesmo grupo dele.
 Cada dado de uma empresa tem que vir de uma página sobre AQUELA empresa — não misture endereço, telefone ou e-mail de empresas diferentes.
 Dê a cada empresa uma "nota" de 0 a 10 (quanto ela se parece com o cliente de referência, quanto maior ela é e quão fácil é contatar) e um "motivo" curto.
@@ -208,7 +212,7 @@ function host(url: string | null | undefined) {
 const texto = (v: unknown) => (typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim() : null);
 
 // Le a resposta final da OpenAI (Responses API) e devolve so o que da pra confiar.
-const chaveEmpresa = (s: string) =>
+export const chaveEmpresa = (s: string) =>
   s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/\b(ltda|me|epp|eireli|s\.?a|cia|comercio|industria|e|de|da|do|dos|das)\b/g, '')
     .replace(/[^a-z0-9]/g, '');

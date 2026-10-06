@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { contexto, ContatoReferencia, CAMPOS_CONTATO_REFERENCIA } from '@/lib/indicacoes/contexto';
 import { preencherVazios, CAMPOS_PREENCHIVEIS_SELECT } from '@/lib/receita/preencher';
 import { conferirCnpjDoCliente, resumoEmpresa, type EmpresaAchada } from '@/lib/receita/conferir';
+import { carregarConhecidos, conhecidosPorNome, juntar, jaConhecida } from '@/lib/indicacoes/ja-no-crm';
 import {
   MODELO, DIAS_CACHE_IA, MIN_EMPRESAS, MAX_EMPRESAS, ESTIMATIVA_INICIAL_REAIS, POR_RODADA, MAX_RODADAS,
   EmpresaIA, DadosOficiais, chaveIA, montarPedido, iniciarBusca, consultarBusca, cancelarBusca, lerResposta, custoEmReais,
@@ -52,6 +53,7 @@ type MetaJob = {
   receita?: DadosOficiais | null; parecidos?: string[]; inicio?: string; perfil?: string | null;
   vazias?: number; // rodadas seguidas sem empresa nova
   pequenas?: string[]; // descartadas pela Receita (micro/pequena/fechada): nao podem voltar
+  jaNoCrm?: string[]; // devolvidas pela IA mas ja cadastradas: sairam da lista e nao podem voltar
   cnpjCliente?: string | null; // CNPJ do cliente achado e confirmado na rodada zero
   // contato SEM cidade: a busca pausa ate o vendedor confirmar que a empresa achada e o cliente
   aguardando?: EmpresaAchada | null;
@@ -299,10 +301,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!rodadaZero && !ref.cidade) {
       return NextResponse.json({ erro: 'A Receita não respondeu e o contato não tem cidade. Preencha a cidade ou tente de novo em um minuto.' }, { status: 503 });
     }
-    const parecidos = await parecidosNoCrm(admin, ref);
+    const [parecidos, conhecidos] = await Promise.all([
+      parecidosNoCrm(admin, ref), carregarConhecidos(admin, orgId, ref.cidade, ref.estado),
+    ]);
     const { instrucoes, pedido } = rodadaZero
       ? montarPedidoCnpj(ref)
-      : montarPedido({ ...ref, cidade: ref.cidade as string }, receita, parecidos, { numero: 1, quantas: POR_RODADA, excluir: [] });
+      : montarPedido({ ...ref, cidade: ref.cidade as string }, receita, parecidos,
+          { numero: 1, quantas: POR_RODADA, excluir: [], jaClientes: conhecidos.nomes });
     const busca = await iniciarBusca(instrucoes, pedido, rodadaZero ? { maxPesquisas: MAX_PESQUISAS_CNPJ } : {});
     const job = randomUUID();
 
@@ -410,36 +415,59 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
 
   if (rodada === 0) return depoisDaRodadaZero(admin, contato, job, meta, resp, segundos);
 
-  const lido = lerResposta(resp, contato.company || contato.name, [...acumuladas.map((e) => e.nome), ...(meta.pequenas || [])]);
+  const lido = lerResposta(resp, contato.company || contato.name,
+    [...acumuladas.map((e) => e.nome), ...(meta.pequenas || []), ...(meta.jaNoCrm || [])]);
   const custo = (meta.custo_reais || 0) + custoEmReais(resp.usage, lido.pesquisas);
   const pesquisas = (meta.pesquisas || 0) + lido.pesquisas;
 
   const porPorte = await filtrarPorPorte(lido.empresas);
   const pequenas = [...(meta.pequenas || []), ...porPorte.descartadas.map((d) => d.nome)];
 
-  // salva cada empresa nova como rascunho atribuido a quem pagou a busca
-  const marcadas = await marcarJaNoCrm(admin, orgId, porPorte.empresas);
+  // regra do dono (06/10): quem ja esta no CRM sai da lista (nao ocupa vaga das 12).
+  // Confere contra os contatos da regiao (CNPJ, telefone, site, nome parecido) e a empresa toda (nome exato).
+  const [conhecidos, porNome, marcadas] = await Promise.all([
+    carregarConhecidos(admin, orgId, contato.cidade, contato.estado),
+    conhecidosPorNome(admin, orgId, porPorte.empresas),
+    marcarJaNoCrm(admin, orgId, porPorte.empresas),
+  ]);
+  const todosConhecidos = juntar(conhecidos, porNome);
+  const jaNoCrm = [...(meta.jaNoCrm || [])];
+  const foraPorCrm: string[] = [];
   const novas: EmpresaIA[] = [];
-  for (const e of marcadas.slice(0, MAX_EMPRESAS - acumuladas.length)) {
-    if (e.jaNoCrm) { novas.push(e); continue; }
+  for (const e of marcadas) {
+    if (novas.length >= MAX_EMPRESAS - acumuladas.length) break;
+    const porque = e.jaNoCrm ? 'nome' : jaConhecida(e, todosConhecidos);
+    if (porque) { jaNoCrm.push(e.nome); foraPorCrm.push(`${e.nome} (${porque})`); continue; }
+    // salva como rascunho atribuido a quem pagou a busca
     const r = await salvarComoContato(admin, {
       organizationId: orgId, userId: meta.user_id, referencia: contato, empresa: e, rascunho: true,
     });
-    // erro aqui quase sempre e o indice unico de telefone/e-mail: ja existe no CRM
-    novas.push({ ...e, contatoId: r.id, jaNoCrm: !r.id });
+    // erro aqui quase sempre e o indice unico de telefone/e-mail/CNPJ: ja existe no CRM
+    if (!r.id) { jaNoCrm.push(e.nome); foraPorCrm.push(`${e.nome} (indice unico)`); continue; }
+    // completa o rascunho com a Receita (telefone, e-mail, socio...) — so campos vazios, sem custo
+    const d = porPorte.receita.get(e.nome);
+    let completa = e;
+    if (d) {
+      const { data: reg } = await admin.from('contacts').select(CAMPOS_PREENCHIVEIS_SELECT).eq('id', r.id).single();
+      const p = await preencherVazios(admin, (reg || {}) as unknown as Record<string, unknown>, d);
+      if (p.atualizados.includes('Telefone')) completa = { ...completa, telefone: d.telefone };
+      if (p.atualizados.includes('Email')) completa = { ...completa, email: d.email };
+      if (p.atualizados.includes('Endereco')) completa = { ...completa, endereco: completa.endereco || d.endereco_completo };
+    }
+    novas.push({ ...completa, contatoId: r.id });
   }
   const empresas = [...acumuladas, ...novas].map((e, i) => ({ ...e, osmId: `ia/${i}/${e.osmId.split('/').pop()}` }));
 
   console.log('[indicacoes IA] rodada', JSON.stringify({
     job, rodada, status: resp.status, pesquisas: lido.pesquisas, lidas: lido.lidas, novas: novas.length,
-    salvas: novas.filter((e) => e.contatoId).length, descartadas: lido.descartadas, repetidas: lido.repetidas, pequenas: porPorte.descartadas,
+    salvas: novas.filter((e) => e.contatoId).length, descartadas: lido.descartadas, repetidas: lido.repetidas, pequenas: porPorte.descartadas, ja_no_crm: foraPorCrm,
     total: empresas.length, uso: resp.usage, custo_rodada: custo - (meta.custo_reais || 0), custo_total: custo,
   }));
 
   // nicho estreito: um angulo (ex.: sinonimos) pode vir vazio e o seguinte (cidades
   // vizinhas) render. No teste da Wortex a 2a rodada veio vazia e parar ali deixou 4 empresas.
   const vazias = novas.length === 0 ? (meta.vazias || 0) + 1 : 0;
-  const novoMeta: MetaJob = { ...meta, empresas, custo_reais: custo, pesquisas, vazias, pequenas, perfil: meta.perfil || lido.segmentoPesquisado };
+  const novoMeta: MetaJob = { ...meta, empresas, custo_reais: custo, pesquisas, vazias, pequenas, jaNoCrm, perfil: meta.perfil || lido.segmentoPesquisado };
   const acabou = legado || resp.status !== 'completed' || empresas.length >= MAX_EMPRESAS
     || rodada >= MAX_RODADAS || vazias >= 2;
 
@@ -452,8 +480,8 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
   // proxima rodada, por outro angulo, pedindo so o que falta
   const { instrucoes, pedido } = montarPedido(
     { ...contato, cidade: contato.cidade || '' }, meta.receita, meta.parecidos || [],
-    { numero: rodada + 1, quantas: Math.min(POR_RODADA, MAX_EMPRESAS - empresas.length), excluir: [...empresas.map((e) => e.nome), ...pequenas],
-      perfilConfirmado: novoMeta.perfil }
+    { numero: rodada + 1, quantas: Math.min(POR_RODADA, MAX_EMPRESAS - empresas.length), excluir: [...empresas.map((e) => e.nome), ...pequenas, ...jaNoCrm],
+      perfilConfirmado: novoMeta.perfil, jaClientes: conhecidos.nomes }
   );
   const proxima = await iniciarBusca(instrucoes, pedido);
   const { data: seguiu } = await admin.from('ai_analysis_cache')
@@ -525,7 +553,7 @@ async function iniciarRodadaUm(
   const novoMeta: MetaJob = { ...meta, receita, cnpjCliente, aguardando: null };
   const { instrucoes, pedido } = montarPedido(
     { ...contato, cnpj: contato.cnpj || cnpjCliente, cidade: contato.cidade || '' }, receita, meta.parecidos || [],
-    { numero: 1, quantas: POR_RODADA, excluir: [] }
+    { numero: 1, quantas: POR_RODADA, excluir: [], jaClientes: (await carregarConhecidos(admin, orgId, contato.cidade, contato.estado)).nomes }
   );
   const proxima = await iniciarBusca(instrucoes, pedido);
   const { data: seguiu } = await admin.from('ai_analysis_cache')
