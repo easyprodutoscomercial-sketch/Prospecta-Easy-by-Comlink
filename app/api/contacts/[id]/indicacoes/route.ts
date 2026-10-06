@@ -65,7 +65,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     if (!contato.cidade) {
       return NextResponse.json({
-        erro: 'Este contato não tem cidade cadastrada. Preencha a cidade para eu buscar indicações na região dele.',
+        erro: 'O mapa gratuito precisa da cidade. Use "Completar cadastro pela Receita" acima (acho a cidade pelo nome) ou "Buscar com IA".',
         empresas: [], perfis,
       });
     }

@@ -58,8 +58,9 @@ interface InfoIA {
   segmentoCadastrado: string | null;
   origem: [number, number] | null;
   estado: string | null;
-  bloqueio: string | null;
-  semCidade?: boolean; // a busca acha o CNPJ pelo nome e o vendedor confirma a empresa // por que este usuario nao pode buscar aqui (contato sem dono, de outro vendedor)
+  bloqueio: string | null; // por que este usuario nao pode buscar aqui (contato sem dono, de outro vendedor)
+  semCidade?: boolean; // a busca acha o CNPJ pelo nome e o vendedor confirma a empresa
+  semCnpj?: boolean; // mostra o botao "Completar cadastro pela Receita"
   historico: { id: string; buscadoEm: string; empresas: number; quem: string; custo: number | null }[];
   resultado?: { id?: string } | null;
 }
@@ -86,7 +87,9 @@ interface Props {
   onFechar: () => void;
 }
 
-export default function IndicacoesModal({ contactId, contactNome, cidade, aberto, onFechar }: Props) {
+export default function IndicacoesModal({ contactId, contactNome, cidade: cidadeInicial, aberto, onFechar }: Props) {
+  // a cidade pode chegar depois: "Completar cadastro pela Receita" preenche e a janela ja usa
+  const [cidade, setCidade] = useState(cidadeInicial);
   const router = useRouter();
   const [carregando, setCarregando] = useState(false);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -117,6 +120,9 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
   const [iaAchada, setIaAchada] = useState<EmpresaAchada | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [iaAchadaErro, setIaAchadaErro] = useState<string | null>(null);
+  // botao "Completar cadastro pela Receita": acha o CNPJ pelo nome, o vendedor confirma, a ficha e preenchida
+  const [cad, setCad] = useState<{ fase: 'procurando' | 'confirmar' | 'gravando' | 'feito' | 'erro'; resposta?: string;
+    empresa?: EmpresaAchada; msg?: string } | null>(null);
   // empresas que o aviao ja "visitou": so essas aparecem na lista enquanto a busca anima
   const [reveladas, setReveladas] = useState<Set<string>>(new Set());
   const [animar, setAnimar] = useState(false);
@@ -262,6 +268,55 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
         } else {
           carregarIA();
         }
+  }
+
+  async function acharCadastro() {
+    setCad({ fase: 'procurando' });
+    try {
+      const r = await fetch(`/api/contacts/${contactId}/receita/achar`, { method: 'POST' });
+      const j = await r.json();
+      if (j.erro || !j.resposta) { setCad({ fase: 'erro', msg: j.erro || 'Não consegui começar.' }); return; }
+      setCad({ fase: 'procurando', resposta: j.resposta });
+    } catch {
+      setCad({ fase: 'erro', msg: 'Não consegui começar. Tente de novo.' });
+    }
+  }
+
+  // acompanha a procura do CNPJ (leva ~10s)
+  useEffect(() => {
+    if (cad?.fase !== 'procurando' || !cad.resposta) return;
+    let vivo = true;
+    const id = setInterval(async () => {
+      try {
+        const r = await fetch(`/api/contacts/${contactId}/receita/achar?resposta=${encodeURIComponent(cad.resposta!)}`);
+        const j = await r.json();
+        if (!vivo || j.status === 'procurando') return;
+        console.info('[receita achar]', j);
+        if (j.status === 'confirmar') setCad({ fase: 'confirmar', empresa: j.empresa });
+        else setCad({ fase: 'erro', msg: j.motivo || j.erro || 'Não achei o CNPJ.' });
+      } catch { /* tenta de novo */ }
+    }, 3000);
+    return () => { vivo = false; clearInterval(id); };
+  }, [cad?.fase, cad?.resposta, contactId]);
+
+  async function confirmarCadastro(sim: boolean) {
+    if (!cad?.empresa) return;
+    if (!sim) { setCad({ fase: 'erro', msg: 'Ok, nada foi gravado. Preencha o CNPJ ou a cidade na ficha.' }); return; }
+    setCad({ ...cad, fase: 'gravando' });
+    try {
+      const r = await fetch(`/api/contacts/${contactId}/receita`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cnpj: cad.empresa.cnpj }),
+      });
+      const j = await r.json();
+      if (j.erro) { setCad({ ...cad, fase: 'confirmar', msg: j.erro }); return; }
+      const lista = [...(j.atualizados || []), ...(j.avisos || [])];
+      setCad({ fase: 'feito', msg: lista.length ? `Cadastro atualizado pela Receita: ${lista.join(', ')}.` : 'A ficha já estava completa.' });
+      if (!cidade && cad.empresa.cidade) setCidade(cad.empresa.cidade);
+      carregarIA().then((temIA) => { if (!temIA) verCache(perfil); });
+    } catch {
+      setCad({ ...cad, fase: 'confirmar', msg: 'Não consegui gravar. Tente de novo.' });
+    }
   }
 
   // vendedor responde se a empresa achada pelo nome e mesmo o cliente
@@ -512,6 +567,54 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
                 </div>
               )}
               {ia.bloqueio && !iaJob && <p className="mt-2 text-[11px] text-red-300/90">🔒 {ia.bloqueio}</p>}
+
+              {/* Completar cadastro pela Receita: so pra quem tem permissao de IA e contato sem CNPJ */}
+              {!iaJob && ia.limiteDia > 0 && (ia.semCnpj || cad) && (
+                <div className="mt-2.5 pt-2.5 border-t border-emerald-500/15">
+                  {!cad ? (
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <p className="text-[11px] text-neutral-400 min-w-0">
+                        Sem CNPJ{ia.semCidade ? ' e sem cidade' : ''}: acho o CNPJ pelo nome, você confirma e eu preencho a ficha (cidade, endereço, CEP, telefone...). Não gasta as buscas do dia.
+                      </p>
+                      <button onClick={acharCadastro}
+                        className="shrink-0 px-3 py-1.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/40 text-sky-200 text-xs font-bold">
+                        Completar cadastro pela Receita · ~R$ 0,07
+                      </button>
+                    </div>
+                  ) : cad.fase === 'procurando' ? (
+                    <p className="text-[12px] text-sky-200 flex items-center gap-2">
+                      <span className="w-4 h-4 rounded-full border-2 border-sky-400/30 border-t-sky-300 animate-spin" />
+                      Procurando o CNPJ de {contactNome} pelo nome... (uns 10 segundos)
+                    </p>
+                  ) : (cad.fase === 'confirmar' || cad.fase === 'gravando') && cad.empresa ? (
+                    <div>
+                      <p className="text-sm font-semibold text-sky-200">Achei esta empresa — é o seu cliente?</p>
+                      <div className="mt-2 rounded-lg border border-sky-500/30 bg-sky-500/5 p-2.5 text-[12px] text-neutral-200 space-y-0.5">
+                        <p className="font-semibold">{cad.empresa.nome_fantasia || cad.empresa.razao_social}</p>
+                        {cad.empresa.nome_fantasia && cad.empresa.razao_social && <p className="text-neutral-400">{cad.empresa.razao_social}</p>}
+                        <p className="text-neutral-400">CNPJ {cad.empresa.cnpj}{cad.empresa.porte ? ` · ${cad.empresa.porte}` : ''}</p>
+                        <p className="text-neutral-400">{[cad.empresa.endereco, [cad.empresa.cidade, cad.empresa.uf].filter(Boolean).join('/')].filter(Boolean).join(' · ')}</p>
+                      </div>
+                      {cad.msg && <p className="mt-1 text-[11px] text-red-300/90">{cad.msg}</p>}
+                      <div className="mt-2 flex gap-2">
+                        <button onClick={() => confirmarCadastro(true)} disabled={cad.fase === 'gravando'}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-[#1a0a2e] text-xs font-bold disabled:opacity-50">
+                          {cad.fase === 'gravando' ? 'Gravando...' : 'Sim, é o cliente'}
+                        </button>
+                        <button onClick={() => confirmarCadastro(false)} disabled={cad.fase === 'gravando'}
+                          className="px-3 py-1.5 rounded-lg border border-red-500/40 bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-bold disabled:opacity-50">
+                          Não é
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className={`text-[11px] ${cad.fase === 'feito' ? 'text-emerald-300/90' : 'text-amber-300/90'}`}>
+                      {cad.msg}
+                      {cad.fase === 'erro' && <button onClick={() => setCad(null)} className="ml-2 underline">tentar de novo</button>}
+                    </p>
+                  )}
+                </div>
+              )}
               {iaAviso && !iaJob && <p className="mt-2 text-[11px] text-amber-300/90">{iaAviso}</p>}
 
               {/* toda busca ja feita fica guardada: um clique mostra de novo, sem custo */}

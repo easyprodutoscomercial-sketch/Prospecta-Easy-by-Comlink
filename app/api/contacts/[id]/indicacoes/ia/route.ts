@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { contexto, ContatoReferencia, CAMPOS_CONTATO_REFERENCIA } from '@/lib/indicacoes/contexto';
 import { preencherVazios, CAMPOS_PREENCHIVEIS_SELECT } from '@/lib/receita/preencher';
+import { conferirCnpjDoCliente, resumoEmpresa, type EmpresaAchada } from '@/lib/receita/conferir';
 import {
   MODELO, DIAS_CACHE_IA, MIN_EMPRESAS, MAX_EMPRESAS, ESTIMATIVA_INICIAL_REAIS, POR_RODADA, MAX_RODADAS,
   EmpresaIA, DadosOficiais, chaveIA, montarPedido, iniciarBusca, consultarBusca, cancelarBusca, lerResposta, custoEmReais,
@@ -57,10 +58,6 @@ type MetaJob = {
   cadastro?: string[]; // campos do cadastro que a Receita preencheu
 };
 
-type EmpresaAchada = {
-  cnpj: string; razao_social: string | null; nome_fantasia: string | null;
-  cidade: string | null; uf: string | null; endereco: string | null; porte: string | null;
-};
 const AGUARDANDO = 'aguardando-confirmacao';
 
 const paraOficiais = (d: DadosReceita): DadosOficiais =>
@@ -99,33 +96,6 @@ function bloqueioDeBusca(c: ContatoReferencia, profile: { user_id: string; role:
 
 function alvoDaBusca(c: ContatoReferencia) {
   return c.segmento?.trim() || c.company?.trim() || c.name;
-}
-
-const semAcento = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const PALAVRAS_GENERICAS = new Set(['ltda', 'eireli', 'comercio', 'industria', 'servicos', 'maquinas', 'equipamentos',
-  'empresa', 'brasil', 'distribuidora', 'de', 'da', 'do', 'dos', 'das', 'e', 'me', 'epp', 'sa', 'cia']);
-
-// O CNPJ que a IA achou e mesmo deste cliente? Exige a MESMA cidade na Receita e
-// uma palavra propria do nome (nao "ltda", "maquinas"...) na razao social ou fantasia.
-// Sem isso, gravaria CNPJ de outra empresa no cadastro do cliente.
-async function conferirCnpjDoCliente(c: ContatoReferencia, digitos: string) {
-  try {
-    const d = await Promise.race([buscarDadosReceita(digitos), new Promise<null>((r) => setTimeout(() => r(null), 8000))]);
-    if (!d) return { dados: null, motivo: 'Receita não respondeu' };
-    const mesmaCidade = !!d.municipio && !!c.cidade && semAcento(d.municipio).trim() === semAcento(c.cidade).trim();
-    const nomeReceita = semAcento(`${d.razao_social || ''} ${d.nome_fantasia || ''}`);
-    const palavras = semAcento(`${c.company || ''} ${c.name}`).split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !PALAVRAS_GENERICAS.has(w));
-    const nomeBate = palavras.some((w) => nomeReceita.includes(w));
-    // sem cidade no cadastro nao da pra comparar: confere o estado (se tiver) e o vendedor confirma na tela
-    if (c.cidade && !mesmaCidade) return { dados: null, motivo: `cidade na Receita é ${d.municipio}` };
-    if (!c.cidade && c.estado && d.uf && d.uf.toUpperCase() !== c.estado.trim().toUpperCase()) {
-      return { dados: null, motivo: `estado na Receita é ${d.uf}` };
-    }
-    if (!nomeBate) return { dados: null, motivo: `nome na Receita é ${d.razao_social}` };
-    return { dados: d, motivo: null };
-  } catch (e) {
-    return { dados: null, motivo: e instanceof Error ? e.message.slice(0, 80) : 'falhou' };
-  }
 }
 
 // clientes que ja temos com o mesmo segmento: exemplo do cliente ideal pra IA
@@ -270,6 +240,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       origem: getContactCoords(contato.cidade, contato.estado), estado: contato.estado,
       bloqueio: bloqueioDeBusca(contato, profile, info.limiteDia),
       semCidade: !contato.cidade, // a busca acha o CNPJ pelo nome e o vendedor confirma
+      semCnpj: !contato.cnpj || !cnpjValido(contato.cnpj), // mostra o botao "Completar cadastro pela Receita"
       resultado: resultado && { ...resultado, id: guardado?.id }, historico, jobEmAndamento: andamento?.cache_key || null,
     });
   } catch (e) {
@@ -530,10 +501,7 @@ async function depoisDaRodadaZero(admin: Admin, contato: ContatoReferencia, job:
       return finalizar(admin, contato, job, { ...meta, custo_reais: custo, pesquisas }, 'sem cidade',
         `Não achei o CNPJ deste cliente pelo nome${motivo ? ` (${motivo})` : ''}. Preencha a cidade ou o CNPJ na ficha e busque de novo.`);
     }
-    const empresa: EmpresaAchada = {
-      cnpj: formatarCnpj(achado.cnpj as string), razao_social: dados.razao_social, nome_fantasia: dados.nome_fantasia,
-      cidade: dados.municipio, uf: dados.uf, endereco: dados.endereco_completo, porte: dados.porte,
-    };
+    const empresa = resumoEmpresa(dados);
     await admin.from('ai_analysis_cache')
       .update({ result: { ...meta, custo_reais: custo, pesquisas, aguardando: empresa, resposta: AGUARDANDO } })
       .eq('organization_id', orgId).eq('analysis_type', 'INDICACOES_IA_JOB').eq('cache_key', job);
