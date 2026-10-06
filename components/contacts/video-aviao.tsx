@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 
 // Video do King Air da Comlink por cima da janela de indicacoes (pedido do dono em 06/10):
 // a subida toca quando o consultor manda buscar e a descida quando a busca termina.
-// Os dois trechos saem de um video so (8s) cortado no ponto mais alto (3,6s).
+// Subida: video proprio do dono (2,75s, 06/10). Descida: trecho final (4,4s) do video de 8s
+// de decolagem e pouso, cortado no ponto mais alto.
 // Ficam em public/noprecache/: o app instalado nao baixa os videos antes de alguem buscar.
 // Sem som: o navegador nao deixa video tocar sozinho com som, e turbina no escritorio incomoda.
 
 export type VideoAviaoTipo = 'decolagem' | 'pouso';
 
 export const SRC_VIDEO: Record<VideoAviaoTipo, string> = {
-  decolagem: '/noprecache/videos/aviao-decolagem.mp4',
+  decolagem: '/noprecache/videos/aviao-subida.mp4', // nome novo: o video antigo nao fica no cache de ninguem
   pouso: '/noprecache/videos/aviao-pouso.mp4',
 };
 
