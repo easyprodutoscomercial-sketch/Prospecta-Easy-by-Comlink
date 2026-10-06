@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import { svgAviao, svgSombra } from './aviao-comlink';
 
 // Mapa da busca de indicacoes com IA: o aviao circula sobre a cidade do cliente
 // enquanto a IA pesquisa e voa ate cada empresa achada. So depois do pouso a
@@ -37,6 +38,10 @@ const ESRI_NOMES = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/
 
 const BRASIL: [number, number] = [-14.235, -51.925];
 const MS_VOO = 1700;
+const MS_DECOLAGEM = 2600;
+const MS_POUSO = 2800;
+const MS_SUMIR = 600;
+const TAM_AVIAO = 88;
 
 const casa = L.divIcon({ html: '<div class="mapa-ind-casa"></div>', className: '', iconSize: [16, 16], iconAnchor: [8, 8] });
 
@@ -49,21 +54,32 @@ function pino(numero: number, novo: boolean) {
   });
 }
 
-// desenho aponta pra cima (norte); girar() roda pelo rumo do voo direto no
-// elemento — trocar o icone a cada quadro recriaria o DOM 60x por segundo
+// Aviao da Comlink (components/contacts/aviao-comlink.ts) com sombra no chao.
+// O desenho aponta pro norte; pose() gira, encolhe e afasta a sombra direto no
+// elemento — trocar o icone a cada quadro recriaria o DOM 60x por segundo.
+// Tudo e transform/opacity num elemento de 88px: a placa de video faz sozinha.
 const aviao = L.divIcon({
-  html: `<div class="mapa-ind-aviao"><svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="#fbbf24">
-    <path d="M12 2c.8 0 1.4.7 1.4 1.6v5.6l7.6 4.6v2l-7.6-2.4v4.5l2.2 1.7v1.6L12 20.3l-3.6.9v-1.6l2.2-1.7v-4.5L3 15.8v-2l7.6-4.6V3.6C10.6 2.7 11.2 2 12 2z"/>
-  </svg></div>`,
+  html: `<div class="mapa-ind-aviao"><div class="mapa-ind-aviao-sombra">${svgSombra(TAM_AVIAO)}</div><div class="mapa-ind-aviao-corpo">${svgAviao(TAM_AVIAO)}</div></div>`,
   className: '',
-  iconSize: [36, 36],
-  iconAnchor: [18, 18],
+  iconSize: [TAM_AVIAO, TAM_AVIAO],
+  iconAnchor: [TAM_AVIAO / 2, TAM_AVIAO / 2],
 });
 
-function girar(m: L.Marker, graus: number) {
-  const el = m.getElement()?.querySelector<HTMLElement>('.mapa-ind-aviao');
-  if (el) el.style.transform = `rotate(${graus}deg)`;
+// altitude 0 = no chao (pequeno, sombra colada embaixo), 1 = em cruzeiro (sombra longe)
+function pose(m: L.Marker, graus: number, altitude: number) {
+  const raiz = m.getElement();
+  const corpo = raiz?.querySelector<HTMLElement>('.mapa-ind-aviao-corpo');
+  const sombra = raiz?.querySelector<HTMLElement>('.mapa-ind-aviao-sombra');
+  const escala = 0.42 + 0.58 * altitude;
+  if (corpo) corpo.style.transform = `rotate(${graus}deg) scale(${escala})`;
+  if (sombra) {
+    const d = 2 + 20 * altitude;
+    sombra.style.transform = `translate(${d}px, ${d * 1.15}px) rotate(${graus}deg) scale(${escala * 0.92})`;
+    sombra.style.opacity = String(0.5 - 0.28 * altitude);
+  }
 }
+
+const suave = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
 
 function rumo(de: [number, number], para: [number, number]) {
   const dy = para[0] - de[0];
@@ -105,7 +121,14 @@ export default function IndicacoesMapaInner({ origem, nomeCliente, pousados, des
   // o voo so recomeca quando muda a EMPRESA de destino, nao a cada redesenho
   const destinoRef = useRef(destino);
   destinoRef.current = destino;
-  const destinoId = destino?.id ?? null;
+  const voandoRef = useRef(voando);
+  voandoRef.current = voando;
+  // fase do aviao so pro letreiro (decolando/pousando); o resto vive em refs, fora do React
+  const [faseUI, setFaseUI] = useState<'decolando' | 'pousando' | null>(null);
+  const marcador = useRef<L.Marker | null>(null);
+  const quadro = useRef(0);
+  const rumoAtual = useRef(0);
+  const [pousos, setPousos] = useState(0); // cada pouso completo: se outra busca ja comecou, decola de novo
 
   // 1) cria o mapa (e o mini mapa do Brasil); a limpeza destroi os dois
   useEffect(() => {
@@ -185,53 +208,115 @@ export default function IndicacoesMapaInner({ origem, nomeCliente, pousados, des
     }
   }, [pousados, voando]);
 
-  // 3) aviao: circula enquanto a IA pesquisa, voa em curva ate a proxima empresa
+  // 3) aviao: decola da casa do cliente quando a busca comeca, circula enquanto a IA
+  //    pesquisa, voa em curva ate cada empresa achada e, no fim, volta e pousa na casa
+  //    do cliente (pedido do dono em 06/10). Um laco so, que le a fase a cada quadro:
+  //    a janela redesenha a cada 4s e isso nao pode interromper decolagem nem pouso.
   useEffect(() => {
+    if (!voando || marcador.current || !mapa.current) return;
     const map = mapa.current;
-    if (!map || !voando) return;
-    const m = L.marker(posicao.current, { icon: aviao, zIndexOffset: 1000, interactive: false }).addTo(map);
-    let quadro = 0;
-    const inicio = performance.now();
-    const destino = destinoRef.current;
+    const o = inicial.current.origem;
+    const reduzido = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const dur = (ms: number) => (reduzido ? 1 : ms);
+    const m = L.marker(o, { icon: aviao, zIndexOffset: 1000, interactive: false }).addTo(map);
+    marcador.current = m;
+    posicao.current = o;
 
-    if (!destino) {
-      const o = inicial.current.origem;
-      const circular = (t: number) => {
-        const a = ((t - inicio) / 4500) * Math.PI * 2;
-        const p: [number, number] = [o[0] + 0.07 * Math.sin(a), o[1] + 0.09 * Math.cos(a)];
-        girar(m, rumo(posicao.current, p));
-        m.setLatLng(p);
-        posicao.current = p;
-        quadro = requestAnimationFrame(circular);
-      };
-      quadro = requestAnimationFrame(circular);
-    } else {
-      const rota = arco(posicao.current, destino.coords, 60);
-      const voar = (t: number) => {
-        const k = Math.min(1, (t - inicio) / MS_VOO);
-        const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; // acelera e freia
-        const i = Math.min(rota.length - 2, Math.floor(e * (rota.length - 1)));
-        const p = rota[i + 1];
-        girar(m, rumo(rota[i], p));
-        m.setLatLng(p);
-        posicao.current = p;
-        if (k < 1) quadro = requestAnimationFrame(voar);
-        else onPousouRef.current(destino.id);
-      };
-      quadro = requestAnimationFrame(voar);
-    }
+    type Fase =
+      | { nome: 'decolando'; t0: number; fim: [number, number] }
+      | { nome: 'circulando'; t0: number; centro: [number, number] }
+      | { nome: 'indo'; t0: number; rota: [number, number][]; id: string }
+      | { nome: 'pousando'; t0: number; rota: [number, number][] }
+      | { nome: 'sumindo'; t0: number };
+    // pista: corre pro leste e sai no ponto onde comeca o circulo sobre a cidade
+    const pista: [number, number] = [o[0], o[1] + 0.09];
+    let fase: Fase = { nome: 'decolando', t0: performance.now(), fim: pista };
+    rumoAtual.current = rumo(o, pista);
+    pose(m, rumoAtual.current, 0);
+    setFaseUI('decolando');
 
-    return () => {
-      cancelAnimationFrame(quadro);
-      m.remove();
+    // curva suave: o nariz vira aos poucos em vez de saltar de rumo
+    const apontar = (de: [number, number], para: [number, number]) => {
+      if (de[0] === para[0] && de[1] === para[1]) return rumoAtual.current;
+      const alvo = rumo(de, para);
+      const diff = ((alvo - rumoAtual.current + 540) % 360) - 180;
+      rumoAtual.current += diff * 0.18;
+      return rumoAtual.current;
     };
-  }, [voando, destinoId]);
+    const mover = (p: [number, number], altitude: number) => {
+      const g = apontar(posicao.current, p);
+      m.setLatLng(p);
+      posicao.current = p;
+      pose(m, g, altitude);
+    };
+    const circularAqui = (t: number): Fase => {
+      // o circulo passa pelo ponto onde o aviao esta (antes ele "teletransportava" pra cidade do cliente)
+      const p = posicao.current;
+      return { nome: 'circulando', t0: t, centro: [p[0], p[1] - 0.09] };
+    };
+
+    const tick = (t: number) => {
+      if (fase.nome === 'decolando') {
+        const k = Math.min(1, (t - fase.t0) / dur(MS_DECOLAGEM));
+        const e = k * k; // acelera na pista
+        mover([o[0] + (fase.fim[0] - o[0]) * e, o[1] + (fase.fim[1] - o[1]) * e], suave((k - 0.35) / 0.65));
+        if (k >= 1) { fase = circularAqui(t); setFaseUI(null); }
+      } else if (fase.nome === 'circulando') {
+        const destino = destinoRef.current;
+        if (!voandoRef.current) {
+          fase = { nome: 'pousando', t0: t, rota: arco(posicao.current, o, 90) };
+          setFaseUI('pousando');
+        } else if (destino) {
+          fase = { nome: 'indo', t0: t, rota: arco(posicao.current, destino.coords, 60), id: destino.id };
+        } else {
+          const a = ((t - fase.t0) / 4500) * Math.PI * 2;
+          mover([fase.centro[0] + 0.07 * Math.sin(a), fase.centro[1] + 0.09 * Math.cos(a)], 1);
+        }
+      } else if (fase.nome === 'indo') {
+        const k = Math.min(1, (t - fase.t0) / MS_VOO);
+        const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; // acelera e freia
+        const i = Math.min(fase.rota.length - 2, Math.floor(e * (fase.rota.length - 1)));
+        mover(fase.rota[i + 1], 1);
+        if (k >= 1) { onPousouRef.current(fase.id); fase = circularAqui(t); }
+      } else if (fase.nome === 'pousando') {
+        const k = Math.min(1, (t - fase.t0) / dur(MS_POUSO));
+        const e = 1 - Math.pow(1 - k, 2.2); // vem rapido e freia na pista
+        const i = Math.min(fase.rota.length - 2, Math.floor(e * (fase.rota.length - 1)));
+        mover(fase.rota[i + 1], 1 - suave((k - 0.3) / 0.5)); // desce e toca o chao antes do fim
+        if (k >= 1) fase = { nome: 'sumindo', t0: t };
+      } else {
+        const k = Math.min(1, (t - fase.t0) / dur(MS_SUMIR));
+        m.setOpacity(1 - k);
+        if (k >= 1) {
+          m.remove();
+          marcador.current = null;
+          setFaseUI(null);
+          setPousos((n) => n + 1);
+          return; // fim do laco; se outra busca comecar, o efeito decola de novo
+        }
+      }
+      quadro.current = requestAnimationFrame(tick);
+    };
+    quadro.current = requestAnimationFrame(tick);
+    // sem limpeza aqui de proposito: o laco segue ate o pouso mesmo com a janela redesenhando
+  }, [voando, pousos]);
+
+  // fechou a janela: para o laco e tira o aviao
+  useEffect(() => () => {
+    cancelAnimationFrame(quadro.current);
+    marcador.current?.remove();
+    marcador.current = null;
+  }, []);
 
   return (
     <div className="mapa-ind relative h-full w-full">
       <div ref={caixa} className="absolute inset-0" style={{ background: '#0f0a1e' }} />
       <div className="mapa-ind-vinheta" />
-      {status && <div className="mapa-ind-caixa left-3 top-3 border-amber-400/40 text-amber-100 font-semibold">{status}</div>}
+      {faseUI ? (
+        <div className="mapa-ind-caixa left-3 top-3 border-teal-400/50 text-teal-100 font-semibold">
+          {faseUI === 'decolando' ? `🛫 Decolando de ${nomeCliente}...` : `🛬 Pousando de volta em ${nomeCliente}`}
+        </div>
+      ) : status && <div className="mapa-ind-caixa left-3 top-3 border-amber-400/40 text-amber-100 font-semibold">{status}</div>}
       <div className="absolute right-3 top-3 z-[500] w-28 h-28 rounded-xl overflow-hidden border border-purple-500/40 shadow-lg shadow-black/50 pointer-events-none">
         <div ref={caixaMini} className="h-full w-full" style={{ background: '#0f0a1e' }} />
       </div>

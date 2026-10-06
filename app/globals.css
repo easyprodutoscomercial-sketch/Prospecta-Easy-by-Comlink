@@ -762,10 +762,11 @@ input[type="range"].density-slider:disabled {
   box-shadow: 0 0 10px rgba(16, 185, 129, .6);
 }
 .mapa-ind-pino.novo { animation: mapa-ind-pulso-pino 1.4s infinite; }
-.mapa-ind-aviao {
-  transition: transform .2s linear;
-  filter: drop-shadow(0 0 6px rgba(251, 191, 36, .9)) drop-shadow(0 3px 4px rgba(0, 0, 0, .6));
-}
+/* aviao da Comlink: corpo e sombra empilhados; pose() mexe so em transform/opacity */
+.mapa-ind-aviao { position: relative; width: 88px; height: 88px; }
+.mapa-ind-aviao-corpo, .mapa-ind-aviao-sombra { position: absolute; inset: 0; will-change: transform; }
+.mapa-ind-aviao-corpo { filter: drop-shadow(0 0 5px rgba(41, 172, 176, .7)); }
+.mapa-ind-aviao-sombra { filter: blur(1.5px); }
 .leaflet-tooltip.mapa-ind-rotulo {
   background: rgba(18, 8, 38, .92); border: 1px solid rgba(147, 51, 234, .5); color: #f5f3ff;
   font-weight: 600; font-size: 11px; border-radius: 8px; box-shadow: none; padding: 3px 7px;

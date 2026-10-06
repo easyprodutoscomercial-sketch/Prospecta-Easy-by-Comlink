@@ -128,6 +128,7 @@ Além do núcleo CRM + Feiras, o sistema cresceu com módulos adjacentes: **supo
 ### Região (Vercel × Supabase)
 
 - `vercel.json` fixa as funções em **`pdx1` (Oregon)**, a mesma região do banco Supabase (**us-west-2**). Até 06/10/2026 elas rodavam em `iad1` (Washington) e cada consulta ao banco cruzava os EUA (~65ms cada; uma tela faz de 3 a 8). Não trocar a região sem mudar o banco junto.
+- Mapa da busca de indicações: **avião da Comlink** (logo vetorial original de comlink.com.br, "Com" na asa esquerda e "link" na direita, [`components/contacts/aviao-comlink.ts`](components/contacts/aviao-comlink.ts)). Decola da casa do cliente quando a busca começa, voa até cada empresa e pousa de volta no fim. Animação só com `transform`/`opacity` num elemento de 88px e só enquanto a busca roda (ver armadilha 13).
 - Kanban desenha **50 cartões por coluna** (lista: 100 linhas) com botão "Mostrar mais": a coluna Novo chegou a 3.788 cartões e travava máquina fraca.
 
 ### TypeScript
