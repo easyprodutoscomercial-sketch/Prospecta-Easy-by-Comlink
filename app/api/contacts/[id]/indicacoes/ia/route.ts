@@ -3,14 +3,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { contexto, ContatoReferencia } from '@/lib/indicacoes/contexto';
 import {
-  MODELO, LIMITE_DIA, DIAS_CACHE_IA, MIN_EMPRESAS, MAX_EMPRESAS, ESTIMATIVA_INICIAL_REAIS, POR_RODADA, MAX_RODADAS,
+  MODELO, DIAS_CACHE_IA, MIN_EMPRESAS, MAX_EMPRESAS, ESTIMATIVA_INICIAL_REAIS, POR_RODADA, MAX_RODADAS,
   EmpresaIA, DadosOficiais, chaveIA, montarPedido, iniciarBusca, consultarBusca, cancelarBusca, lerResposta, custoEmReais,
 } from '@/lib/indicacoes/ia';
 import { normalizeCNPJ, normalizeName, normalizePhone } from '@/lib/utils/normalize';
 import { buscarDadosReceita, cnpjValido } from '@/lib/receita/cnpj';
+import { filtrarPorPorte } from '@/lib/indicacoes/porte';
 import { salvarComoContato } from '@/lib/indicacoes/salvar';
 import { getContactCoords } from '@/lib/data/brazil-cities-coords';
 import { hasFullVisibility } from '@/lib/utils/roles';
+import { buscasPermitidas } from '@/lib/indicacoes/permissao';
 import type { UserRole } from '@/lib/types';
 
 // GET    /api/contacts/:id/indicacoes/ia          -> custo estimado, buscas que restam hoje e resultado guardado
@@ -42,11 +44,14 @@ type MetaJob = {
   rodada?: number; resposta?: string; empresas?: EmpresaIA[]; custo_reais?: number; pesquisas?: number;
   receita?: DadosOficiais | null; parecidos?: string[]; inicio?: string; perfil?: string | null;
   vazias?: number; // rodadas seguidas sem empresa nova
+  pequenas?: string[]; // descartadas pela Receita (micro/pequena/fechada): nao podem voltar
 };
 
 // Regra do dono (02/10): so contato APONTADO pode ter busca com IA. Vendedor so busca
 // nos apontados pra ele (nao gasta a cota no cliente do colega); admin/gerente em qualquer apontado.
-function bloqueioDeBusca(c: ContatoReferencia, profile: { user_id: string; role: string }) {
+// Regra do dono (06/10): so busca quem o admin liberou em Admin > Usuarios (inclusive o admin).
+function bloqueioDeBusca(c: ContatoReferencia, profile: { user_id: string; role: string }, limiteDia: number) {
+  if (limiteDia <= 0) return 'Você não tem permissão para buscar indicações com IA. Peça ao administrador para liberar.';
   if (!c.assigned_to_user_id) return 'Aponte este contato para alguém antes de buscar indicações com IA.';
   if (!hasFullVisibility(profile.role as UserRole) && c.assigned_to_user_id !== profile.user_id) {
     return 'Só quem está apontado neste contato pode buscar indicações com IA.';
@@ -89,7 +94,7 @@ function inicioDoDiaSP() {
 }
 
 async function painel(admin: Admin, orgId: string, userId: string) {
-  const [{ data: usos }, { count: hoje }] = await Promise.all([
+  const [{ data: usos }, { count: hoje }, limiteDia] = await Promise.all([
     admin.from('ai_analysis_cache').select('result')
       .eq('organization_id', orgId).eq('analysis_type', 'INDICACOES_IA_USO')
       .order('created_at', { ascending: false }).limit(30),
@@ -98,6 +103,7 @@ async function painel(admin: Admin, orgId: string, userId: string) {
       .eq('organization_id', orgId).in('analysis_type', ['INDICACOES_IA_USO', 'INDICACOES_IA_JOB'])
       .eq('result->>user_id', userId)
       .gte('created_at', inicioDoDiaSP()),
+    buscasPermitidas(admin, orgId, userId),
   ]);
   // so buscas do modelo atual: as do gpt-5 (R$2,61) inflariam a estimativa do mini
   const custos = (usos || [])
@@ -107,8 +113,8 @@ async function painel(admin: Admin, orgId: string, userId: string) {
   return {
     custoEstimado: Math.ceil(media * 100) / 100,
     estimativaBaseadaEm: custos.length, // 0 = ainda e a estimativa inicial
-    restantesHoje: Math.max(0, LIMITE_DIA - (hoje || 0)),
-    limiteDia: LIMITE_DIA,
+    restantesHoje: Math.max(0, limiteDia - (hoje || 0)),
+    limiteDia,
   };
 }
 
@@ -215,7 +221,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ...info, chave, alvo: alvoDaBusca(contato), segmentoCadastrado: contato.segmento,
       // ponto de partida do aviao no mapa da busca
       origem: getContactCoords(contato.cidade, contato.estado), estado: contato.estado,
-      bloqueio: bloqueioDeBusca(contato, profile),
+      bloqueio: bloqueioDeBusca(contato, profile, info.limiteDia),
       resultado: resultado && { ...resultado, id: guardado?.id }, historico, jobEmAndamento: andamento?.cache_key || null,
     });
   } catch (e) {
@@ -240,7 +246,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (!contato.cidade) {
       return NextResponse.json({ erro: 'Este contato não tem cidade cadastrada.' }, { status: 400 });
     }
-    const bloqueio = bloqueioDeBusca(contato, profile);
+    const info = await painel(admin, orgId, profile.user_id);
+    const bloqueio = bloqueioDeBusca(contato, profile, info.limiteDia);
     if (bloqueio) return NextResponse.json({ erro: bloqueio }, { status: 403 });
 
     const alvo = alvoDaBusca(contato);
@@ -253,9 +260,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       .contains('result', { chave }).limit(1).maybeSingle();
     if (rodando) return NextResponse.json({ job: rodando.cache_key, reaproveitada: true });
 
-    const info = await painel(admin, orgId, profile.user_id);
     if (info.restantesHoje <= 0) {
-      return NextResponse.json({ erro: `Você já usou suas ${LIMITE_DIA} buscas de hoje. Amanhã libera de novo.` }, { status: 429 });
+      return NextResponse.json({ erro: `Você já usou suas ${info.limiteDia} buscas de hoje. Amanhã libera de novo.` }, { status: 429 });
     }
 
     const [receita, parecidos] = await Promise.all([dadosOficiais(contato.cnpj), parecidosNoCrm(admin, contato)]);
@@ -365,12 +371,15 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
     .select('id');
   if (!legado && !travado?.length) return parcial();
 
-  const lido = lerResposta(resp, contato.company || contato.name, acumuladas.map((e) => e.nome));
+  const lido = lerResposta(resp, contato.company || contato.name, [...acumuladas.map((e) => e.nome), ...(meta.pequenas || [])]);
   const custo = (meta.custo_reais || 0) + custoEmReais(resp.usage, lido.pesquisas);
   const pesquisas = (meta.pesquisas || 0) + lido.pesquisas;
 
+  const porPorte = await filtrarPorPorte(lido.empresas);
+  const pequenas = [...(meta.pequenas || []), ...porPorte.descartadas.map((d) => d.nome)];
+
   // salva cada empresa nova como rascunho atribuido a quem pagou a busca
-  const marcadas = await marcarJaNoCrm(admin, orgId, lido.empresas);
+  const marcadas = await marcarJaNoCrm(admin, orgId, porPorte.empresas);
   const novas: EmpresaIA[] = [];
   for (const e of marcadas.slice(0, MAX_EMPRESAS - acumuladas.length)) {
     if (e.jaNoCrm) { novas.push(e); continue; }
@@ -384,14 +393,14 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
 
   console.log('[indicacoes IA] rodada', JSON.stringify({
     job, rodada, status: resp.status, pesquisas: lido.pesquisas, lidas: lido.lidas, novas: novas.length,
-    salvas: novas.filter((e) => e.contatoId).length, descartadas: lido.descartadas, repetidas: lido.repetidas,
+    salvas: novas.filter((e) => e.contatoId).length, descartadas: lido.descartadas, repetidas: lido.repetidas, pequenas: porPorte.descartadas,
     total: empresas.length, uso: resp.usage, custo_rodada: custo - (meta.custo_reais || 0), custo_total: custo,
   }));
 
   // nicho estreito: um angulo (ex.: sinonimos) pode vir vazio e o seguinte (cidades
   // vizinhas) render. No teste da Wortex a 2a rodada veio vazia e parar ali deixou 4 empresas.
   const vazias = novas.length === 0 ? (meta.vazias || 0) + 1 : 0;
-  const novoMeta: MetaJob = { ...meta, empresas, custo_reais: custo, pesquisas, vazias, perfil: meta.perfil || lido.segmentoPesquisado };
+  const novoMeta: MetaJob = { ...meta, empresas, custo_reais: custo, pesquisas, vazias, pequenas, perfil: meta.perfil || lido.segmentoPesquisado };
   const acabou = legado || resp.status !== 'completed' || empresas.length >= MAX_EMPRESAS
     || rodada >= MAX_RODADAS || vazias >= 2;
 
@@ -404,7 +413,7 @@ async function acompanhar(admin: Admin, contato: ContatoReferencia, job: string)
   // proxima rodada, por outro angulo, pedindo so o que falta
   const { instrucoes, pedido } = montarPedido(
     { ...contato, cidade: contato.cidade || '' }, meta.receita, meta.parecidos || [],
-    { numero: rodada + 1, quantas: Math.min(POR_RODADA, MAX_EMPRESAS - empresas.length), excluir: empresas.map((e) => e.nome),
+    { numero: rodada + 1, quantas: Math.min(POR_RODADA, MAX_EMPRESAS - empresas.length), excluir: [...empresas.map((e) => e.nome), ...pequenas],
       perfilConfirmado: novoMeta.perfil }
   );
   const proxima = await iniciarBusca(instrucoes, pedido);

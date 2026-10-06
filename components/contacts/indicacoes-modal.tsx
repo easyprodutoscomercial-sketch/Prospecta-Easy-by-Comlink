@@ -36,6 +36,9 @@ interface Empresa {
   jaNoCrm?: boolean;
   nota?: number | null;
   motivo?: string | null;
+  porte?: string | null; // porte oficial da Receita
+  porteConfirmado?: boolean; // buscas antes de 06/10 nao tem este campo
+  porte_indicio?: string | null;
   contatoId?: string | null; // rascunho criado quando a IA achou
   noFunil?: boolean;
   apagado?: boolean;
@@ -406,7 +409,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-neutral-100">
-                      {origem === 'ia' ? 'Buscar de novo com IA' : 'Buscar 10 a 12 empresas com IA'}
+                      {origem === 'ia' ? 'Buscar de novo com IA' : 'Buscar até 12 empresas de médio/grande porte com IA'}
                     </p>
                     <p className="text-[11px] text-neutral-500">
                       {ia.segmentoCadastrado ? `Segmento: ${ia.segmentoCadastrado}` : 'Sem segmento cadastrado — a IA descobre pelo nome da empresa'}
@@ -588,12 +591,18 @@ export default function IndicacoesModal({ contactId, contactNome, cidade, aberto
                         )}
                         {e.nome}
                         {e.nota != null && <span className="ml-2 text-[10px] font-bold text-emerald-300">nota {e.nota}</span>}
+                        {e.porteConfirmado === true ? (
+                          <span className="ml-2 text-[10px] font-semibold text-emerald-300" title={`Porte na Receita: ${e.porte}`}>médio/grande ✓ Receita</span>
+                        ) : e.porteConfirmado === false ? (
+                          <span className="ml-2 text-[10px] font-semibold text-neutral-500" title={e.porte_indicio || 'Sem CNPJ para conferir na Receita'}>porte não confirmado</span>
+                        ) : null}
                         {e.noFunil ? <span className="ml-2 text-[10px] font-semibold text-emerald-300">✓ no funil</span>
                           : e.contatoId ? <span className="ml-2 text-[10px] font-semibold text-sky-300">salva nos Rascunhos</span>
                           : e.jaNoCrm ? <span className="ml-2 text-[10px] font-semibold text-amber-300">já estava no CRM</span>
                           : e.apagado ? <span className="ml-2 text-[10px] font-semibold text-neutral-500">excluída</span> : null}
                       </p>
                       {e.motivo && <p className="text-[11px] text-emerald-200/60 line-clamp-1">{e.motivo}</p>}
+                      {e.porte_indicio && <p className="text-[11px] text-neutral-400 line-clamp-1">Porte: {e.porte_indicio}</p>}
                       {(e.razao_social || e.cnpj) && (
                         <p className="text-[11px] text-neutral-400 truncate">
                           {e.razao_social}{e.razao_social && e.cnpj ? ' · ' : ''}{e.cnpj ? `CNPJ ${e.cnpj}` : ''}

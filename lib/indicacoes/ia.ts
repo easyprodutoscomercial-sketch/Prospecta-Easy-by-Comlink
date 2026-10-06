@@ -19,7 +19,7 @@
 export const MODELO = process.env.INDICACOES_IA_MODELO || 'gpt-5-mini';
 export const MIN_EMPRESAS = 10;
 export const MAX_EMPRESAS = 12;
-export const LIMITE_DIA = 2; // buscas por USUARIO por dia (pedido do dono em 02/10); rever resultado guardado nao conta
+// Buscas por dia agora sao por usuario, definidas pelo admin: ver lib/indicacoes/permissao.ts
 export const DIAS_CACHE_IA = 3650; // busca fica guardada (o dono revisita quando quiser)
 // A busca roda em RODADAS curtas pra tela ir enchendo e o consultor poder parar
 // quando quiser: cada rodada pede poucas empresas novas por um angulo diferente.
@@ -27,11 +27,14 @@ export const POR_RODADA = 4;
 export const MAX_RODADAS = 5;
 export const MAX_PESQUISAS = 4; // pesquisas na internet dentro de UMA rodada
 
+// Empresa grande e mais rara que oficina: os angulos miram fabricante, distribuidor,
+// distrito industrial e lista de associados/expositores, e o raio e de 100 km.
+export const RAIO_KM = 100;
 const ANGULOS = [
-  'pela atividade principal + a cidade do cliente',
-  'pelos produtos/serviços e por sinônimos da atividade, na cidade e no entorno',
-  'nas cidades vizinhas (até 50 km), pela atividade',
-  'em guias e listas de empresas (CNPJ por cidade e atividade, associações do setor)',
+  'pela atividade principal na cidade do cliente e nos distritos/polos industriais da região',
+  'pelos produtos/serviços e sinônimos da atividade, procurando fabricantes, indústrias e distribuidores',
+  `nas cidades vizinhas (até ${RAIO_KM} km), pela atividade`,
+  'em listas de associados de entidades do setor (ex.: ABIMAQ, sindicatos patronais, FIESP/CIESP), expositores de feiras do setor e rankings de maiores empresas da região',
   'em qualquer fonte confiável que ainda não usou, mesma região',
 ];
 
@@ -76,6 +79,9 @@ export interface EmpresaIA {
   tipo: string;
   lat: null;
   lon: null;
+  porte_indicio?: string | null; // o que a IA viu de tamanho (fabrica, funcionarios, filiais)
+  porte?: string | null; // porte oficial da Receita, quando o CNPJ foi conferido
+  porteConfirmado?: boolean; // true = Receita confirmou que nao e Micro/Pequena
   jaNoCrm?: boolean;
   contatoId?: string | null; // contato (rascunho) criado quando a busca terminou
   noFunil?: boolean; // ja foi jogado pro funil
@@ -171,17 +177,21 @@ Regras invioláveis:
 ${ficha}${exemplos}
 
 ${entender}
-Depois encontre ${rodada.quantas} empresas REAIS com o MESMO perfil — mesma atividade, mesmo tipo de produto, porte parecido — em ${local} ou em cidades vizinhas até 50 km.
+Depois encontre ${rodada.quantas} empresas REAIS com o MESMO perfil — mesma atividade, mesmo tipo de produto — em ${local} ou em cidades vizinhas até ${RAIO_KM} km.
+PORTE: só empresas de MÉDIO ou GRANDE porte, mesmo que o cliente de referência seja pequeno. Procure indústrias, fabricantes, distribuidores e atacadistas com estrutura própria (fábrica, vários funcionários, filiais, marca conhecida no setor). Na Receita Federal elas aparecem com porte "Demais" (faturamento acima de R$ 4,8 milhões por ano).
+NÃO inclua: microempresa, MEI, oficina, tornearia, assistência técnica, loja de bairro, revenda pequena, representante comercial autônomo nem prestador de serviço individual.
+Traga o CNPJ sempre que conseguir confirmar numa página: o porte de cada empresa será conferido na Receita e as pequenas serão descartadas.
 Nesta rodada, pesquise ${angulo}.${excluir}
 NÃO inclua o cliente de referência (${empresa}) nem empresas do mesmo grupo dele.
 Cada dado de uma empresa tem que vir de uma página sobre AQUELA empresa — não misture endereço, telefone ou e-mail de empresas diferentes.
-Dê a cada empresa uma "nota" de 0 a 10 (quanto ela se parece com o cliente de referência e quão fácil é contatar) e um "motivo" curto.
+Dê a cada empresa uma "nota" de 0 a 10 (quanto ela se parece com o cliente de referência, quanto maior ela é e quão fácil é contatar) e um "motivo" curto.
+Em "porte_indicio" escreva em poucas palavras o que você viu de tamanho (ex.: "fábrica de 20 mil m², 300 funcionários", "3 filiais").
 Se não achar ${rodada.quantas}, devolva as que achou — nunca complete com empresa inventada.
 
 Para cada empresa traga todos os dados que conseguir confirmar: nome fantasia, razão social, CNPJ, o que a empresa faz, telefone, WhatsApp, e-mail, site, Instagram, endereço (rua e número), bairro, cidade, UF, CEP e a fonte.
 
 Responda SOMENTE com este JSON, sem texto antes ou depois:
-{"perfil_entendido":"","empresas":[{"nome":"","nota":0,"motivo":"","razao_social":null,"cnpj":null,"segmento":"","descricao":null,"telefone":null,"whatsapp":null,"email":null,"site":null,"instagram":null,"endereco":null,"bairro":null,"cidade":null,"estado":null,"cep":null,"fonte":""}]}`;
+{"perfil_entendido":"","empresas":[{"nome":"","nota":0,"motivo":"","porte_indicio":null,"razao_social":null,"cnpj":null,"segmento":"","descricao":null,"telefone":null,"whatsapp":null,"email":null,"site":null,"instagram":null,"endereco":null,"bairro":null,"cidade":null,"estado":null,"cep":null,"fonte":""}]}`;
 
   return { instrucoes, pedido };
 }
@@ -278,6 +288,7 @@ export function lerResposta(resp: any, referencia?: string, jaVistas: string[] =
       fonte,
       nota: Number.isFinite(Number(e.nota)) ? Math.max(0, Math.min(10, Number(e.nota))) : null,
       motivo: texto(e.motivo),
+      porte_indicio: texto(e.porte_indicio),
       tipo: texto(e.segmento) || texto(json?.perfil_entendido) || texto(json?.segmento_pesquisado) || 'empresa',
       lat: null,
       lon: null,

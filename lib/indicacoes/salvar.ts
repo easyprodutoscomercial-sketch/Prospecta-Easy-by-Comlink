@@ -8,9 +8,9 @@ export const ETAPA_NOVO = '66e2a4dc-b694-42f9-9d3e-0674c0d9e31e';
 // vem do mapa (EmpresaIndicada) ou da IA (EmpresaIA, com mais campos)
 export type EmpresaParaSalvar = EmpresaIndicada & Partial<Record<
   'razao_social' | 'cnpj' | 'segmento' | 'descricao' | 'whatsapp' | 'email' | 'instagram' |
-  'bairro' | 'estado' | 'cep' | 'fonte' | 'motivo',
+  'bairro' | 'estado' | 'cep' | 'fonte' | 'motivo' | 'porte' | 'porte_indicio',
   string | null
->> & { nota?: number | null };
+>> & { nota?: number | null; porteConfirmado?: boolean };
 
 // Grava uma empresa indicada como contato.
 // rascunho=true: fica salva no banco, atribuida a quem buscou, mas FORA do funil
@@ -34,6 +34,8 @@ export async function salvarComoContato(
     veioDaIA ? `Fonte: pesquisa com IA na internet (${e.fonte}). Confira os dados antes de ligar.` : 'Fonte: OpenStreetMap.',
     e.nota != null ? `Nota da IA: ${e.nota}/10${e.motivo ? ` — ${e.motivo}` : ''}` : '',
     e.razao_social ? `Razão social: ${e.razao_social}.` : '',
+    veioDaIA ? (e.porteConfirmado ? `Porte na Receita: ${e.porte}.` : 'Porte não confirmado na Receita.') : '',
+    e.porte_indicio ? `Indício de porte: ${e.porte_indicio}` : '',
     e.descricao ? `O que faz: ${e.descricao}` : '',
   ].filter(Boolean).join('\n');
 

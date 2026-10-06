@@ -117,6 +117,10 @@ export default function AdminPage() {
   // Role change loading
   const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
 
+  // Busca de indicacoes com IA: quantas buscas por dia cada usuario pode fazer (0 = bloqueado)
+  const [buscasIA, setBuscasIA] = useState<Record<string, number>>({});
+  const [buscasIASalvando, setBuscasIASalvando] = useState<string | null>(null);
+
   // Avatar upload
   const [avatarUploadingId, setAvatarUploadingId] = useState<string | null>(null);
 
@@ -162,10 +166,36 @@ export default function AdminPage() {
       if (res.ok) {
         setUsers(data.users || []);
       }
+      const perm = await fetch('/api/indicacoes/permissoes');
+      if (perm.ok) setBuscasIA(await perm.json());
     } catch {
       // silent
     } finally {
       setLoadingUsers(false);
+    }
+  };
+
+  const handleBuscasIAChange = async (userId: string, nome: string, buscas: number) => {
+    setBuscasIASalvando(userId);
+    try {
+      const res = await fetch('/api/indicacoes/permissoes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, buscas_dia: buscas }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setBuscasIA((m) => ({ ...m, [userId]: buscas }));
+        setUserResult({ type: 'success', message: buscas > 0
+          ? `${nome} pode fazer ${buscas} busca${buscas > 1 ? 's' : ''} de indicação com IA por dia.`
+          : `${nome} não pode mais buscar indicações com IA.` });
+      } else {
+        setUserResult({ type: 'error', message: data.error });
+      }
+    } catch {
+      setUserResult({ type: 'error', message: 'Erro de conexão' });
+    } finally {
+      setBuscasIASalvando(null);
     }
   };
 
@@ -887,6 +917,20 @@ export default function AdminPage() {
                             <option value="sdr">SDR</option>
                             <option value="user">Vendedor</option>
                             <option value="suporte">Suporte</option>
+                          </select>
+                          <select
+                            value={buscasIA[u.user_id] || 0}
+                            onChange={(e) => handleBuscasIAChange(u.user_id, u.name, Number(e.target.value))}
+                            disabled={buscasIASalvando === u.user_id}
+                            title="Buscas de indicação com IA por dia (cada uma custa ~R$1)"
+                            className={`text-[10px] bg-[#2a1245] border rounded px-1 py-0.5 focus:outline-none disabled:opacity-40 ${
+                              buscasIA[u.user_id] ? 'border-emerald-500/40 text-emerald-300' : 'border-purple-700/30 text-purple-300/60'
+                            }`}
+                          >
+                            <option value={0}>IA: bloqueado</option>
+                            {[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((n) => (
+                              <option key={n} value={n}>IA: {n}/dia</option>
+                            ))}
                           </select>
                           <button
                             onClick={() => startMenuEditing(u)}

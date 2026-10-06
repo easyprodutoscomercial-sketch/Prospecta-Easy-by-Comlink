@@ -197,6 +197,13 @@ Pipeline membership controlada por `pipeline_members` (user_id, pipeline_id).
 
 ---
 
+## ✈️ Indicações com IA (regras do dono, 06/10/2026)
+
+- **Só busca quem o admin liberar**, em Admin → Gerenciar Usuários (seletor "IA: N/dia"). Sem liberação = bloqueado, **inclusive o admin**. A trava é no servidor (`lib/indicacoes/permissao.ts`), não só o botão escondido.
+- Hoje: **Daniel Lima = 8 buscas/dia**; todos os outros bloqueados. Cada busca custa ~R$1 (OpenAI).
+- Vendedor só busca em contato apontado para ele; admin/gerente em qualquer contato apontado.
+- **Só empresa de médio/grande porte.** Com CNPJ: conferida na Receita; Microempresa, Pequeno Porte, MEI ou CNPJ não ativo é descartada. Sem CNPJ: entra marcada "porte não confirmado" (a IA diz o indício de porte).
+
 ## ❌ O que NUNCA pode acontecer
 
 1. **Contato aparecer em org errada** — vazamento de dados entre organizações
