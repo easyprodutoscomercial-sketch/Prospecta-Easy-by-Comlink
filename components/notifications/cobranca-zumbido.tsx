@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-// Aviso de cobranca: um raio de luz corre pelas bordas da tela enquanto houver
+// Aviso de cobranca: a borda da tela fica acesa (parada) enquanto houver
 // cobranca pendente, e uma lingueta pequena pendurada no topo mostra quantas sao.
-// Quando chega cobranca nova o raio acelera e brilha por 5s, com bipe.
+// Quando chega cobranca nova a borda pisca por 5s, com bipe.
+// A borda NAO pode ficar animada o tempo todo: o raio girando de 06/10 travou as
+// maquinas dos vendedores (ver comentario em app/globals.css).
 // O titulo da aba fica piscando: e o que pega quem deixou o CRM em segundo plano.
 //
 // Antes era um botao flutuante no canto de cima a direita, por cima de tudo:
@@ -13,7 +15,7 @@ import { useRouter } from 'next/navigation';
 // numa camada que deixa o clique passar (pointer-events: none) — nao trava nada.
 
 const INTERVALO_MS = 30_000; // de quanto em quanto tempo olha se chegou cobranca
-const DURACAO_ALERTA_MS = 5_000; // 5s de raio acelerado: chama atencao sem atrapalhar o trabalho
+const DURACAO_ALERTA_MS = 5_000; // 5s de borda piscando: chama atencao sem atrapalhar o trabalho
 
 export default function CobrancaZumbido() {
   const router = useRouter();
@@ -118,7 +120,6 @@ export default function CobrancaZumbido() {
       {/* camadas so de luz: o clique passa direto (pointer-events: none no CSS) */}
       <div className={classe} aria-hidden>
         <div className="raio-cobranca-fundo" />
-        <div className="raio-cobranca-brilho" />
         <div className="raio-cobranca-linha" />
       </div>
       {/* Lingueta no TOPO, nao embaixo: o rodape tem as barras de acao (Modo Foco,

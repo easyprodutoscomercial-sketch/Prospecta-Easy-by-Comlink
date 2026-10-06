@@ -707,31 +707,27 @@ input[type="range"].density-slider:disabled {
 }
 
 /* ---- Aviso de cobranca (components/notifications/cobranca-zumbido.tsx) ----
-   Raio de luz correndo pelas bordas da tela. Tudo pointer-events:none: nunca
-   tampa nem bloqueia clique (o botao flutuante antigo tampava o topo do kanban,
-   e o tremor no <body> chegou a impedir vendedor de salvar). */
-@property --raio-angulo { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-.raio-cobranca { --raio-cor: #f59e0b; --raio-claro: #fff7d6; --raio-fraco: rgba(245, 158, 11, .35); --raio-volta: 6s; }
-.raio-cobranca.vermelho { --raio-cor: #ef4444; --raio-claro: #ffe4e4; --raio-fraco: rgba(239, 68, 68, .4); }
-.raio-cobranca.alerta { --raio-volta: 1.2s; }
-.raio-cobranca-fundo, .raio-cobranca-brilho, .raio-cobranca-linha {
+   Borda acesa PARADA nas bordas da tela. Tudo pointer-events:none: nunca tampa
+   nem bloqueia clique (o botao flutuante antigo tampava o topo do kanban, e o
+   tremor no <body> chegou a impedir vendedor de salvar).
+
+   NAO animar a borda continuamente. Em 06/10 um raio girando (conic-gradient
+   animado via @property + camada com filter: blur em tela cheia) obrigava o
+   navegador a repintar a tela inteira a cada quadro, em todas as paginas, o dia
+   todo: travou as maquinas dos vendedores. Animacao aqui so de opacity (a placa
+   de video faz sozinha) e so nos 5s do alerta de cobranca nova. */
+.raio-cobranca { --raio-cor: #f59e0b; --raio-fraco: rgba(245, 158, 11, .35); }
+.raio-cobranca.vermelho { --raio-cor: #ef4444; --raio-fraco: rgba(239, 68, 68, .4); }
+.raio-cobranca-fundo, .raio-cobranca-linha {
   position: fixed; inset: 0; pointer-events: none; z-index: 95;
 }
 .raio-cobranca-fundo { box-shadow: inset 0 0 0 1px var(--raio-fraco), inset 0 0 40px color-mix(in srgb, var(--raio-cor) 12%, transparent); }
-.raio-cobranca-brilho, .raio-cobranca-linha {
-  padding: 3px;
-  background: conic-gradient(from var(--raio-angulo), transparent 0 62%, color-mix(in srgb, var(--raio-cor) 15%, transparent) 72%,
-    var(--raio-cor) 84%, var(--raio-claro) 87%, var(--raio-cor) 89%, transparent 93%);
-  /* mascara deixa so a moldura de 3px: o meio da tela fica intocado */
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: raio-cobranca-volta var(--raio-volta) linear infinite;
+.raio-cobranca-linha { border: 3px solid var(--raio-cor); opacity: .55; }
+.raio-cobranca.alerta .raio-cobranca-linha {
+  border-width: 5px; will-change: opacity;
+  animation: raio-cobranca-pisca .5s ease-in-out infinite alternate;
 }
-.raio-cobranca-brilho { padding: 10px; filter: blur(8px); opacity: .8; }
-.raio-cobranca.alerta .raio-cobranca-linha { padding: 5px; }
-.raio-cobranca.alerta .raio-cobranca-brilho { padding: 16px; opacity: 1; }
-@keyframes raio-cobranca-volta { to { --raio-angulo: 360deg; } }
+@keyframes raio-cobranca-pisca { from { opacity: .25; } to { opacity: 1; } }
 .raio-cobranca-lingueta {
   z-index: 96; display: flex; align-items: center; gap: 6px; padding: 4px 14px 5px;
   border-radius: 0 0 10px 10px; background: var(--raio-cor); color: #1a0a2e;
@@ -741,8 +737,7 @@ input[type="range"].density-slider:disabled {
 .raio-cobranca-lingueta.vermelho { color: #fff; }
 .raio-cobranca-lingueta:hover { filter: brightness(1.1); }
 @media (prefers-reduced-motion: reduce) {
-  /* sem raio correndo: fica so a borda acesa */
-  .raio-cobranca-brilho, .raio-cobranca-linha { animation: none; background: var(--raio-fraco); }
+  .raio-cobranca.alerta .raio-cobranca-linha { animation: none; opacity: 1; }
 }
 
 /* ---- Mapa da busca de indicacoes com IA (components/contacts/indicacoes-mapa-inner.tsx) ---- */
