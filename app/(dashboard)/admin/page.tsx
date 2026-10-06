@@ -1016,6 +1016,22 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* Conferencia de relatorios */}
+      <div className="mb-10">
+        <h2 className="text-lg font-bold text-emerald-400 mb-4">Conferência de relatórios</h2>
+        <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
+          <p className="text-xs text-purple-300/60 mb-4">
+            Arraste os e-mails diários dos vendedores e veja o que foi dito e não está registrado no CRM.
+          </p>
+          <Link
+            href="/admin/conferencia"
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-500 shadow-lg shadow-emerald-600/20 transition-colors"
+          >
+            Abrir conferência
+          </Link>
+        </div>
+      </div>
+
       {/* Quiz Feira Section */}
       <div className="mb-10">
         <h2 className="text-lg font-bold text-emerald-400 mb-4">Quiz Feira</h2>

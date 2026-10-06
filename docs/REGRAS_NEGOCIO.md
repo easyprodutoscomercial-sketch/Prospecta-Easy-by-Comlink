@@ -204,6 +204,27 @@ Pipeline membership controlada por `pipeline_members` (user_id, pipeline_id).
 - Vendedor só busca em contato apontado para ele; admin/gerente em qualquer contato apontado.
 - **Só empresa de médio/grande porte.** Com CNPJ: conferida na Receita; Microempresa, Pequeno Porte, MEI ou CNPJ não ativo é descartada. Sem CNPJ: entra marcada "porte não confirmado" (a IA diz o indício de porte).
 
+## 📋 Conferência de relatórios diários (regras do dono, 06/10/2026)
+
+Tela `/admin/conferencia`: o dono arrasta os e-mails diários dos vendedores (.eml) e vê o que foi dito contra o que foi registrado no CRM.
+
+- **Só admin e gerente.** A trava fica no servidor (`canViewAuditLog` em `app/api/conferencia/route.ts`).
+- **Só mostra, não registra nada no CRM.** A cobrança fica com o dono.
+- **A IA só extrai** a lista de empresas do e-mail (`lib/conferencia/extrair.ts`). Quem decide "registrou ou não" é uma regra fixa (`lib/conferencia/casar.ts`).
+- **Nunca acusar sem certeza.**
+  - Nome que bate com várias fichas e sem lançamento vira "Várias fichas", nunca "Não registrou".
+  - Nome parecido vira "Provável".
+  - A palavra mais rara do nome (a marca) precisa bater: "Aços Continental" não vira "Aços Puma".
+- **Conta como registrado** quando há interação do **próprio vendedor** naquela empresa, do dia do relatório até 12h do dia seguinte.
+- **"Registrou, mas não citou"** só olha o dia do relatório: o que foi lançado na manhã seguinte é trabalho do outro dia.
+- **Alertas:**
+  - Reunião prometida que não está em `meetings` (±1 dia da data citada).
+  - Próximo passo com dia e sem `proxima_acao_data`.
+  - O e-mail afirma um resultado concreto (apresentação, reunião, recusa) e o CRM diz "sem resposta" ou a etapa não andou. "Falou" sozinho não gera alerta.
+- **O e-mail bruto não é guardado.** Ele é lido no navegador, só o texto vai ao servidor e só a leitura da IA fica em `ai_analysis_cache` (`CONFERENCIA_EMAIL`).
+- **A comparação é refeita a cada vez que a tela abre.** Um lançamento atrasado já aparece sem pagar IA de novo.
+- **Custo:** de R$ 0,01 a R$ 0,03 por e-mail (medido em 05/10). Limite de 40 leituras por dia por empresa.
+
 ## ❌ O que NUNCA pode acontecer
 
 1. **Contato aparecer em org errada** — vazamento de dados entre organizações

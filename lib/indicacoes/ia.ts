@@ -93,8 +93,8 @@ export interface UsoOpenAI {
   output_tokens?: number;
 }
 
-export function custoEmReais(uso: UsoOpenAI | null | undefined, pesquisas: number) {
-  const preco = PRECOS_USD[MODELO] || PRECOS_USD['gpt-5'];
+export function custoEmReais(uso: UsoOpenAI | null | undefined, pesquisas: number, modelo: string = MODELO) {
+  const preco = PRECOS_USD[modelo] || PRECOS_USD['gpt-5'];
   const usd =
     ((uso?.input_tokens || 0) / 1e6) * preco.entrada +
     ((uso?.output_tokens || 0) / 1e6) * preco.saida +

@@ -146,7 +146,7 @@ mini-crm/
 ├── app/
 │   ├── (auth)/              # Login, logout (públicas)
 │   ├── (dashboard)/         # Área logada com sidebar
-│   │   ├── admin/           # Painel admin (audit, dedup, users)
+│   │   ├── admin/           # Painel admin (audit, dedup, users, conferencia)
 │   │   ├── contacts/        # CRM de contatos (list, new, [id])
 │   │   ├── kanban/          # Pipeline visual drag-and-drop
 │   │   ├── calendar/        # Calendário de meetings
@@ -168,7 +168,7 @@ mini-crm/
 │   │   ├── quiz/[token]/            # Quiz público de feiras
 │   │   └── layout.tsx
 │   │
-│   ├── api/                 # Route Handlers (122 rotas — ver seção 11)
+│   ├── api/                 # Route Handlers (123 rotas — ver seção 11)
 │   ├── layout.tsx           # Root layout (metadata, PWA, viewport)
 │   ├── globals.css          # Tailwind + overrides (Leaflet, range slider)
 │   └── offline/             # Fallback PWA offline
@@ -206,6 +206,7 @@ mini-crm/
 │   ├── data/                # brazil-cities, brazil-ddd, pipeline-templates
 │   ├── automations/         # engine.ts (stage-change automations)
 │   ├── offline/             # db.ts (IndexedDB), queue.ts, hooks.ts
+│   ├── conferencia/         # eml.ts (lê .eml no navegador), extrair.ts (IA), casar.ts (compara com o CRM)
 │   ├── push/                # send-push.ts (VAPID Web Push)
 │   ├── types.ts             # Tipos globais (Contact, Interaction, Pipeline...)
 │   ├── ensure-profile.ts    # Auto-provisioning de org+profile no login
@@ -735,7 +736,7 @@ export function useX() { return useContext(Ctx) }
 
 ---
 
-## 🛣️ 11. Rotas da API (122 rotas)
+## 🛣️ 11. Rotas da API (123 rotas)
 
 > ✅ = auth via Supabase / 🔓 = pública por token ou slug / 🔒 = cron Vercel
 
@@ -908,6 +909,12 @@ export function useX() { return useContext(Ctx) }
 | GET/POST | `/api/portal/[token]/tickets/[ticketId]/comments` | Comentários | 🔓 token |
 | POST | `/api/portal/[token]/tickets/[ticketId]/attachments` | Anexos | 🔓 token |
 
+### Conferência de relatórios (1)
+
+| Método | Rota | Descrição | Auth |
+|---|---|---|---|
+| GET/POST/DELETE | `/api/conferencia` | Conferência dos e-mails diários dos vendedores contra o CRM. POST lê UM e-mail (texto já extraído do .eml no navegador) com IA (`gpt-5-mini`) e guarda a leitura em `ai_analysis_cache` (`CONFERENCIA_EMAIL`, uma por vendedor por dia). GET `?dia=` refaz a comparação na hora, sem IA (interações do vendedor, reuniões e próxima ação). DELETE apaga uma leitura. Vendedor reconhecido pelo remetente = `profiles.email`; se não bater, a tela pede e guarda o apelido (`CONFERENCIA_APELIDO`). Limite: 40 leituras/dia/organização. Tela: `/admin/conferencia` | ✅ admin/gerente |
+
 ### Usuários (5)
 
 | Método | Rota | Descrição | Auth |
@@ -988,6 +995,11 @@ npx next lint
 
 # Type check (sem build)
 npx tsc --noEmit
+
+# Testes (node:test, sem dependência; Node >= 23 lê .ts direto)
+npm test
+# tests/conferencia.test.mjs também confere os 4 relatórios reais de 05/10/2026
+# se estiverem em ~/Downloads (ou CONFERENCIA_EML_DIR). Eles NÃO vão pro repo: é público.
 ```
 
 ### Banco de Dados
@@ -1043,6 +1055,8 @@ Arquivo: `.env.local` (nunca commitar)
 | `VAPID_EMAIL` | ⚪ Não | Email contato VAPID | `admin@exemplo.com` |
 | `CRON_SECRET` | ⚪ Não | Auth de cron jobs Vercel | `...` |
 | `INDICACOES_IA_MODELO` | ⚪ Não | Modelo da busca de indicações por IA (padrão `gpt-5-mini` em rodadas: 12 empresas/~R$1,20; `gpt-5` custou R$2,61) | `gpt-5-mini` |
+| `CONFERENCIA_IA_MODELO` | ⚪ Não | Modelo que lê os e-mails da Conferência (padrão `gpt-5-mini`: R$0,01–0,03 por e-mail, 7–19s) | `gpt-5-mini` |
+| `CONFERENCIA_IA_ESFORCO` | ⚪ Não | Esforço de raciocínio da leitura (padrão `minimal`) | `minimal` |
 | `INDICACOES_IA_ESFORCO` | ⚪ Não | Esforço de raciocínio da busca por IA (padrão `low`) | `low` |
 
 ### 🚨 ALERTA DE SEGURANÇA ATUAL (2026-04-13)
@@ -1212,6 +1226,15 @@ Ver `docs/DECISOES_TECNICAS.md` para o plano completo.
 3. Retorna ranking por menor diferença do `valor_exato`
 
 ---
+
+### G. Conferência de relatórios diários
+
+1. Admin/gerente em `/admin/conferencia` arrasta os .eml dos vendedores (ou cola o texto)
+2. Navegador lê o .eml (`lib/conferencia/eml.ts`: Windows-1252/iso-8859-1, quoted-printable) e acha o dia do relatório pelo assunto
+3. POST `/api/conferencia` só com o texto → vendedor pelo remetente → IA devolve uma linha por empresa (resultado, próximo passo, reunião)
+4. GET `/api/conferencia?dia=` casa cada empresa com `contacts` (palavras raras pesam mais; a marca tem que bater) e confere com `interactions` do vendedor, `meetings` e `proxima_acao_data`
+5. Tela mostra placar por vendedor (% registrado), selos por empresa e "registrou mas não citou"; exporta xlsx
+6. Validado com os e-mails de 05/10/2026: João 23/23, Mário 10/14, Fernando 9/16, Daniel 5/8, 3 reuniões fora da agenda — igual à conferência manual no banco
 
 ## 📎 Arquivos de Documentação Complementar
 
