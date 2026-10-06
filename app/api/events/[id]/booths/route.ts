@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { nasceEmNovo } from '@/lib/contacts/nasce-em-novo';
 
 // GET /api/events/[id]/booths — list booths with visit info
 export async function GET(
@@ -285,14 +286,14 @@ export async function POST(
         // Tenta com origem, fallback sem
         let { data: newContact, error: cErr } = await admin
           .from('contacts')
-          .insert({ ...contactData, origem: 'FEIRA' })
+          .insert(await nasceEmNovo(admin, { ...contactData, origem: 'FEIRA' }))
           .select('id')
           .single();
 
         if (cErr) {
           const { data: retry, error: rErr } = await admin
             .from('contacts')
-            .insert(contactData)
+            .insert(await nasceEmNovo(admin, contactData))
             .select('id')
             .single();
           if (rErr) continue;
@@ -410,14 +411,14 @@ export async function POST(
             // Tenta com origem FEIRA, fallback sem
             let { data: newContact, error: cErr } = await admin
               .from('contacts')
-              .insert({ ...contactData, origem: 'FEIRA' })
+              .insert(await nasceEmNovo(admin, { ...contactData, origem: 'FEIRA' }))
               .select('id')
               .single();
 
             if (cErr) {
               const { data: retry } = await admin
                 .from('contacts')
-                .insert(contactData)
+                .insert(await nasceEmNovo(admin, contactData))
                 .select('id')
                 .single();
               newContact = retry;

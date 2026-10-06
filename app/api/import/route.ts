@@ -5,6 +5,7 @@ import { normalizeContactData, normalizePhone, normalizeCPF, normalizeCNPJ, norm
 import { ImportResult, TelefoneAdicional } from '@/lib/types';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { processStageChangeAutomations } from '@/lib/automations/engine';
+import { nasceEmNovo } from '@/lib/contacts/nasce-em-novo';
 
 const MAX_ROWS = 2000;
 
@@ -525,14 +526,14 @@ export async function POST(request: NextRequest) {
           // Criar contato
           const { data: newContact, error } = await admin
             .from('contacts')
-            .insert({
+            .insert(await nasceEmNovo(admin, {
               organization_id: profile.organization_id,
               ...normalized,
               created_by_user_id: user.id,
               ...(defaultPipelineId ? { pipeline_id: defaultPipelineId } : {}),
               ...(firstStageId ? { stage_id: firstStageId } : {}),
               ...(telefones_adicionais.length > 0 ? { telefones_adicionais } : {}),
-            })
+            }))
             .select()
             .single();
 

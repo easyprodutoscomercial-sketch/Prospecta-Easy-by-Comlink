@@ -463,6 +463,12 @@ NOVO → EM_PROSPECCAO → CONTATADO → REUNIAO_MARCADA → CONVERTIDO
 - `is_terminal = true` + `terminal_type: 'won'` = CONVERTIDO
 - `is_terminal = true` + `terminal_type: 'lost'` = PERDIDO
 
+### Todo contato nasce em Novo (regra do dono, 06/10/2026)
+
+- Qualquer contato criado — cadastro, rascunho, importação, link de captura, quiz, check-in/avulso/stand de feira, indicação da IA — **nasce na primeira coluna do funil (Novo)**, ignorando a coluna configurada na feira/quiz/link. Depois o vendedor move normalmente.
+- Implementado em [`lib/contacts/nasce-em-novo.ts`](lib/contacts/nasce-em-novo.ts): **todo `insert` em `contacts` passa por `nasceEmNovo(admin, linha)`** (sem DDL não dá trigger no banco). Caminho novo que cria contato TEM que usar essa função.
+- Busca de indicações com IA só em contato na coluna Novo (servidor recusa fora dela); fora do Novo o card só mostra o selo pra rever buscas antigas.
+
 ### Temperatura
 
 `FRIO` → `MORNO` → `QUENTE` (pode descer: sinaliza esfriamento com alerta)

@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
 import { uploadEventImage } from '@/lib/storage/upload';
+import { nasceEmNovo } from '@/lib/contacts/nasce-em-novo';
 
 // Wrapper local pra manter assinatura antiga (retorna URL ou null) usando o
 // helper centralizado que valida MIME + extensao + sanitiza nome.
@@ -189,7 +190,7 @@ export async function POST(
       if (event?.pipeline_id) {
         const { data: newContact } = await admin
           .from('contacts')
-          .insert({
+          .insert(await nasceEmNovo(admin, {
             organization_id: profile.organization_id,
             name: booth.company_name,
             company: booth.company_name,
@@ -202,7 +203,7 @@ export async function POST(
             created_by_user_id: user.id,
             assigned_to_user_id: user.id, // vendedor que captou vira dono no CRM
             name_normalized: booth.company_name.toLowerCase().trim(),
-          })
+          }))
           .select()
           .single();
 
@@ -500,7 +501,7 @@ export async function POST(
         }
         const { data: newContact } = await admin
           .from('contacts')
-          .insert(insertPayload)
+          .insert(await nasceEmNovo(admin, insertPayload))
           .select()
           .single();
 
@@ -607,7 +608,7 @@ export async function POST(
           }
           const { data: inserted, error: insErr } = await admin
             .from('contacts')
-            .insert(extraPayload)
+            .insert(await nasceEmNovo(admin, extraPayload))
             .select('id')
             .single();
           if (insErr) {

@@ -1,6 +1,7 @@
 import { getAdminClient } from '@/lib/supabase/admin';
 import { normalizeContactData } from '@/lib/utils/normalize';
 import { EmpresaIndicada } from '@/lib/indicacoes/osm';
+import { nasceEmNovo } from '@/lib/contacts/nasce-em-novo';
 
 export const PIPELINE_PADRAO = 'ca0488f4-ae6d-4ce7-bc34-0afeeeb4a521';
 export const ETAPA_NOVO = '66e2a4dc-b694-42f9-9d3e-0674c0d9e31e';
@@ -58,7 +59,7 @@ export async function salvarComoContato(
     notes: nota,
   });
 
-  const { data, error } = await admin.from('contacts').insert({
+  const { data, error } = await admin.from('contacts').insert(await nasceEmNovo(admin, {
     ...dados,
     organization_id: opcoes.organizationId,
     status: 'NOVO',
@@ -69,7 +70,7 @@ export async function salvarComoContato(
     origem: 'INDICACAO',
     is_draft: opcoes.rascunho,
     updated_at: new Date().toISOString(),
-  }).select('id').single();
+  })).select('id').single();
 
   if (error) {
     console.warn('[indicacoes] nao salvou', e.nome, error.message);

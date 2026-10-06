@@ -2,6 +2,7 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
 import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
+import { nasceEmNovo } from '@/lib/contacts/nasce-em-novo';
 
 export const dynamic = 'force-dynamic';
 
@@ -331,7 +332,7 @@ export async function POST(request: NextRequest) {
 
             let { data: newContact, error: insertError } = await admin
               .from('contacts')
-              .insert({ ...contactData, ...optionalFields })
+              .insert(await nasceEmNovo(admin, { ...contactData, ...optionalFields }))
               .select('id')
               .single();
 
@@ -339,7 +340,7 @@ export async function POST(request: NextRequest) {
               console.warn('Contact insert with optional fields failed, retrying:', insertError.message);
               const { data: retryContact, error: retryError } = await admin
                 .from('contacts')
-                .insert(contactData)
+                .insert(await nasceEmNovo(admin, contactData))
                 .select('id')
                 .single();
 

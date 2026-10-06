@@ -4,6 +4,7 @@ import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
 import { uploadEventImage } from '@/lib/storage/upload';
+import { nasceEmNovo, etapaNovo } from '@/lib/contacts/nasce-em-novo';
 
 // Wrapper local com a mesma API antiga, mas usando helper centralizado
 // (lib/storage/upload) que valida MIME + extensao + sanitiza nome.
@@ -287,6 +288,12 @@ export async function POST(
         if (emailNorm) payload.email_normalized = emailNorm;
       }
 
+      // nasce em Novo (regra do dono 06/10): antes gravava a coluna da feira com
+      // status 'NOVO' — card numa coluna dizendo estar em outra. Vale tambem
+      // pra finalizacao do rascunho, que e um update e nao passa pelo insert.
+      const novo = await etapaNovo(admin, payload.pipeline_id, null);
+      if (novo) Object.assign(payload, novo);
+
       if (finalizeContactId) {
         // Finalizacao: atualiza o rascunho, marca is_draft=false.
         payload.is_draft = false;
@@ -305,7 +312,7 @@ export async function POST(
         payload.assigned_to_user_id = user.id;
         const { data: newContact, error: insertErr } = await admin
           .from('contacts')
-          .insert(payload)
+          .insert(await nasceEmNovo(admin, payload))
           .select('id, name')
           .single();
         if (insertErr) throw insertErr;

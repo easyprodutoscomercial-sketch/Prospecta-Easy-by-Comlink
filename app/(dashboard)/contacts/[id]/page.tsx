@@ -11,6 +11,7 @@ import Tabs from '@/components/ui/tabs';
 import ContactSidebar from '@/components/contacts/contact-sidebar';
 import ContactDetails from '@/components/contacts/contact-details';
 import IndicacoesModal from '@/components/contacts/indicacoes-modal';
+import { useIndicacoesBuscadas } from '@/lib/hooks/use-indicacoes-buscadas';
 import ContactAvatar from '@/components/contacts/contact-avatar';
 import ContactTimeline from '@/components/contacts/contact-timeline';
 import AICopilotPanel from '@/components/ai/ai-copilot-panel';
@@ -38,6 +39,7 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [verIndicacoes, setVerIndicacoes] = useState(false);
+  const indicacoesAchadas = useIndicacoesBuscadas(id);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState('');
   const [activeTab, setActiveTab] = useState('timeline');
@@ -313,6 +315,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
         </div>
         {canModify && (
           <div className="flex items-center gap-2 shrink-0">
+            {/* busca com IA so na coluna Novo (regra do dono 06/10); fora dela o botao
+                so aparece se ja houve busca, pra rever o resultado sem custo */}
+            {(contact.status === 'NOVO' || indicacoesAchadas > 0) && (
             <button
               onClick={() => setVerIndicacoes(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg hover:bg-amber-500/15 hover:border-amber-400 transition-colors min-h-[40px]"
@@ -322,8 +327,9 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 10a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-              <span className="hidden sm:inline">Indicações</span>
+              <span className="hidden sm:inline">{indicacoesAchadas > 0 ? `${indicacoesAchadas} indicações` : 'Indicações'}</span>
             </button>
+            )}
             <button
               onClick={() => setIsEditing(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/15 hover:border-emerald-400 transition-colors min-h-[40px]"

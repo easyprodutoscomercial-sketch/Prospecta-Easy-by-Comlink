@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { normalizePhone, normalizeEmail } from '@/lib/utils/normalize';
 import { processStageChangeAutomations } from '@/lib/automations/engine';
 import { checkRateLimit, getClientIp } from '@/lib/security/rate-limit';
+import { nasceEmNovo } from '@/lib/contacts/nasce-em-novo';
 
 // GET /api/lead-capture?token=xxx - Info publica do link (sem auth)
 export async function GET(request: NextRequest) {
@@ -344,14 +345,14 @@ export async function POST(request: NextRequest) {
 
       let { data: newContact, error: insertErr } = await admin
         .from('contacts')
-        .insert({ ...newContactData, ...optFields })
+        .insert(await nasceEmNovo(admin, { ...newContactData, ...optFields }))
         .select('id')
         .single();
 
       if (insertErr) {
         const { data: retryContact, error: retryErr } = await admin
           .from('contacts')
-          .insert(newContactData)
+          .insert(await nasceEmNovo(admin, newContactData))
           .select('id')
           .single();
         if (retryErr) throw retryErr;
@@ -494,7 +495,7 @@ export async function POST(request: NextRequest) {
     // Tenta com todos os campos primeiro
     let { data: createdContact, error: insertError } = await admin
       .from('contacts')
-      .insert({ ...baseContactData, ...optionalFields })
+      .insert(await nasceEmNovo(admin, { ...baseContactData, ...optionalFields }))
       .select('id')
       .single();
 
@@ -503,7 +504,7 @@ export async function POST(request: NextRequest) {
       console.warn('Insert with optional fields failed, retrying without:', insertError.message);
       const { data: retryContact, error: retryError } = await admin
         .from('contacts')
-        .insert(baseContactData)
+        .insert(await nasceEmNovo(admin, baseContactData))
         .select('id')
         .single();
 

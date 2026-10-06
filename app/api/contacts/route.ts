@@ -5,6 +5,7 @@ import { contactSchema } from '@/lib/utils/validation';
 import { normalizeContactData, normalizeEmail } from '@/lib/utils/normalize';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { applyContactFilters } from '@/lib/contacts/filters';
+import { nasceEmNovo } from '@/lib/contacts/nasce-em-novo';
 // Visibility is now handled by pipeline membership (members see all contacts in their pipelines)
 
 // Supabase limita a 1000 rows por request
@@ -378,7 +379,7 @@ export async function POST(request: NextRequest) {
     // Criar contato (sem responsável — só via "Apontar")
     const { data: newContact, error } = await admin
       .from('contacts')
-      .insert({
+      .insert(await nasceEmNovo(admin, {
         organization_id: profile.organization_id,
         ...normalized,
         created_by_user_id: user.id,
@@ -386,7 +387,7 @@ export async function POST(request: NextRequest) {
         ...(validated.event_id ? { event_id: validated.event_id } : {}),
         ...(contactPipelineId ? { pipeline_id: contactPipelineId } : {}),
         ...(contactStageId ? { stage_id: contactStageId } : {}),
-      })
+      }))
       .select()
       .single();
 

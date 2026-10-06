@@ -11,11 +11,12 @@ export type ContatoReferencia = {
   notes: string | null; website: string | null; cnpj: string | null; cep: string | null; endereco: string | null;
   cargo: string | null; instagram: string | null; temperatura: string | null; valor_estimado: number | null;
   assigned_to_user_id: string | null;
+  status: string | null; // coluna atual ('NOVO' = coluna Novo)
 };
 
 export const CAMPOS_CONTATO_REFERENCIA =
   'id, organization_id, name, company, cidade, estado, segmento, pipeline_id, tipo, produtos_fornecidos, ' +
-  'referencia, classe, notes, website, cnpj, cep, endereco, cargo, instagram, temperatura, valor_estimado, assigned_to_user_id';
+  'referencia, classe, notes, website, cnpj, cep, endereco, cargo, instagram, temperatura, valor_estimado, assigned_to_user_id, status';
 
 // Sessao + contato da mesma empresa do usuario. Compartilhado pelas rotas de indicacao.
 export async function contexto(id: string) {

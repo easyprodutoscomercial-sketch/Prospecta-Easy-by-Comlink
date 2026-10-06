@@ -361,7 +361,9 @@ export const KanbanCard = memo(function KanbanCard({ contact, overlay, userMap, 
 
       {/* Indicacoes: busca empresas parecidas na cidade deste contato.
           Fica fora do bloco acima de proposito — nao depende de ter telefone. */}
-      {!overlay && (
+      {/* Busca com IA so na coluna Novo (regra do dono 06/10). Fora do Novo fica so
+          o selo de quem ja teve busca, pra rever o resultado sem custo. */}
+      {!overlay && (indicacoesAchadas > 0 || contact.status === 'NOVO') && (
         <div className="px-1 mt-1.5">
           {/* ja teve busca com IA: o card mostra e um clique abre o resultado (sem custo) */}
           {indicacoesAchadas > 0 ? (

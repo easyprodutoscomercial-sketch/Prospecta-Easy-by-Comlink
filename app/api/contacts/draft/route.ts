@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { getAdminClient } from '@/lib/supabase/admin';
 import { ensureProfile } from '@/lib/ensure-profile';
+import { nasceEmNovo } from '@/lib/contacts/nasce-em-novo';
 
 // POST /api/contacts/draft
 //
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
 
     const { data: draft, error } = await admin
       .from('contacts')
-      .insert({
+      .insert(await nasceEmNovo(admin, {
         organization_id: profile.organization_id,
         name: placeholderName,
         name_normalized: placeholderName,
@@ -106,7 +107,7 @@ export async function POST(request: NextRequest) {
         origem,
         status: 'NOVO',
         tipo: [],
-      })
+      }))
       .select()
       .single();
 

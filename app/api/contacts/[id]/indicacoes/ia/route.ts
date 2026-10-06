@@ -89,6 +89,8 @@ async function completarCadastro(admin: Admin, contato: ContatoReferencia, dados
 // Regra do dono (06/10): so busca quem o admin liberou em Admin > Usuarios (inclusive o admin).
 function bloqueioDeBusca(c: ContatoReferencia, profile: { user_id: string; role: string }, limiteDia: number) {
   if (limiteDia <= 0) return 'Você não tem permissão para buscar indicações com IA. Peça ao administrador para liberar.';
+  // Regra do dono (06/10): busca com IA so na coluna Novo; rever busca antiga continua liberado
+  if (c.status !== 'NOVO') return 'A busca com IA é só para contatos na coluna Novo. As buscas já feitas continuam abaixo para rever.';
   if (!c.assigned_to_user_id) return 'Aponte este contato para alguém antes de buscar indicações com IA.';
   if (!hasFullVisibility(profile.role as UserRole) && c.assigned_to_user_id !== profile.user_id) {
     return 'Só quem está apontado neste contato pode buscar indicações com IA.';
