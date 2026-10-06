@@ -125,6 +125,11 @@ Além do núcleo CRM + Feiras, o sistema cresceu com módulos adjacentes: **supo
 - **Server Actions:** body limit 30MB
 - **Desabilitado em dev** (PWA)
 
+### Região (Vercel × Supabase)
+
+- `vercel.json` fixa as funções em **`pdx1` (Oregon)**, a mesma região do banco Supabase (**us-west-2**). Até 06/10/2026 elas rodavam em `iad1` (Washington) e cada consulta ao banco cruzava os EUA (~65ms cada; uma tela faz de 3 a 8). Não trocar a região sem mudar o banco junto.
+- Kanban desenha **50 cartões por coluna** (lista: 100 linhas) com botão "Mostrar mais": a coluna Novo chegou a 3.788 cartões e travava máquina fraca.
+
 ### TypeScript
 
 - Target: ES2017
