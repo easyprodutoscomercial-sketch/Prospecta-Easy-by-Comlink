@@ -4,20 +4,20 @@ import { useEffect, useRef, useState } from 'react';
 
 // Video do King Air da Comlink por cima da janela de indicacoes (pedido do dono em 06/10):
 // a subida toca quando o consultor manda buscar e a descida quando a busca termina.
-// Subida: video proprio do dono (2,75s, 06/10). Descida: trecho final (4,4s) do video de 8s
-// de decolagem e pouso, cortado no ponto mais alto.
+// Subida: video do dono com o comandante Mario embarcando em frente ao predio da Comlink e o
+// King Air decolando (cortado em 6s a pedido do dono, 06/10). Descida: trecho final (4,4s) do video de decolagem e pouso.
 // Ficam em public/noprecache/: o app instalado nao baixa os videos antes de alguem buscar.
 // Sem som: o navegador nao deixa video tocar sozinho com som, e turbina no escritorio incomoda.
 
 export type VideoAviaoTipo = 'decolagem' | 'pouso';
 
 export const SRC_VIDEO: Record<VideoAviaoTipo, string> = {
-  decolagem: '/noprecache/videos/aviao-subida.mp4', // nome novo: o video antigo nao fica no cache de ninguem
+  decolagem: '/noprecache/videos/aviao-subida-capitao.mp4', // nome novo a cada troca: o antigo nao fica no cache de ninguem
   pouso: '/noprecache/videos/aviao-pouso.mp4',
 };
 
 const MS_SAIDA = 450;
-const MS_LIMITE = 8000; // video travado ou rede lenta: nao prende a tela
+const MS_LIMITE = 13000; // video travado ou rede lenta: nao prende a tela (o mais longo tem 6s)
 
 interface Props {
   tipo: VideoAviaoTipo;
@@ -57,7 +57,8 @@ export default function VideoAviao({ tipo, legenda, onFim }: Props) {
         onError={fechar}
         className="h-full w-full object-cover"
       />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent px-6 pb-6 pt-16">
+      {/* legenda no alto: o video do comandante ja traz "Mario, nosso capitao" gravado embaixo */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 bg-gradient-to-b from-black/75 via-black/30 to-transparent px-6 pt-6 pb-16 pr-28">
         <p className="text-lg md:text-2xl font-bold text-white drop-shadow">{legenda}</p>
       </div>
       <button onClick={fechar}
