@@ -54,6 +54,7 @@ interface InfoIA {
   estimativaBaseadaEm: number;
   restantesHoje: number;
   limiteDia: number;
+  ilimitado?: boolean; // administrador: sem limite diario
   alvo: string;
   segmentoCadastrado: string | null;
   origem: [number, number] | null;
@@ -587,7 +588,7 @@ export default function IndicacoesModal({ contactId, contactNome, cidade: cidade
                         : ia.segmentoCadastrado ? `Segmento: ${ia.segmentoCadastrado}` : 'Sem segmento cadastrado — a IA descobre pelo nome da empresa'}
                       {' · '}custo ~{reais(ia.custoEstimado)}
                       {ia.estimativaBaseadaEm > 0 ? ` (média das últimas ${ia.estimativaBaseadaEm})` : ' (estimativa)'}
-                      {' · '}você ainda tem {ia.restantesHoje} de {ia.limiteDia} buscas hoje
+                      {' · '}{ia.ilimitado ? 'buscas ilimitadas (administrador)' : `você ainda tem ${ia.restantesHoje} de ${ia.limiteDia} buscas hoje`}
                     </p>
                   </div>
                   <button onClick={() => setIaConfirmar(true)} disabled={ia.restantesHoje <= 0 || !!ia.bloqueio}

@@ -918,6 +918,13 @@ export default function AdminPage() {
                             <option value="user">Vendedor</option>
                             <option value="suporte">Suporte</option>
                           </select>
+                          {/* administrador busca sem limite (regra do dono 06/10); a caixinha e so pros demais */}
+                          {u.role === 'admin' ? (
+                            <span title="Administrador busca indicações com IA sem limite diário"
+                              className="text-[10px] border border-emerald-500/40 text-emerald-300 rounded px-1 py-0.5">
+                              IA: ilimitado
+                            </span>
+                          ) : (
                           <select
                             value={buscasIA[u.user_id] || 0}
                             onChange={(e) => handleBuscasIAChange(u.user_id, u.name, Number(e.target.value))}
@@ -932,6 +939,7 @@ export default function AdminPage() {
                               <option key={n} value={n}>IA: {n}/dia</option>
                             ))}
                           </select>
+                          )}
                           <button
                             onClick={() => startMenuEditing(u)}
                             className="px-2 py-1 text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded transition-colors"

@@ -115,7 +115,11 @@ function inicioDoDiaSP() {
   return new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate(), 3)).toISOString();
 }
 
-async function painel(admin: Admin, orgId: string, userId: string) {
+// Regra do dono (06/10): administrador busca sem limite ("sou o super adm, ilimitado
+// pra mim"). Vendedor, gerente etc. seguem o limite liberado em Admin > Usuarios.
+const SEM_LIMITE = 9999;
+
+async function painel(admin: Admin, orgId: string, userId: string, role: string) {
   const [{ data: usos }, { count: hoje }, limiteDia] = await Promise.all([
     admin.from('ai_analysis_cache').select('result')
       .eq('organization_id', orgId).eq('analysis_type', 'INDICACOES_IA_USO')
@@ -132,11 +136,14 @@ async function painel(admin: Admin, orgId: string, userId: string) {
     .filter((u) => (u.result as { modelo?: string }).modelo === MODELO)
     .map((u) => Number((u.result as { custo_reais?: number }).custo_reais)).filter((n) => n > 0);
   const media = custos.length ? custos.reduce((a, b) => a + b, 0) / custos.length : ESTIMATIVA_INICIAL_REAIS;
+  const ilimitado = role === 'admin';
+  const limite = ilimitado ? SEM_LIMITE : limiteDia;
   return {
     custoEstimado: Math.ceil(media * 100) / 100,
     estimativaBaseadaEm: custos.length, // 0 = ainda e a estimativa inicial
-    restantesHoje: Math.max(0, limiteDia - (hoje || 0)),
-    limiteDia,
+    restantesHoje: Math.max(0, limite - (hoje || 0)),
+    limiteDia: limite,
+    ilimitado,
   };
 }
 
@@ -195,7 +202,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const chave = chaveIA(contato.id);
     // todas as buscas ja feitas para este cliente (o dono quer rever qualquer uma, quando quiser)
     const [info, { data: buscas }, { data: andamento }] = await Promise.all([
-      painel(admin, orgId, profile.user_id),
+      painel(admin, orgId, profile.user_id, profile.role),
       admin.from('ai_analysis_cache').select('id, result, created_at')
         .eq('organization_id', orgId).eq('analysis_type', 'INDICACOES_IA').like('cache_key', `${chave}%`)
         .order('created_at', { ascending: false }).limit(30),
@@ -264,7 +271,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (body?.confirmado !== true) {
       return NextResponse.json({ erro: 'Confirme o custo antes de buscar.' }, { status: 400 });
     }
-    const info = await painel(admin, orgId, profile.user_id);
+    const info = await painel(admin, orgId, profile.user_id, profile.role);
     const bloqueio = bloqueioDeBusca(contato, profile, info.limiteDia);
     if (bloqueio) return NextResponse.json({ erro: bloqueio }, { status: 403 });
 
