@@ -20,6 +20,7 @@ import EditEventModal from '@/components/eventos/edit-event-modal';
 import DeleteConfirmModal from '@/components/ui/delete-confirm-modal';
 import ContactAvatar from '@/components/contacts/contact-avatar';
 import { useToast } from '@/lib/toast-context';
+import { proximoDiaUtilAs9 } from '@/lib/utils/proximo-passo';
 
 // Parser seguro de data ISO vinda do banco. Aceita tanto 'YYYY-MM-DD' quanto
 // 'YYYY-MM-DDT...' (com tempo/zona), sempre fixando ao meio-dia local pra
@@ -5570,6 +5571,9 @@ function FollowUpTab({ eventId, event }: { eventId: string; event: FairEvent }) 
         outcome: 'AGUARDANDO_RETORNO',
         note: `Follow-up iniciado a partir do evento ${event.name}${visit.event_booths?.company_name ? ` · ${visit.event_booths.company_name}` : ''}${visit.notes ? `\n\nNotas da visita: ${visit.notes}` : ''}`,
         happened_at: new Date().toISOString(),
+        // proximo passo obrigatorio (06/10): follow-up de feira ja nasce com retorno no proximo dia util 9h
+        proxima_acao_tipo: 'FOLLOW_UP',
+        proxima_acao_data: proximoDiaUtilAs9(1),
       };
       const res = await fetch('/api/interactions', {
         method: 'POST',

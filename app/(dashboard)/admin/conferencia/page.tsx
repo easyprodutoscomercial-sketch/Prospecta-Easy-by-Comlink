@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { lerEml, dataDoRelatorio } from '@/lib/conferencia/eml';
 import type { LinhaConferida, NaoCitado, Placar, Situacao, Resultado } from '@/lib/conferencia/casar';
 import { formatInteractionOutcome, formatInteractionType, formatStatus } from '@/lib/utils/labels';
+import { montarCobranca } from '@/lib/conferencia/cobrar';
 
 // Conferencia de relatorios diarios: o dono arrasta os e-mails que os
 // vendedores mandam e ve o que foi dito x o que esta no CRM. So mostra:
@@ -71,6 +72,8 @@ export default function ConferenciaPage() {
   const [envios, setEnvios] = useState<Envio[]>([]);
   const [arrastando, setArrastando] = useState(false);
   const [aberto, setAberto] = useState<Record<string, boolean>>({});
+  // botao "Cobrar": mensagem pronta por vendedor (lib/conferencia/cobrar.ts), editavel antes de mandar
+  const [cobranca, setCobranca] = useState<Record<string, { texto: string; pontos: number; estado: string | null }>>({});
   const [colar, setColar] = useState(false);
   const [texto, setTexto] = useState('');
   const [textoVendedor, setTextoVendedor] = useState('');
@@ -159,6 +162,29 @@ export default function ConferenciaPage() {
     setEnvios((l) => [{ id, arquivo: 'Texto colado', estado: 'lendo', mensagem: '' }, ...l]);
     const d = await enviar(id, { texto, assunto: '', vendedor_id: textoVendedor, dia: textoDia || null });
     if (d) { setTexto(''); carregar(d); }
+  }
+
+  function abrirCobranca(v: VendedorConferido) {
+    if (!dia) return;
+    const { mensagem, pontos } = montarCobranca(v.vendedor_nome, dia, v.linhas, v.placar);
+    setCobranca((m) => ({ ...m, [v.vendedor_id]: { texto: mensagem, pontos, estado: null } }));
+    setAberto((a) => ({ ...a, [v.vendedor_id]: true }));
+  }
+
+  async function mandarNoCrm(v: VendedorConferido) {
+    const c = cobranca[v.vendedor_id];
+    if (!c || !dia) return;
+    setCobranca((m) => ({ ...m, [v.vendedor_id]: { ...c, estado: 'enviando' } }));
+    try {
+      const r = await fetch('/api/conferencia/cobrar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendedor_id: v.vendedor_id, dia, mensagem: c.texto }),
+      });
+      const j = await r.json().catch(() => ({}));
+      setCobranca((m) => ({ ...m, [v.vendedor_id]: { ...c, estado: r.ok ? 'enviada' : `erro:${j.error || 'Não consegui mandar.'}` } }));
+    } catch {
+      setCobranca((m) => ({ ...m, [v.vendedor_id]: { ...c, estado: 'erro:Não consegui mandar.' } }));
+    }
   }
 
   async function apagar(v: VendedorConferido) {
@@ -350,8 +376,44 @@ export default function ConferenciaPage() {
                     <span className="text-xs text-purple-300/40">
                       {v.enviado_em ? `enviado ${hora(v.enviado_em)} · ` : ''}leitura {reais(v.custo_reais || 0)}
                     </span>
+                    <button onClick={() => abrirCobranca(v)}
+                      className="px-2.5 py-1 rounded-md border border-amber-500/40 bg-amber-500/10 text-amber-200 text-xs font-bold hover:bg-amber-500/20">
+                      📋 Cobrar
+                    </button>
                     <button onClick={() => apagar(v)} className="text-xs text-red-400/70 hover:text-red-300">Apagar leitura</button>
                   </div>
+                  {cobranca[v.vendedor_id] && (() => {
+                    const c = cobranca[v.vendedor_id];
+                    return (
+                      <div className="px-4 py-3 border-b border-purple-800/20 bg-amber-500/5">
+                        <p className="text-xs text-amber-200/90 mb-1.5">
+                          Mensagem pronta {c.pontos ? `com ${c.pontos} ajuste(s)` : '(sem ajustes: só elogio)'} — pode editar antes de mandar.
+                        </p>
+                        <textarea value={c.texto} onChange={(e) => setCobranca((m) => ({ ...m, [v.vendedor_id]: { ...c, texto: e.target.value, estado: null } }))}
+                          rows={Math.min(14, c.texto.split('\n').length + 2)}
+                          className="w-full rounded-lg border border-purple-700/30 bg-[#2a1245] px-3 py-2 text-xs text-neutral-100 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button onClick={() => mandarNoCrm(v)} disabled={c.estado === 'enviando'}
+                            className="px-3 py-1.5 rounded-lg bg-amber-500 text-[#1a0a2e] text-xs font-bold hover:bg-amber-400 disabled:opacity-50">
+                            {c.estado === 'enviando' ? 'Mandando...' : 'Mandar no CRM (sino + celular)'}
+                          </button>
+                          <a href={`https://wa.me/?text=${encodeURIComponent(c.texto)}`} target="_blank" rel="noopener noreferrer"
+                            className="px-3 py-1.5 rounded-lg border border-green-500/40 bg-green-500/10 text-green-300 text-xs font-bold hover:bg-green-500/20">
+                            Abrir no WhatsApp
+                          </a>
+                          <button onClick={() => { navigator.clipboard?.writeText(c.texto); setCobranca((m) => ({ ...m, [v.vendedor_id]: { ...c, estado: 'copiada' } })); }}
+                            className="px-3 py-1.5 rounded-lg border border-purple-700/40 text-purple-200 text-xs font-semibold hover:bg-purple-800/30">
+                            Copiar
+                          </button>
+                          <button onClick={() => setCobranca((m) => { const n = { ...m }; delete n[v.vendedor_id]; return n; })}
+                            className="ml-auto text-xs text-neutral-500 hover:text-neutral-300">Fechar</button>
+                          {c.estado === 'copiada' && <span className="text-xs text-emerald-300">copiada ✓</span>}
+                          {c.estado === 'enviada' && <span className="text-xs text-emerald-300">mandada pro {v.vendedor_nome.split(' ')[0]} ✓ (aparece no sino e no aviso de cobrança dele)</span>}
+                          {c.estado && c.estado.startsWith('erro:') && <span className="text-xs text-red-300">{c.estado.slice(5)}</span>}
+                        </div>
+                      </div>
+                    );
+                  })()}
                   {aberta && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">

@@ -19,6 +19,7 @@ import {
   SEGMENTO_COLORS,
 } from '@/lib/utils/labels';
 import { useToast } from '@/lib/toast-context';
+import { useProximoPasso } from '@/components/contacts/proximo-passo';
 
 interface ContactPreviewDrawerProps {
   contactId: string | null;
@@ -118,16 +119,19 @@ export default function ContactPreviewDrawer({
   }, []);
 
   const toast = useToast();
+  const { pedirProximoPasso, janelaProximoPasso } = useProximoPasso();
 
   // Submit interaction (quick template or form)
   async function submitInteraction(type: string, outcome: string, note: string) {
     if (!contact) return;
+    const pp = await pedirProximoPasso(outcome, { tipo: contact.proxima_acao_tipo, data: contact.proxima_acao_data });
+    if (!pp) return; // cancelou na janela do proximo passo
     setSubmitting(true);
     try {
       const res = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contact_id: contact.id, type, outcome, note: note || undefined }),
+        body: JSON.stringify({ contact_id: contact.id, type, outcome, note: note || undefined, ...pp }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({ error: 'Erro ao registrar interacao' }));
@@ -160,6 +164,7 @@ export default function ContactPreviewDrawer({
 
   return (
     <>
+      {janelaProximoPasso}
       {/* Backdrop */}
       <div
         className={`fixed inset-0 z-40 transition-opacity duration-300 ${

@@ -8,9 +8,12 @@ import FocusActionBar from '@/components/focus/focus-action-bar';
 import FocusCallScript from '@/components/focus/focus-call-script';
 import FocusSessionStats from '@/components/focus/focus-session-stats';
 import MeetingModal from '@/components/meetings/meeting-modal';
+import { useProximoPasso, type ProximoPasso } from '@/components/contacts/proximo-passo';
+import { proximoDiaUtilAs9 } from '@/lib/utils/proximo-passo';
 
 export default function FocusPage() {
   const toast = useToast();
+  const { pedirProximoPasso, janelaProximoPasso } = useProximoPasso();
   const { selectedPipelineId, currentPipeline } = usePipeline();
   const [queue, setQueue] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -112,6 +115,19 @@ export default function FocusPage() {
       return;
     }
 
+    // Regra do dono (06/10): atividade exige proximo passo. "Atendeu" pergunta o que e quando;
+    // "Nao atendeu" agenda nova tentativa no proximo dia util as 9h, so se nao houver algo marcado
+    // (nao atropela uma reuniao ja agendada).
+    let pp: ProximoPasso = {};
+    const jaTemProximo = !!currentContact.proxima_acao_data && new Date(currentContact.proxima_acao_data).getTime() > Date.now();
+    if (action === 'answered') {
+      const escolhido = await pedirProximoPasso('RESPONDEU', { tipo: currentContact.proxima_acao_tipo, data: currentContact.proxima_acao_data });
+      if (!escolhido) return; // cancelou: fica no mesmo contato
+      pp = escolhido;
+    } else if (action === 'no_answer' && !jaTemProximo) {
+      pp = { proxima_acao_tipo: 'LIGAR', proxima_acao_data: proximoDiaUtilAs9(1) };
+    }
+
     setActionLoading(true);
     setContactsCalled(prev => prev + 1);
 
@@ -125,8 +141,8 @@ export default function FocusPage() {
 
       const { type, outcome } = interactionMap[action];
 
-      // Create interaction
-      await fetch('/api/interactions', {
+      // Create interaction (antes o resultado nao era conferido: falha aparecia como sucesso)
+      const res = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,8 +150,16 @@ export default function FocusPage() {
           type,
           outcome,
           note: `Registrado via Modo Foco`,
+          ...pp,
         }),
       });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error || 'Erro ao registrar acao');
+        setContactsCalled(prev => prev - 1);
+        setActionLoading(false);
+        return;
+      }
 
       if (action === 'answered') {
         setAnsweredCount(prev => prev + 1);
@@ -263,6 +287,7 @@ export default function FocusPage() {
 
   return (
     <div className="-mx-4 -my-6 sm:-mx-6 sm:-my-8 lg:-mx-10 lg:-my-10 min-h-screen flex flex-col pb-24">
+      {janelaProximoPasso}
       {/* Header */}
       <div className="bg-[#120826]/80 backdrop-blur-sm border-b border-purple-500/10 px-4 lg:px-6 py-3">
         <div className="flex items-center justify-between">

@@ -6,6 +6,7 @@ import { useToast } from '@/lib/toast-context';
 import { usePipeline } from '@/lib/pipeline-context';
 import { MEETING_TYPE_LABELS, MEETING_TYPE_COLORS, formatMeetingType, INTERACTION_TYPE_LABELS, INTERACTION_OUTCOME_LABELS } from '@/lib/utils/labels';
 import MeetingModal from '@/components/meetings/meeting-modal';
+import { useProximoPasso } from '@/components/contacts/proximo-passo';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
 const MONTHS = [
@@ -37,6 +38,7 @@ const MEETING_TYPE_STYLE: Record<string, { bg: string; text: string }> = {
 
 export default function CalendarPage() {
   const toast = useToast();
+  const { pedirProximoPasso, janelaProximoPasso } = useProximoPasso();
   const { selectedPipelineId } = usePipeline();
   const [meetings, setMeetings] = useState<MeetingWithContact[]>([]);
   const [loading, setLoading] = useState(true);
@@ -286,6 +288,8 @@ export default function CalendarPage() {
 
   async function handleAddInteraction() {
     if (!selectedMeeting) return;
+    const pp = await pedirProximoPasso(interactionData.outcome);
+    if (!pp) return; // cancelou na janela do proximo passo
     setInteractionLoading(true);
     try {
       const res = await fetch('/api/interactions', {
@@ -296,9 +300,14 @@ export default function CalendarPage() {
           type: interactionData.type,
           outcome: interactionData.outcome,
           note: interactionData.note || null,
+          ...pp,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        toast.error(d.error || 'Erro ao registrar interacao');
+        return;
+      }
       toast.success('Interacao registrada!');
       setInteractionData({ type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: '' });
       setShowInteractionForm(false);
@@ -332,6 +341,7 @@ export default function CalendarPage() {
 
   return (
     <div>
+      {janelaProximoPasso}
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>

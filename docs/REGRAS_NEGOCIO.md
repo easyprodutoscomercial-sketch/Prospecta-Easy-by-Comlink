@@ -197,6 +197,13 @@ Pipeline membership controlada por `pipeline_members` (user_id, pipeline_id).
 
 ---
 
+## 📅 Próximo passo obrigatório (regra do dono, 06/10/2026)
+
+- Toda atividade registrada (ligação, e-mail, WhatsApp...) que **não encerra o negócio** exige o próximo passo: **o que** vai fazer e **quando** (data no futuro). Encerram: convertido, proposta aceita, fechado parcial, sem interesse (estes limpam o próximo passo).
+- Dispensado se o contato já tem um próximo passo marcado no futuro.
+- Modo Foco: "Não atendeu" agenda sozinho "Ligar" no próximo dia útil 9h (se não houver nada marcado). Follow-up de feira nasce com retorno no próximo dia útil 9h.
+- Motivo: na conferência de 05/10, nenhuma das 12 empresas do Mario tinha próximo passo no CRM — a cobrança automática não tinha o que cobrar.
+
 ## ✈️ Indicações com IA (regras do dono, 06/10/2026)
 
 - **Só busca quem o admin liberar**, em Admin → Gerenciar Usuários (seletor "IA: N/dia"). Sem liberação = bloqueado, **inclusive o admin**. A trava é no servidor (`lib/indicacoes/permissao.ts`), não só o botão escondido.

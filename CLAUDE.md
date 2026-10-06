@@ -784,7 +784,7 @@ export function useX() { return useContext(Ctx) }
 
 | Método | Rota | Descrição | Auth |
 |---|---|---|---|
-| GET/POST | `/api/interactions` | Listar/criar | ✅ |
+| GET/POST | `/api/interactions` | Listar/criar. **POST exige próximo passo** (`proxima_acao_tipo` + `proxima_acao_data` no futuro) quando o resultado não encerra o negócio, salvo se o contato já tem próximo passo futuro — senão 422 `PROXIMO_PASSO_OBRIGATORIO`. Regra em [`lib/utils/proximo-passo.ts`](lib/utils/proximo-passo.ts); janela comum [`components/contacts/proximo-passo.tsx`](components/contacts/proximo-passo.tsx) usada na ficha, gaveta do kanban, Modo Foco e agenda | ✅ |
 | GET/PATCH/DELETE | `/api/interactions/[id]` | CRUD individual | ✅ |
 
 ### Meetings (4)
@@ -940,6 +940,13 @@ export function useX() { return useContext(Ctx) }
 | GET/PATCH | `/api/users/[id]` | CRUD | ✅ |
 | POST | `/api/users/avatar` | Upload avatar | ✅ |
 | POST | `/api/users/password` | Alterar senha | ✅ |
+
+### Conferência de relatórios
+
+| Método | Rota | Descrição | Auth |
+|---|---|---|---|
+| GET/POST/DELETE | `/api/conferencia` | Lê os e-mails diários dos vendedores (IA) e cruza com o CRM | ✅ admin/gerente |
+| POST | `/api/conferencia/cobrar` | Botão "Cobrar": manda a mensagem (montada sem IA por [`lib/conferencia/cobrar.ts`](lib/conferencia/cobrar.ts)) como notificação `TASK_OVERDUE` com `metadata.source='conferencia'` + push | ✅ admin/gerente |
 
 ### Admin & Auditoria (5)
 

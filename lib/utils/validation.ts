@@ -56,6 +56,9 @@ export const interactionSchema = z.object({
   ]),
   note: z.string().optional().nullable(),
   happened_at: z.string().datetime().optional(),
+  // proximo passo (obrigatorio quando o resultado nao encerra o negocio — ver lib/utils/proximo-passo.ts)
+  proxima_acao_tipo: z.enum(['LIGAR', 'ENVIAR_WHATSAPP', 'ENVIAR_EMAIL', 'ENVIAR_PROPOSTA', 'REUNIAO', 'VISITA', 'FOLLOW_UP', 'OUTRO']).optional(),
+  proxima_acao_data: z.string().datetime().optional(),
 });
 
 // Schema de atualizacao de contato. .strict() rejeita explicitamente campos

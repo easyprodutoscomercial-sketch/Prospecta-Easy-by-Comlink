@@ -17,6 +17,7 @@ import {
 } from '@/lib/utils/labels';
 import ConfirmModal from '@/components/ui/confirm-modal';
 import { useToast } from '@/lib/toast-context';
+import { useProximoPasso, type ProximoPasso } from './proximo-passo';
 
 type AttachmentWithUrl = ContactAttachment & { public_url: string };
 
@@ -29,6 +30,9 @@ interface ContactTimelineProps {
   attachments: AttachmentWithUrl[];
   setAttachments: React.Dispatch<React.SetStateAction<AttachmentWithUrl[]>>;
   canModify: boolean;
+  // proximo passo atual do contato (vem pre-preenchido na janela) e aviso pra pagina atualizar
+  proximaAcao?: { tipo: string | null; data: string | null };
+  onProximoPasso?: (pp: ProximoPasso) => void;
 }
 
 const FILE_ICONS: Record<string, { icon: string; color: string }> = {
@@ -73,8 +77,11 @@ export default function ContactTimeline({
   attachments,
   setAttachments,
   canModify,
+  proximaAcao,
+  onProximoPasso,
 }: ContactTimelineProps) {
   const toast = useToast();
+  const { pedirProximoPasso, janelaProximoPasso } = useProximoPasso();
 
   // Filter state
   const [filter, setFilter] = useState<TimelineFilter>('all');
@@ -135,14 +142,17 @@ export default function ContactTimeline({
 
   // --- Interaction CRUD ---
   const handleQuickTemplate = async (tpl: typeof ACTIVITY_TEMPLATES[number]) => {
+    const pp = await pedirProximoPasso(tpl.outcome, proximaAcao);
+    if (!pp) return; // cancelou na janela do proximo passo
     const r = await fetch('/api/interactions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contact_id: contactId, type: tpl.type, outcome: tpl.outcome, note: tpl.note }),
+      body: JSON.stringify({ contact_id: contactId, type: tpl.type, outcome: tpl.outcome, note: tpl.note, ...pp }),
     });
     if (r.ok) {
       const created = await r.json();
       setInteractions((p) => [created, ...p]);
+      if (pp.proxima_acao_data) onProximoPasso?.(pp);
       toast.success('Interacao registrada');
     } else {
       const d = await r.json();
@@ -152,16 +162,20 @@ export default function ContactTimeline({
 
   const handleAddInteraction = async (e: React.FormEvent) => {
     e.preventDefault();
-    const body: Record<string, any> = { contact_id: contactId, type: newInteraction.type, outcome: newInteraction.outcome, note: newInteraction.note || null };
+    const pp = await pedirProximoPasso(newInteraction.outcome, proximaAcao);
+    if (!pp) return; // cancelou: o formulario continua aberto com o que foi digitado
+    const body: Record<string, any> = { contact_id: contactId, type: newInteraction.type, outcome: newInteraction.outcome, note: newInteraction.note || null, ...pp };
     if (newInteraction.happened_at) body.happened_at = new Date(newInteraction.happened_at).toISOString();
     const r = await fetch('/api/interactions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (r.ok) {
       const created = await r.json();
       setInteractions((p) => [created, ...p]);
+      if (pp.proxima_acao_data) onProximoPasso?.(pp);
       toast.success('Interacao adicionada');
     } else {
       const d = await r.json();
       toast.error(d.error || 'Erro');
+      return; // erro: mantem o formulario aberto pra nao perder o que foi digitado
     }
     setNewInteraction({ type: 'LIGACAO', outcome: 'SEM_RESPOSTA', note: '', happened_at: '' });
     setShowForm(false);
@@ -317,6 +331,7 @@ export default function ContactTimeline({
 
   return (
     <div>
+      {janelaProximoPasso}
       {/* Filter chips */}
       <div className="flex items-center gap-2 flex-wrap mb-4">
         {filterChips.map((chip) => (

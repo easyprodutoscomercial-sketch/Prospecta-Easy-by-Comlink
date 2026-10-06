@@ -496,6 +496,8 @@ export default function ContactDetailPage({ params }: { params: Promise<{ id: st
                   attachments={attachments}
                   setAttachments={setAttachments}
                   canModify={!!canModify}
+                  proximaAcao={{ tipo: contact.proxima_acao_tipo, data: contact.proxima_acao_data }}
+                  onProximoPasso={(pp) => setContact((c) => c ? { ...c, ...pp } as Contact : c)}
                 />
               )}
               {activeTab === 'detalhes' && (

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { interactionSchema } from '@/lib/utils/validation';
 import { ensureProfile } from '@/lib/ensure-profile';
 import { computeLeadScoreDetailed } from '@/lib/utils/lead-score';
+import { exigeProximoPasso, CODIGO_PROXIMO_PASSO } from '@/lib/utils/proximo-passo';
 
 // GET /api/interactions - Listar interações
 export async function GET(request: NextRequest) {
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     // Pegar contact para verificar organization_id e ownership
     const { data: contact } = await admin
       .from('contacts')
-      .select('organization_id, status, assigned_to_user_id')
+      .select('organization_id, status, assigned_to_user_id, proxima_acao_data')
       .eq('id', validated.contact_id)
       .single();
 
@@ -89,6 +90,20 @@ export async function POST(request: NextRequest) {
       if (contact.assigned_to_user_id !== user.id) {
         return NextResponse.json({ error: 'Apenas o responsável ou admin pode registrar interações neste contato.' }, { status: 403 });
       }
+    }
+
+    // Regra do dono (06/10): atividade que nao encerra o negocio exige proximo passo (o que + quando).
+    // Dispensa se o contato ja tem um proximo passo no futuro. Ver lib/utils/proximo-passo.ts.
+    const informouProximo = !!(validated.proxima_acao_tipo && validated.proxima_acao_data);
+    if (informouProximo && new Date(validated.proxima_acao_data as string).getTime() < Date.now() - 5 * 60_000) {
+      return NextResponse.json({ error: 'A data do próximo passo precisa ser no futuro.', codigo: CODIGO_PROXIMO_PASSO }, { status: 422 });
+    }
+    const jaTemProximo = !!contact.proxima_acao_data && new Date(contact.proxima_acao_data).getTime() > Date.now();
+    if (exigeProximoPasso(validated.outcome) && !informouProximo && !jaTemProximo) {
+      return NextResponse.json({
+        error: 'Informe o próximo passo (o que vai fazer e quando) antes de registrar.',
+        codigo: CODIGO_PROXIMO_PASSO,
+      }, { status: 422 });
     }
 
     // Criar interação
@@ -126,11 +141,22 @@ export async function POST(request: NextRequest) {
       newStatus = 'CONVERTIDO';
     }
 
-    if (newStatus !== contact.status) {
+    // status novo + proximo passo informado numa gravacao so; negocio encerrado limpa o proximo passo
+    const mudancas: Record<string, unknown> = {};
+    if (newStatus !== contact.status) mudancas.status = newStatus;
+    if (informouProximo) {
+      mudancas.proxima_acao_tipo = validated.proxima_acao_tipo;
+      mudancas.proxima_acao_data = validated.proxima_acao_data;
+    } else if (!exigeProximoPasso(validated.outcome)) {
+      mudancas.proxima_acao_tipo = null;
+      mudancas.proxima_acao_data = null;
+    }
+    if (Object.keys(mudancas).length) {
       await admin
         .from('contacts')
-        .update({ status: newStatus })
-        .eq('id', validated.contact_id);
+        .update(mudancas)
+        .eq('id', validated.contact_id)
+        .eq('organization_id', contact.organization_id);
     }
 
     // Recalculate lead score after new interaction
