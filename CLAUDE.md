@@ -463,6 +463,15 @@ NOVO → EM_PROSPECCAO → CONTATADO → REUNIAO_MARCADA → CONVERTIDO
 - `is_terminal = true` + `terminal_type: 'won'` = CONVERTIDO
 - `is_terminal = true` + `terminal_type: 'lost'` = PERDIDO
 
+### Módulos liga/desliga (regra do dono, 09/10/2026)
+
+- **Admin → Módulos do sistema** liga/desliga cada módulo para a empresa inteira. Desligado = some do menu e dos atalhos de **todos, inclusive o admin**; a página manda pro Dashboard; o link público mostra "Página indisponível". **Nenhum dado é apagado.**
+- Módulos desligáveis (lista em [`lib/modulos/regras.ts`](lib/modulos/regras.ts)): Feiras (`/eventos`, `/walkin-fill`), Quiz Feira (`/quiz-feira`, `/quiz`), Suporte (`/suporte`, `/portal`), Pedidos & Cotações, Associações, Bugs, Frentes, Modo Foco, Automações, Links de captura (`/lead-capture` + QR em Configurações), Assistente IA (`/chat` + botão redondo no Pipeline) e Relatórios.
+- **Começam todos desligados** (`DESLIGADOS_PADRAO`): auditoria de 09/10 achou 0 registros em quiz, suporte, pedidos, bugs, automações, links de captura e feiras (feiras zeraram na limpeza de 01/10); a tabela `associations` **nem existe** no banco (a tela dava erro). IA e Relatórios: sem como medir uso, o dono mandou desligar.
+- Guardado em `ai_analysis_cache` (`MODULOS_DESLIGADOS`, `cache_key='org'`, `result.desligados`) por falta de DDL. Sem linha = padrão; depois que o admin salva, manda o que ele salvou.
+- Bloqueio: cada pasta de módulo tem um `layout.tsx` que chama `exigirModulo()` ([`lib/modulos/servidor.ts`](lib/modulos/servidor.ts)); links públicos usam `moduloPublicoLigado()` (acha a empresa pelo token). Telas client usam `useModuloLigado()` ([`lib/modulos/contexto.tsx`](lib/modulos/contexto.tsx)). As **APIs dos módulos continuam respondendo** (só as telas somem).
+- **Módulo novo:** registrar em `MODULOS` + criar o `layout.tsx` com `exigirModulo`. Testes em `tests/modulos.test.mjs`.
+
 ### Todo contato nasce em Novo (regra do dono, 06/10/2026)
 
 - Qualquer contato criado — cadastro, rascunho, importação, link de captura, quiz, check-in/avulso/stand de feira, indicação da IA — **nasce na primeira coluna do funil (Novo)**, ignorando a coluna configurada na feira/quiz/link. Depois o vendedor move normalmente.
@@ -925,6 +934,12 @@ export function useX() { return useContext(Ctx) }
 | GET/POST | `/api/portal/[token]/tickets/[ticketId]/comments` | Comentários | 🔓 token |
 | POST | `/api/portal/[token]/tickets/[ticketId]/attachments` | Anexos | 🔓 token |
 
+### Módulos do sistema (1)
+
+| Método | Rota | Descrição | Auth |
+|---|---|---|---|
+| GET/PUT | `/api/modulos` | Lista os módulos e quais estão desligados / grava `{ desligados: [...] }`. Tela: Admin → Módulos do sistema | ✅ admin |
+
 ### Conferência de relatórios (1)
 
 | Método | Rota | Descrição | Auth |
@@ -1147,6 +1162,9 @@ Ver `docs/DECISOES_TECNICAS.md` para o plano completo.
 
 13. **Nada de animação contínua em camada de tela cheia** (06/10/2026)
     O aviso de cobrança (`components/notifications/cobranca-zumbido.tsx`) fica em TODAS as páginas, para quase todo vendedor. Em 06/10 um "raio de luz" girando nas bordas (`conic-gradient` animado via `@property` + camada com `filter: blur`) travou as máquinas: 2571 repinturas em 5s contra 2 na versão parada. Animação permanente só de `opacity`/`transform`, e de preferência só por alguns segundos.
+
+14. **Módulo desligado continua com a API aberta** (09/10/2026)
+    O liga/desliga esconde telas e links públicos, mas `/api/quiz/route`, `/api/portal/*`, `/api/lead-capture` etc. seguem respondendo a quem tiver um token válido. Hoje não há nenhum token criado (0 quizzes, 0 projetos, 0 links), então não há risco prático.
 
 12. **`NEXT_PUBLIC_*` aparecem no bundle client**
     Tudo que começa com `NEXT_PUBLIC_` vai pro navegador. Nunca colocar segredo nesse prefixo.

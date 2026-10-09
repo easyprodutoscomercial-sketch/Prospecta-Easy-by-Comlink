@@ -8,11 +8,14 @@ import NotificationBell from '@/components/notifications/notification-bell';
 import PipelineSelectorGlobal from '@/components/pipeline-selector-global';
 import WorkFrontSelector from '@/components/work-fronts/work-front-selector';
 import { useQueueCount, useOnlineStatus, useInstallQueueAutoFlush, processQueue } from '@/lib/offline/hooks';
+import { rotaBloqueada } from '@/lib/modulos/regras';
 
 interface SidebarProps {
   profileName: string | null;
   userRole: string;
   visibleMenus?: string[];
+  /** Modulos desligados em Admin -> Modulos do sistema (somem pra todos, inclusive admin). */
+  desligados?: readonly string[];
   signOutAction: () => Promise<void>;
 }
 
@@ -109,6 +112,7 @@ const navItems = [
   {
     key: 'ai',
     href: '/kanban?chat=1',
+    modulo: '/chat', // o chat abre dentro do Pipeline, mas e do modulo Assistente IA
     label: 'Assistente IA',
     icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -190,7 +194,7 @@ const navItems = [
   },
 ];
 
-export default function Sidebar({ profileName, userRole, visibleMenus, signOutAction }: SidebarProps) {
+export default function Sidebar({ profileName, userRole, visibleMenus, desligados = [], signOutAction }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -247,7 +251,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
       } catch { /* silent */ }
     };
     fetchData();
-    fetchQuizDia();
+    if (!desligados.includes('quiz')) fetchQuizDia();
     const interval = setInterval(async () => {
       try {
         const [res, tasksRes] = await Promise.all([
@@ -271,6 +275,7 @@ export default function Sidebar({ profileName, userRole, visibleMenus, signOutAc
   ]);
 
   const filteredNavItems = navItems.filter((item) => {
+    if (rotaBloqueada('modulo' in item && item.modulo ? item.modulo : item.href, desligados)) return false;
     if ('adminOnly' in item && item.adminOnly && userRole !== 'admin' && userRole !== 'gerente') return false;
     // Filtro por visible_menus — SO esconde menus "conhecidos" na epoca em
     // que o admin salvou. Menus novos (adicionados depois) passam livres.

@@ -1,6 +1,7 @@
 'use client';
 
 import type { ContactView } from '@/lib/hooks/use-contact-preferences';
+import { useModuloLigado } from '@/lib/modulos/contexto';
 
 interface ContactsToolbarProps {
   activeView: ContactView;
@@ -21,6 +22,7 @@ export default function ContactsToolbar({
   onRevealAll,
   isMapView,
 }: ContactsToolbarProps) {
+  const feirasLigado = useModuloLigado('eventos');
   return (
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-[#1e0f35] rounded-xl border border-purple-800/30 px-3 py-2.5">
       {/* Left: View toggle */}
@@ -52,7 +54,7 @@ export default function ContactsToolbar({
           </svg>
           Mapa
         </button>
-        <button
+        {feirasLigado && <button
           onClick={() => onViewChange('feiras')}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
             activeView === 'feiras'
@@ -64,7 +66,7 @@ export default function ContactsToolbar({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
           </svg>
           Feiras
-        </button>
+        </button>}
         <button
           onClick={() => onViewChange('import')}
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${

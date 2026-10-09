@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import QrCodeSection from '@/components/settings/qr-code-section';
+import { useModuloLigado } from '@/lib/modulos/contexto';
 
 export default function SettingsPage() {
+  const capturaLigada = useModuloLigado('captura');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -245,7 +247,7 @@ export default function SettingsPage() {
         </div>
 
         {/* QR Code Lead Capture Section */}
-        <QrCodeSection />
+        {capturaLigada && <QrCodeSection />}
       </div>
     </div>
   );

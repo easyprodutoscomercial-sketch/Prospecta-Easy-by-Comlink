@@ -7,6 +7,9 @@ import { Profile } from '@/lib/types';
 import { STATUS_LABELS, STATUS_CHART_COLORS } from '@/lib/utils/labels';
 import NotificationBell from '@/components/notifications/notification-bell';
 import PipelineManager from '@/components/admin/pipeline-manager';
+import ModulosSistema from '@/components/admin/modulos-sistema';
+import { useModulosDesligados } from '@/lib/modulos/contexto';
+import type { ChaveModulo } from '@/lib/modulos/regras';
 
 const STATUSES = ['NOVO', 'EM_PROSPECCAO', 'CONTATADO', 'REUNIAO_MARCADA', 'CONVERTIDO', 'PERDIDO'] as const;
 
@@ -25,6 +28,12 @@ const MENU_OPTIONS = [
   { key: 'eventos', label: 'Feiras' },
   { key: 'settings', label: 'Configuracoes' },
 ] as const;
+
+// Menu que pertence a um modulo desligado nem aparece na escolha de menus por usuario
+const MODULO_DO_MENU: Partial<Record<string, ChaveModulo>> = {
+  focus: 'foco', suporte: 'suporte', pedidos: 'pedidos', ai: 'ai',
+  reports: 'relatorios', 'quiz-feira': 'quiz', eventos: 'eventos',
+};
 
 function AnalyzeButton() {
   const [analyzing, setAnalyzing] = useState(false);
@@ -128,6 +137,9 @@ export default function AdminPage() {
   const [menuEditingId, setMenuEditingId] = useState<string | null>(null);
   const [menuSelection, setMenuSelection] = useState<string[]>([]);
   const [savingMenus, setSavingMenus] = useState(false);
+
+  const desligados = useModulosDesligados();
+  const ligado = (m: ChaveModulo) => !desligados.includes(m);
 
   // Quiz Feira
   const [quizAtivo, setQuizAtivo] = useState(false);
@@ -264,9 +276,9 @@ export default function AdminPage() {
     if (!checkingRole && currentRole === 'admin') {
       fetchUsers();
       fetchPipelineSettings();
-      fetchQuizStatus();
+      if (!desligados.includes('quiz')) fetchQuizStatus();
     }
-  }, [checkingRole, currentRole]);
+  }, [checkingRole, currentRole, desligados]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -557,6 +569,8 @@ export default function AdminPage() {
       <h1 className="text-2xl font-semibold text-emerald-400 mb-2">Administração</h1>
       <p className="text-sm text-purple-300/60 mb-8">Ferramentas de gerenciamento do sistema.</p>
 
+      <ModulosSistema />
+
       {/* Multi-Pipeline Manager Section */}
       <div className="mb-10">
         <h2 className="text-lg font-bold text-emerald-400 mb-4">Gerenciar Pipelines</h2>
@@ -567,7 +581,7 @@ export default function AdminPage() {
           <PipelineManager showBugsType={users.some(u => {
             const menus = (u as any).visible_menus as string[] | undefined;
             return menus && menus.length > 0 && menus.includes('bugs');
-          })} showSuporteType />
+          })} showSuporteType={ligado('suporte')} />
         </div>
       </div>
 
@@ -972,7 +986,7 @@ export default function AdminPage() {
                         ) : (
                           <>
                             <div className="grid grid-cols-2 gap-1.5 mb-3">
-                              {MENU_OPTIONS.map((menu) => (
+                              {MENU_OPTIONS.filter((menu) => { const m = MODULO_DO_MENU[menu.key]; return !m || ligado(m); }).map((menu) => (
                                 <label key={menu.key} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-purple-800/20 cursor-pointer transition-colors">
                                   <input
                                     type="checkbox"
@@ -1041,7 +1055,7 @@ export default function AdminPage() {
       </div>
 
       {/* Quiz Feira Section */}
-      <div className="mb-10">
+      {ligado('quiz') && <div className="mb-10">
         <h2 className="text-lg font-bold text-emerald-400 mb-4">Quiz Feira</h2>
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
           <div className="flex items-center justify-between">
@@ -1076,10 +1090,10 @@ export default function AdminPage() {
             </Link>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Automations Section */}
-      <div className="mb-10">
+      {ligado('automacoes') && <div className="mb-10">
         <h2 className="text-lg font-bold text-emerald-400 mb-4">Automacoes</h2>
         <div className="bg-[#1e0f35] border border-purple-800/30 rounded-lg p-5">
           <h3 className="text-sm font-medium text-neutral-100 mb-1">Regras de Automacao</h3>
@@ -1096,7 +1110,7 @@ export default function AdminPage() {
             Gerenciar Automacoes
           </Link>
         </div>
-      </div>
+      </div>}
 
       {/* Audit Log Section */}
       <div className="mb-10">

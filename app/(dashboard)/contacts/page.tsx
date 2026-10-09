@@ -18,6 +18,7 @@ import { useContactPreferences } from '@/lib/hooks/use-contact-preferences';
 import ContactCard from '@/components/contacts/contact-card';
 import ContactsToolbar from '@/components/contacts/contacts-toolbar';
 import EmptyState from '@/components/ui/empty-state';
+import { useModuloLigado } from '@/lib/modulos/contexto';
 import { selectBase, inputBase, btnPrimary, btnSecondary, btnDanger } from '@/lib/utils/ui-classes';
 
 // Views pesadas (Leaflet, XLSX, etc) carregam so quando o usuario muda
@@ -140,7 +141,8 @@ function ContactsPageContent() {
 
   const isMapView = prefs.activeView === 'map';
   const isImportView = prefs.activeView === 'import';
-  const isFeirasView = prefs.activeView === 'feiras';
+  const feirasLigado = useModuloLigado('eventos');
+  const isFeirasView = feirasLigado && prefs.activeView === 'feiras';
 
   useEffect(() => {
     async function fetchUsersAndMe() {

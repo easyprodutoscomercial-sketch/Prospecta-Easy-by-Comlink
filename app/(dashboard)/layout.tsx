@@ -9,6 +9,8 @@ import { ProductTour } from '@/components/onboarding/product-tour';
 import OfflineIndicator from '@/components/offline/offline-indicator';
 import CobrancaZumbido from '@/components/notifications/cobranca-zumbido';
 import PushObrigatorio from '@/components/notifications/push-obrigatorio';
+import { modulosDesligados } from '@/lib/modulos/servidor';
+import { ModulosProvider } from '@/lib/modulos/contexto';
 
 export default async function DashboardLayout({
   children,
@@ -23,6 +25,7 @@ export default async function DashboardLayout({
   }
 
   const profile = await ensureProfile(supabase, user);
+  const desligados = profile ? await modulosDesligados(profile.organization_id) : [];
 
   const handleSignOut = async () => {
     'use server';
@@ -32,12 +35,13 @@ export default async function DashboardLayout({
   };
 
   return (
+    <ModulosProvider desligados={desligados}>
     <div className="min-h-screen bg-[#1a0a2e]">
       {/* Skip to content - accessibility */}
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-emerald-600 focus:text-white focus:rounded-lg focus:text-sm focus:font-medium">
         Pular para o conteudo
       </a>
-      <Sidebar profileName={profile?.name ?? null} userRole={profile?.role ?? 'user'} visibleMenus={profile?.visible_menus ?? []} signOutAction={handleSignOut} />
+      <Sidebar profileName={profile?.name ?? null} userRole={profile?.role ?? 'user'} visibleMenus={profile?.visible_menus ?? []} desligados={desligados} signOutAction={handleSignOut} />
 
       <main id="main-content" className="lg:pl-64 pt-14 lg:pt-0 min-h-screen">
         {/* <DashboardBanner /> — desativado (banner animado Avatar Runner descontinuado) */}
@@ -53,5 +57,6 @@ export default async function DashboardLayout({
       <CobrancaZumbido />
       <PushObrigatorio />
     </div>
+    </ModulosProvider>
   );
 }

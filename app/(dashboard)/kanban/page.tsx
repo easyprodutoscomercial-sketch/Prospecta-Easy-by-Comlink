@@ -38,6 +38,7 @@ const AiChatPanel = dynamic(() => import('@/components/ai-chat-panel'), { ssr: f
 import { normalizeSearch } from '@/lib/utils/normalize';
 import { useSessionState } from '@/lib/hooks/use-session-state';
 import { useIsMobile } from '@/lib/hooks/use-is-mobile';
+import { useModuloLigado } from '@/lib/modulos/contexto';
 
 
 // Sons usando Web Audio API
@@ -133,6 +134,7 @@ export default function KanbanPage() {
   const [pipelineSettings, setPipelineSettings] = useState<PipelineSettings | null>(null);
   const [emojiParticles, setEmojiParticles] = useState<EmojiParticle[]>([]);
   const [chatOpen, setChatOpen] = useState(false);
+  const iaLigada = useModuloLigado('ai');
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [meetingContact, setMeetingContact] = useState<{ id: string; name: string } | null>(null);
   const [meetingLoading, setMeetingLoading] = useState(false);
@@ -177,10 +179,10 @@ export default function KanbanPage() {
 
   // Open chat if ?chat=1 in URL
   useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.search.includes('chat=1')) {
+    if (iaLigada && typeof window !== 'undefined' && window.location.search.includes('chat=1')) {
       setChatOpen(true);
     }
-  }, []);
+  }, [iaLigada]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -1312,6 +1314,7 @@ export default function KanbanPage() {
       })()}
 
       {/* AI Chat FAB */}
+      {iaLigada && (<>
       <button
         onClick={() => setChatOpen(true)}
         className={`fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-30 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-purple-600 text-white shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:scale-105 flex items-center justify-center transition-all duration-200 ${
@@ -1327,6 +1330,7 @@ export default function KanbanPage() {
 
       {/* AI Chat Panel */}
       <AiChatPanel isOpen={chatOpen} onClose={() => setChatOpen(false)} />
+      </>)}
     </div>
   );
 }
